@@ -6,7 +6,9 @@ Real processes, real TCP, real NATS leafnode protocol. Toxiproxy shapes the
 one link that matters - the leaf connection - so every scenario exercises
 the same code a deployed edge runs. No containers: nats-server and
 toxiproxy are static binaries (deploy/tools.lock), so this runs the same in
-WSL, on a laptop, and in GitHub Actions.
+WSL, on a laptop, and in GitHub Actions. The Compose stack (deploy/compose,
+harness/compose.py) runs the same topology in containers, from the same
+config rendering below.
 """
 
 from __future__ import annotations
