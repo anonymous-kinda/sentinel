@@ -75,8 +75,9 @@ class Claim:
 
 
 def doc_files(root: Path) -> list[Path]:
-    """The documents under guard: top-level rules and README, and everything in docs/."""
-    named = [root / name for name in ("README.md", "CLAUDE.md", "SECURITY.md", "sentinel/CLAUDE.md")]
+    """The documents under guard: top-level rules and README, the fixtures README, and everything in docs/."""
+    names = ("README.md", "CLAUDE.md", "SECURITY.md", "sentinel/CLAUDE.md", "fixtures/README.md")
+    named = [root / name for name in names]
     return [p for p in named if p.is_file()] + sorted((root / "docs").rglob("*.md"))
 
 

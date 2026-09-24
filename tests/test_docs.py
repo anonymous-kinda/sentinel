@@ -183,7 +183,16 @@ def test_a_claim_without_a_number_is_rejected(tmp_path):
 def test_the_doc_set_covers_the_readme_the_rules_and_the_design_docs():
     names = {_id(d) for d in DOCS}
     assert {"README.md", "CLAUDE.md", "SECURITY.md", "docs/system-design.md"} <= names
-    assert {"docs/adapters/wayfinder.md", "docs/validation-report.md"} <= names
+    assert {"docs/adapters/wayfinder.md", "docs/validation-report.md", "fixtures/README.md"} <= names
+
+
+def test_the_fixtures_readme_names_every_fixture():
+    """A new fixture gets a line in the README; a removed one takes its line with it
+    (the path check above)."""
+    named = set(parse_markdown((ROOT / "fixtures" / "README.md").read_text(encoding="utf-8")).code)
+    entries = sorted((ROOT / "fixtures").iterdir())
+    paths = [f"fixtures/{e.name}/" if e.is_dir() else f"fixtures/{e.name}" for e in entries if e.name != "README.md"]
+    assert [p for p in paths if p not in named] == []
 
 
 @pytest.mark.parametrize("doc", PATH_DOCS, ids=_id)

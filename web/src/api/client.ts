@@ -100,7 +100,6 @@ export function useStream(onEvent: (e: StreamEvent) => void): { connected: boole
       "link.state",
       "link.emulation",
       "passes.updated",
-      "ai.audit",
     ];
     const listeners = kinds.map((kind) => {
       const fn = (ev: MessageEvent) => {

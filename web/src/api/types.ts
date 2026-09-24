@@ -160,7 +160,7 @@ export interface LogEntryView {
   dot: [string, number];
   lamport: number;
   wall_time: string;
-  kind: "DECISION" | "NOTE" | "RESOLUTION" | "AI_DRAFT_CONFIRMED";
+  kind: "DECISION" | "NOTE" | "RESOLUTION";
   event_ref: { event_id: string; cdm_sha256?: string; inputs_hash?: string; message_id?: string };
   body: Record<string, string>;
   author: string;
