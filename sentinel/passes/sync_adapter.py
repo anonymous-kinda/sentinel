@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+from collections.abc import Awaitable, Callable
 
 from ..clock import Clock
 from ..triage import Consequence
@@ -25,14 +26,28 @@ def item_id(norad_id: int) -> str:
 
 
 class ElementRecords:
-    def __init__(self, store: ElementStore, clock: Clock):
+    def __init__(
+        self,
+        store: ElementStore,
+        clock: Clock,
+        on_accepted: Callable[[], Awaitable[None]] | None = None,
+        offered: Callable[[int], bool] | None = None,
+    ):
+        """`on_accepted` is awaited after a fetched element set changes the
+        store, so the node can tell its console the pass inputs moved.
+        `offered` limits which element sets go in the manifest (None: all):
+        every record costs a round trip on a thin link."""
         self.store = store
         self.clock = clock
         self.remote: dict[str, dict] = {}
+        self._on_accepted = on_accepted
+        self._offered = offered or (lambda _norad_id: True)
 
     def manifest(self) -> list[dict]:
         out = []
         for record in self.store.records():
+            if not self._offered(record.norad_id):
+                continue
             stale_at = record.epoch + dt.timedelta(days=STALE_AFTER_DAYS)
             out.append(
                 {
@@ -67,4 +82,6 @@ class ElementRecords:
             result = self.store.add(raw, source)
         except ElementRejected as exc:
             return {"status": "rejected", "code": exc.code, "sha256": hashlib.sha256(raw).hexdigest(), "verification": None}
+        if result.status == "accepted" and self._on_accepted is not None:
+            await self._on_accepted()
         return {"status": result.status, "sha256": result.sha256, "verification": None}

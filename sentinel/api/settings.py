@@ -34,6 +34,8 @@ class Settings:
     toxiproxy_api: str | None = None         # demo/harness link emulation
     ai: bool = True                          # the assistant (off on the public node)
     ai_cloud: bool = False                   # operator opt-in to hosted AI (Jev, Claude)
+    sync_elements: str = "catalog"           # element sets a hub offers edges: catalog (imagers) | all
+    elements_path: str | None = None         # OMM snapshot; None: hub/standalone load the vendored one, an edge syncs
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -58,4 +60,6 @@ class Settings:
             toxiproxy_api=os.environ.get("SENTINEL_TOXIPROXY_API") or None,
             ai=_flag("SENTINEL_AI", True),
             ai_cloud=_flag("SENTINEL_AI_CLOUD", False),
+            elements_path=os.environ.get("SENTINEL_ELEMENTS") or None,
+            sync_elements=os.environ.get("SENTINEL_SYNC_ELEMENTS", "catalog"),
         )

@@ -7,7 +7,7 @@ import pathlib
 
 HERE = pathlib.Path(__file__).resolve().parent
 OUT = HERE.parent / "docs" / "ddil-results.md"
-ORDER = ["denied", "limited", "intermittent", "degraded", "recovery"]
+ORDER = ["denied", "limited", "intermittent", "degraded", "recovery", "opsec"]
 
 
 def main() -> None:

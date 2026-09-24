@@ -1,6 +1,6 @@
 """Run DDIL scenarios against a real two-node cluster.
 
-    python -m harness.run denied [limited intermittent degraded recovery | all] [--denial-s 20]
+    python -m harness.run denied [limited intermittent degraded recovery opsec | all] [--denial-s 20]
 
 Writes harness/results/<scenario>.json and exits non-zero if any assertion
 fails. `python -m harness.report` turns the results into docs/ddil-results.md.

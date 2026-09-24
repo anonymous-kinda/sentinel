@@ -13,11 +13,15 @@ import datetime as dt
 import hashlib
 import json
 import math
+import os
 import pathlib
 
 from ..obs import get_logger
 
 log = get_logger(__name__)
+
+SNAPSHOT_NAME = "celestrak-resource-20260924.json"
+_REPO_FIXTURES = pathlib.Path(__file__).resolve().parents[2] / "fixtures"
 
 NUMERIC_FIELDS = (
     "MEAN_MOTION", "ECCENTRICITY", "INCLINATION", "RA_OF_ASC_NODE", "ARG_OF_PERICENTER",
@@ -49,6 +53,18 @@ class AddResult:
     norad_id: int
 
 
+@dataclasses.dataclass(frozen=True)
+class SnapshotLoad:
+    accepted: int
+    rejected: int
+
+
+def default_snapshot() -> pathlib.Path:
+    """The vendored public CelesTrak snapshot: in a source checkout, or under
+    SENTINEL_FIXTURES where a bundle installs its fixtures."""
+    return pathlib.Path(os.environ.get("SENTINEL_FIXTURES", _REPO_FIXTURES)) / "omm" / SNAPSHOT_NAME
+
+
 def canonical_bytes(obj: dict) -> bytes:
     return json.dumps(obj, sort_keys=True, separators=(",", ":")).encode()
 
@@ -77,11 +93,16 @@ def validate_omm(fields: dict) -> None:
 
 
 class ElementStore:
-    """Latest element set per object, plus every record hash ever seen."""
+    """Latest element set per object, plus every record hash ever seen.
+
+    `version` counts accepted element sets: it changes exactly when
+    `latest()` does, so a result computed from the store can be cached
+    against it."""
 
     def __init__(self):
         self._latest: dict[int, ElementRecord] = {}
         self._seen: set[str] = set()
+        self.version = 0
 
     def add(self, raw: bytes, source: str) -> AddResult:
         sha = hashlib.sha256(raw).hexdigest()
@@ -100,17 +121,20 @@ class ElementStore:
         if current is not None and current.epoch >= epoch:
             return AddResult("superseded", sha, norad_id)
         self._latest[norad_id] = ElementRecord(norad_id, epoch, raw, sha, source, fields)
+        self.version += 1
         return AddResult("accepted", sha, norad_id)
 
-    def load_snapshot(self, path: pathlib.Path, source: str) -> int:
-        """Admit every object in a CelesTrak OMM JSON array; returns how many were accepted."""
-        accepted = 0
+    def load_snapshot(self, path: pathlib.Path, source: str) -> SnapshotLoad:
+        """Admit every object in a CelesTrak OMM JSON array; counts what was
+        accepted and what was rejected (each rejection is logged with its code)."""
+        accepted = rejected = 0
         for obj in json.loads(path.read_text()):
             try:
                 accepted += self.add(canonical_bytes(obj), source).status == "accepted"
             except ElementRejected as exc:
+                rejected += 1
                 log.warning("Element set rejected", source=source, code=exc.code, norad_id=obj.get("NORAD_CAT_ID"))
-        return accepted
+        return SnapshotLoad(accepted, rejected)
 
     def latest(self) -> dict[int, dict]:
         return {norad_id: record.fields for norad_id, record in self._latest.items()}

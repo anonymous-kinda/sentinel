@@ -96,7 +96,7 @@ make ddil            # five scenarios on real processes -> docs/ddil-results.md
 
 ![Edge node while the link is denied](docs/img/edge-denied.png)
 
-**Limited: what matters crosses first.** Within 2.5 s the edge has a summary of every event (at most 256 bytes each). Then full CDMs follow, earliest maneuver commit point first. Each is re-assessed locally and compared with what the hub asserted: an event is HUB-ASSERTED until then, VERIFIED once the local result matches, and MISMATCH if it doesn't. Measured on the same link with the same bytes, the most urgent full record arrives in **5.5 s with earliest-deadline-first vs 38.2 s in FIFO order** (about 7×; latest run in `docs/ddil-results.md`).
+**Limited: what matters crosses first.** The edge gets a summary of every event (at most 256 bytes each) first: within 5.5 s in the latest run. Then full CDMs follow, earliest maneuver commit point first. Each is re-assessed locally and compared with what the hub asserted: an event is HUB-ASSERTED until then, VERIFIED once the local result matches, and MISMATCH if it doesn't. Measured on the same link with the same bytes, the most urgent full record arrives in **12.1 s with earliest-deadline-first vs 46.8 s in FIFO order** (3.9×, latest run in `docs/ddil-results.md`). That run uses the hub's default configuration, which also offers edges the 38 imaging-catalog element sets over the same link. ADR-008 records what reference data costs on a thin link.
 
 ![Sync tab over a limited link](docs/img/edge-sync.png)
 
