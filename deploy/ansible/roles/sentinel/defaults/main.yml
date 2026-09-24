@@ -1,3 +1,7 @@
+# The AI assistant: off unless a deployment turns it on (the local tier needs no
+# network; hosted AI is never opted in by this role).
+sentinel_ai: false
+
 # Where the bundle is staged on the target, and where the verifier runs from.
 sentinel_stage_dir: /var/tmp
 sentinel_verify_dir: "{{ sentinel_stage_dir }}/sentinel-verify"

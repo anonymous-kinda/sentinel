@@ -25,3 +25,15 @@ def test_the_ansible_env_template_sets_sentinel_var_under_the_prefix():
 def test_the_unit_makes_exactly_that_directory_writable():
     unit = (DEPLOY / "systemd" / "sentinel.service").read_text()
     assert "ReadWritePaths=@PREFIX@/var" in unit
+
+
+def test_the_public_node_does_not_run_the_assistant():
+    """docs/deploy-aws.md: the public node does not run the AI assistant,
+    and hosted AI is never opted in there."""
+    template = (DEPLOY / "ansible" / "roles" / "sentinel" / "templates" / "sentinel.env.j2").read_text()
+    assert re.search(r"^SENTINEL_AI=\{\{ '1' if sentinel_ai else '0' \}\}$", template, re.M)
+    assert re.search(r"^SENTINEL_AI_CLOUD=0$", template, re.M)
+    defaults = (DEPLOY / "ansible" / "roles" / "sentinel" / "defaults" / "main.yml").read_text()
+    assert re.search(r"^sentinel_ai: false", defaults, re.M), "off unless a deployment turns it on"
+    site = (DEPLOY / "ansible" / "site.yml").read_text()
+    assert re.search(r"^\s+sentinel_ai: false", site, re.M)

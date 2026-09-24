@@ -77,7 +77,7 @@ every number in an AI-written answer came from the validated code (ADR-007).
 - **NASA reference.** The 53 CARA operational events, ingested through the same parser.
 - **Validation.** The node re-runs the NASA comparison with the engine it is actually running and shows the agreement.
 
-The globe is CesiumJS (Wayfinder's rendering engine) using imagery bundled with the application, with no ion token, geocoder or CDN. A headless-browser check confirms that loading the full console makes **zero requests beyond the node**: the console works on a network with no route to the internet, or it is not a field tool.
+The globe is CesiumJS (Wayfinder's rendering engine) using imagery bundled with the application, with no ion token, geocoder or CDN. The node serves the console under a `default-src 'self'` Content-Security-Policy (asserted in `tests/api/test_api.py`), so the browser itself blocks any request beyond the node; a headless-browser session during development recorded **zero requests beyond the node**. The console works on a network with no route to the internet, or it is not a field tool.
 
 ![Validation tab](docs/img/validation.png)
 

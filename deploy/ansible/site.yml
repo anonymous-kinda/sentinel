@@ -20,6 +20,7 @@
     sentinel_prefix: /opt/sentinel
     sentinel_role: hub
     sentinel_read_only: true        # the public node never accepts uploads
+    sentinel_ai: false              # nor runs the assistant (docs/deploy-aws.md)
     sentinel_marking: "UNCLASSIFIED // EXERCISE"
     # >>> stig (M4) >>>
     # DISA Ubuntu 24.04 STIG V1R6 subset (roles/stig; decisions in

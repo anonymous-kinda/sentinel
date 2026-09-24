@@ -1,8 +1,10 @@
 """Hash-chained audit log for AI interactions (AU-9, AU-10).
 
-Every prompt, routing decision, tool call, result and operator action is
-one JSON line whose hash covers the previous line's hash. Editing or
-deleting any line breaks verification from that line on.
+The assistant writes one JSON line per question asked (with its tier, route,
+grounding result and answer) and one per draft confirmed. Each line's hash
+covers the previous line's hash, so editing or deleting any line breaks
+verification from that line on. Truncating the newest lines is not detected
+by the chain alone (POA&M, AU-9).
 """
 
 import json
