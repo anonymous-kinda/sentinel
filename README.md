@@ -2,7 +2,9 @@
 
 A DDIL-resilient conjunction assessment decision aid for satellite operators.
 
-**Status: risk engine and CDM codec implemented and validated against NASA CARA published cases. Operator console, sync and edge layers in progress.**
+**Status: risk engine, CDM codec and operator console implemented; engine validated against NASA CARA published cases. Sync and edge layers in progress.**
+
+![Sentinel operator console](docs/img/console.png)
 
 ---
 
@@ -52,6 +54,23 @@ the decision aid exactly when the decision still has to be made. The commit
 point does not move because the network went down. The architecture for this
 is designed (see `docs/system-design.md`, ADR-004 through ADR-006) and not
 yet implemented.
+
+---
+
+## The operator console
+
+`make serve`, then open http://127.0.0.1:8000. One process serves the API and the console.
+
+- **Operations.** Active conjunctions sorted by time to the maneuver commit point, which is when a decision is due, not when a message arrived. A scripted exercise scenario plays out live: CDM updates arrive on schedule and the list re-ranks as they do.
+- **The two plots that carry the argument.** The encounter-plane view and the Pc-vs-covariance-scale curve share one slider. Drag it and the uncertainty ellipse grows past the hard-body disk while Pc climbs, peaks, then *falls*. That is dilution, shown rather than described.
+- **Refusals are first-class.** A refused event shows why, the value that tripped the gate, and the threshold. It is never shown as a zero.
+- **Provenance on every number.** Inputs hash, engine version, source CDM hash, and the originator's own Pc labelled as theirs.
+- **NASA reference.** The 53 CARA operational events, ingested through the same parser.
+- **Validation.** The node re-runs the NASA comparison with the engine it is actually running and shows the agreement.
+
+The globe is CesiumJS (Wayfinder's rendering engine) using imagery bundled with the application, with no ion token, geocoder or CDN. A headless-browser check confirms that loading the full console makes **zero requests beyond the node**: the console works on a network with no route to the internet, or it is not a field tool.
+
+![Validation tab](docs/img/validation.png)
 
 ---
 

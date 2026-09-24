@@ -12,3 +12,25 @@ forbidden_modules =
     nats
     sqlite3
     httpx
+
+[importlinter:contract:core-is-mission-agnostic]
+name = The core (bus, triage) knows nothing about any mission module
+type = forbidden
+source_modules =
+    sentinel.bus
+    sentinel.triage
+forbidden_modules =
+    sentinel.conjunction
+    sentinel.risk
+    sentinel.cdm
+    sentinel.api
+
+[importlinter:contract:cdm-is-a-seam]
+name = The CDM codec (ADR-001 seam) does not depend on services above it
+type = forbidden
+source_modules =
+    sentinel.cdm
+forbidden_modules =
+    sentinel.conjunction
+    sentinel.api
+    sentinel.bus
