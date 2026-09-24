@@ -1,4 +1,5 @@
-"""Subcommands beyond the core codec: running a node, exercise data.
+"""Subcommands beyond the core codec: running a node, exercise data,
+demonstration-mode screening.
 
 Kept separate so `sentinel assess` has no import-time dependency on the
 web stack.
@@ -8,7 +9,11 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import os
 import pathlib
+import sys
+
+EXIT_REFUSED = 2
 
 
 def _serve(args: argparse.Namespace) -> int:
@@ -39,6 +44,48 @@ def _exercise_generate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _default_elements() -> pathlib.Path:
+    """The public CelesTrak snapshot in a source checkout (or under SENTINEL_FIXTURES)."""
+    fixtures = pathlib.Path(os.environ.get("SENTINEL_FIXTURES", pathlib.Path(__file__).resolve().parents[1] / "fixtures"))
+    return fixtures / "omm" / "celestrak-resource-20260924.json"
+
+
+def _utc(text: str) -> dt.datetime:
+    when = dt.datetime.now(dt.UTC) if text == "now" else dt.datetime.fromisoformat(text)
+    return when if when.tzinfo else when.replace(tzinfo=dt.UTC)
+
+
+def _screen(args: argparse.Namespace) -> int:
+    from .passes.element_store import ElementStore
+    from .screening.report import report_lines
+    from .screening.screen import ScreeningRefused, screen
+
+    store = ElementStore()
+    store.load_snapshot(pathlib.Path(args.elements), source=str(args.elements))
+    elements = store.latest()
+    try:
+        result = screen(args.primary, elements, _utc(args.start), args.hours, args.threshold_km)
+    except ScreeningRefused as exc:
+        print(f"REFUSED {exc}", file=sys.stderr)
+        return EXIT_REFUSED
+    print("\n".join(report_lines(result, elements)))
+    if args.out:
+        written = _write_derived_cdms(result, elements, pathlib.Path(args.out))
+        print(f"wrote {written} DERIVED CDMs to {args.out}")
+    return 0
+
+
+def _write_derived_cdms(result, elements: dict[int, dict], out: pathlib.Path) -> int:
+    from .cdm import emit
+    from .screening.derived_cdm import derived_cdms
+
+    out.mkdir(parents=True, exist_ok=True)
+    messages = derived_cdms(result, elements, dt.datetime.now(dt.UTC))
+    for message in messages:
+        (out / f"{message.message_id}.cdm").write_text(emit(message))
+    return len(messages)
+
+
 def register(sub) -> None:
     p = sub.add_parser("serve", help="run a node: API + web console")
     p.add_argument("--host", default="127.0.0.1")
@@ -52,3 +99,15 @@ def register(sub) -> None:
     g.add_argument("--out", required=True)
     g.add_argument("--epoch", default="now", help="ISO-8601 scenario start, or 'now'")
     g.set_defaults(func=_exercise_generate)
+
+    s = sub.add_parser(
+        "screen",
+        help="demonstration mode: close approaches from public element sets (geometry only, no Pc)",
+    )
+    s.add_argument("--primary", type=int, required=True, help="NORAD catalog number of the primary")
+    s.add_argument("--hours", type=float, default=24.0, help="window length (default 24)")
+    s.add_argument("--threshold-km", type=float, default=5.0, help="miss-distance threshold (default 5)")
+    s.add_argument("--elements", default=str(_default_elements()), help="CelesTrak OMM JSON array")
+    s.add_argument("--start", default="now", help="ISO-8601 window start, UTC, or 'now'")
+    s.add_argument("--out", default=None, help="write each approach as a DERIVED CDM (KVN) into this directory")
+    s.set_defaults(func=_screen)

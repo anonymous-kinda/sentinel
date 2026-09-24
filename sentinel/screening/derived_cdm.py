@@ -46,7 +46,7 @@ def derived_cdms(result: ScreeningResult, elements: Mapping[int, dict], created:
 def derived_cdm(
     result: ScreeningResult, approach: CloseApproach, elements: Mapping[int, dict], created: dt.datetime
 ) -> CdmMessage:
-    tca = _nearest_millisecond(approach.tca)
+    tca = nearest_millisecond(approach.tca)
     orbits = [Orbit.from_omm(elements[approach.primary_id]), Orbit.from_omm(elements[approach.secondary_id])]
     (r1, v1), (r2, v2) = (orbit.gcrf_state_km(tca) for orbit in orbits)
     preamble = CdmSection(
@@ -72,7 +72,8 @@ def derived_cdm(
     )
 
 
-def _nearest_millisecond(when: dt.datetime) -> dt.datetime:
+def nearest_millisecond(when: dt.datetime) -> dt.datetime:
+    """The CDM's time resolution: the TCA it states, and the instant of its states."""
     milliseconds = round(when.microsecond / 1000.0)
     return when.replace(microsecond=0) + dt.timedelta(milliseconds=milliseconds)
 
@@ -92,7 +93,7 @@ def _object(index: int, orbit: Orbit, r_km: np.ndarray, v_km_s: np.ndarray, tca:
         KvnField("REF_FRAME", REF_FRAME),
         Comment(
             f"state: SGP4 on element set sha256 {sha16}, epoch {format_ccsds_time(orbit.epoch)} "
-            f"({age_days:.2f} d before TCA), TEME to GCRF by Skyfield"
+            f"(age {age_days:.2f} d at TCA), TEME to GCRF by Skyfield"
         ),
         Comment("no covariance: element sets carry none, so none is written (ADR-002)"),
     ]

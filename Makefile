@@ -61,3 +61,10 @@ ddil:  ## run all four DDIL scenarios on a real two-node cluster, then write doc
 wayfinder-fixture:  ## regenerate the ASSUMED-schema Wayfinder contract fixture (offline, deterministic)
 	$(UV) run python scripts/make_assumed_wayfinder_fixture.py
 # --- end M3 tabulated-ephemeris block ---
+
+# --- demonstration-mode screening (ADR-002) ---------------------------------
+PRIMARY ?= 40115
+HOURS ?= 24
+.PHONY: screen
+screen:  ## demonstration mode: approaches to PRIMARY from the public snapshot (geometry only, no Pc)
+	$(UV) run sentinel screen --primary $(PRIMARY) --hours $(HOURS)
