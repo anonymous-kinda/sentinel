@@ -178,7 +178,7 @@ def test_every_contribution_short_of_implemented_is_an_item_with_its_plan(source
     assert risk["status"] == "open"
     assert risk["remediations"][0]["lifecycle"] == "planned"
     assert "AU-9 (Node host baseline): planned" in items
-    assert props(items["SC-13 (Sentinel node software): planned"], "planned-evidence") == ["docs/supply-chain.md"]
+    assert props(items["SC-13 (Sentinel node software): planned"], "planned-evidence") == ["docs/fips-provider.md"]
 
 
 def test_a_stig_deviation_is_requested_not_approved_and_mapped_by_disa(sources, evidence, stig):

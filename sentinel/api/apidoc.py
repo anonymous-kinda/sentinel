@@ -15,6 +15,7 @@ OPERATOR_DATA = "operator data"
 LINK_AND_SYNC = "link and sync"
 STREAM = "stream"
 ASSISTANT = "assistant"
+SCREENING = "screening"
 
 
 def json_body(properties: dict, required: tuple[str, ...] = ()) -> dict:
@@ -60,6 +61,11 @@ TAGS = [
     {
         "name": ASSISTANT,
         "description": "AI decision support (ADR-007). Routes to tools and phrases their facts; it never computes a Pc.",
+    },
+    {
+        "name": SCREENING,
+        "description": "Demonstration mode (ADR-002): element-set geometry filed as DERIVED CDMs, never a Pc "
+        "(docs/icd/screening-api.md).",
     },
 ]
 

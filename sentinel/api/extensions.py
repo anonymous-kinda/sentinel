@@ -6,5 +6,7 @@ public read-only node) run without them.
 """
 
 from .ai_routes import register as register_ai
+from .pass_routes import register as register_passes
+from .screening_routes import register as register_screening
 
-REGISTRARS: list = [register_ai]
+REGISTRARS: list = [register_ai, register_passes, register_screening]

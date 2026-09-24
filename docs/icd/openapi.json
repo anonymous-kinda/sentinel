@@ -1130,6 +1130,178 @@
         ]
       }
     },
+    "/api/passes": {
+      "get": {
+        "operationId": "passes_api_passes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "hours",
+            "required": false,
+            "schema": {
+              "default": 24.0,
+              "maximum": 72,
+              "minimum": 1,
+              "title": "Hours",
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Passes Api Passes Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Passes"
+      }
+    },
+    "/api/passes/catalog": {
+      "get": {
+        "operationId": "catalog_api_passes_catalog_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Catalog Api Passes Catalog Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Catalog"
+      }
+    },
+    "/api/passes/tracks": {
+      "get": {
+        "operationId": "tracks_api_passes_tracks_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "norad_id",
+            "required": true,
+            "schema": {
+              "title": "Norad Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": true,
+            "schema": {
+              "format": "date-time",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": true,
+            "schema": {
+              "format": "date-time",
+              "title": "End",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Tracks Api Passes Tracks Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tracks"
+      }
+    },
+    "/api/passes/unit": {
+      "delete": {
+        "operationId": "delete_unit_api_passes_unit_delete",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Delete Unit"
+      },
+      "get": {
+        "operationId": "get_unit_api_passes_unit_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Unit Api Passes Unit Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Unit"
+      },
+      "put": {
+        "operationId": "put_unit_api_passes_unit_put",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Put Unit Api Passes Unit Put",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Put Unit"
+      }
+    },
     "/api/quarantine": {
       "get": {
         "description": "Every rejected message with its sha256, rejection code, detail and source. Nothing\nis dropped silently.",
@@ -1154,6 +1326,61 @@
         "summary": "Quarantined CDMs",
         "tags": [
           "conjunctions"
+        ]
+      }
+    },
+    "/api/screening": {
+      "post": {
+        "description": "Close approaches to the primary over the next `hours`, each filed as a DERIVED CDM\nwith no covariance, so the engine refuses its Pc. 404 when this node has no element\nset for the primary; 422 on wrong input; 403 on a read-only node. See\ndocs/icd/screening-api.md.",
+        "operationId": "screening_api_screening_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "hours": {
+                    "default": 24,
+                    "exclusiveMinimum": 0.0,
+                    "maximum": 72.0,
+                    "type": "number"
+                  },
+                  "primary_norad_id": {
+                    "minimum": 1.0,
+                    "type": "integer"
+                  },
+                  "threshold_km": {
+                    "default": 5,
+                    "exclusiveMinimum": 0.0,
+                    "maximum": 50.0,
+                    "type": "number"
+                  }
+                },
+                "required": [
+                  "primary_norad_id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Screening Api Screening Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Screen a primary against this node's element sets (no Pc)",
+        "tags": [
+          "screening"
         ]
       }
     },
@@ -1252,6 +1479,10 @@
     {
       "description": "AI decision support (ADR-007). Routes to tools and phrases their facts; it never computes a Pc.",
       "name": "assistant"
+    },
+    {
+      "description": "Demonstration mode (ADR-002): element-set geometry filed as DERIVED CDMs, never a Pc (docs/icd/screening-api.md).",
+      "name": "screening"
     }
   ]
 }

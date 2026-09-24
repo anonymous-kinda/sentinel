@@ -11,6 +11,7 @@ its own, and the edge's leafnode denies node.> both ways):
     node.<node_id>.sync.arrival           one record arrived from the hub (edge)
     node.<node_id>.link.state             measured link state changed (edge)
     node.<node_id>.link.emulation         link-emulation preset applied (demo only)
+    node.<node_id>.passes.updated         pass inputs moved (no unit, no coordinates)
 
 Each is published with a Sentinel-Kind header equal to its kind, which the
 console's server-sent event stream uses as the event name.
@@ -34,6 +35,7 @@ NODE_EVENTS = (
     "sync.arrival",
     "link.state",
     "link.emulation",
+    "passes.updated",
 )
 
 
