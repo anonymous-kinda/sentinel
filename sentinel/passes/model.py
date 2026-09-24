@@ -68,6 +68,10 @@ class PassWindow:
 
 
 class PassProvider(Protocol):
+    """Convention every provider follows: return each pass that overlaps
+    [start, end], with its true rise, culmination and set - even when they
+    fall outside the interval - sorted by rise. Callers clip."""
+
     name: str
 
     def windows(
