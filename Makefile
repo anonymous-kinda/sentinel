@@ -73,8 +73,8 @@ CERT_IDENTITY ?=
 TRUSTED_ROOT ?= $(if $(CERT_IDENTITY),$(abspath .tools/noarch/sigstore-trusted-root.json),)
 TRUSTED_ROOT_SHA256 ?= $(if $(CERT_IDENTITY),$(shell awk '$$1 == "sigstore-trusted-root.json" {print $$4}' deploy/tools.lock),)
 
-supply-tools:  ## fetch pinned cosign, syft, trivy, hadolint, actionlint, Sigstore trust root (sha256-verified)
-	$(UV) run python scripts/fetch_tools.py --arch $(HOST_ARCH) cosign cosign.sigstore.json syft trivy hadolint actionlint sigstore-trusted-root.json
+supply-tools:  ## fetch pinned cosign, syft, trivy, linters, Sigstore trust root (sha256-verified)
+	$(UV) run python scripts/fetch_tools.py --arch $(HOST_ARCH) cosign cosign.sigstore.json syft trivy hadolint actionlint shellcheck sigstore-trusted-root.json
 
 sbom: supply-tools  ## SPDX + CycloneDX SBOMs for the Python runtime and web console -> dist/sbom/
 	$(UV) run python scripts/sbom.py
@@ -97,7 +97,8 @@ airgap-local: bundle sign-local  ## build, sign with an ephemeral key, then airg
 airgap-selftest: supply-tools  ## real cosign, no network: tampering, wrong keys and wrong identities are rejected
 	COSIGN=$(abspath $(TOOLS)/cosign) deploy/bundle/selftest_signature.sh
 
-lint-release: supply-tools  ## actionlint on every workflow, hadolint on the container
-	$(TOOLS)/actionlint
+lint-release: supply-tools  ## actionlint (+shellcheck) on workflows, hadolint, shellcheck on deploy scripts
+	$(TOOLS)/actionlint -shellcheck $(TOOLS)/shellcheck
 	$(TOOLS)/hadolint deploy/containers/Dockerfile
+	$(TOOLS)/shellcheck deploy/bundle/*.sh deploy/ansible/tests/*.sh
 # ---- M4 supply chain (end) --------------------------------------------------

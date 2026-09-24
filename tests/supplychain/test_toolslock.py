@@ -118,5 +118,5 @@ def test_the_committed_lock_parses_and_pins_both_architectures_for_every_tool():
         by_name.setdefault(p.name, set()).add(p.arch)
     per_arch = {name: arches for name, arches in by_name.items() if arches != {"noarch"}}
     assert all(arches == {"x86_64", "aarch64"} for arches in per_arch.values()), per_arch
-    assert {"cosign", "syft", "trivy", "hadolint", "actionlint", "crane"} <= set(per_arch)
+    assert {"cosign", "syft", "trivy", "hadolint", "actionlint", "shellcheck", "crane"} <= set(per_arch)
     assert by_name.get("sigstore-trusted-root.json") == {"noarch"}

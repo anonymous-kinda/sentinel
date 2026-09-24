@@ -42,7 +42,9 @@ expect() {  # expect pass|fail "<label>" "<stderr text on fail>" artifact [ENV=V
   if [[ $want == pass && $rc -eq 0 ]] || [[ $want == fail && $rc -ne 0 && $out == *"$needle"* ]]; then
     echo "  ok    $label"
   else
-    echo "  WRONG $label (exit $rc)"; echo "$out" | sed 's/^/        /'; failures=$((failures + 1))
+    echo "  WRONG $label (exit $rc)"
+    while IFS= read -r line; do printf '        %s\n' "$line"; done <<< "$out"
+    failures=$((failures + 1))
   fi
 }
 

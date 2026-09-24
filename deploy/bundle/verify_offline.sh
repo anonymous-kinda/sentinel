@@ -21,6 +21,7 @@ WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
 export BUNDLE WORK VERIFY="$HERE/verify_signature.sh" COSIGN=${COSIGN:-cosign}
 
+# shellcheck disable=SC2016  # single quotes on purpose: the inner shell expands the exported variables
 unshare -rn bash -euo pipefail -c '
   ip link set lo up 2>/dev/null || true
   if curl -s -m 3 https://pypi.org >/dev/null 2>&1; then echo "FAIL: namespace has network"; exit 1; fi

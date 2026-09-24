@@ -36,7 +36,7 @@ echo "==> installing hash-pinned dependencies (offline)"
   --no-index --no-deps --reinstall-package sentinel wheels/sentinel-*.whl
 
 echo "==> installing console, reference data and binaries"
-rm -rf "$PREFIX/web" "$PREFIX/fixtures" "$PREFIX/bin"
+rm -rf "${PREFIX:?}/web" "${PREFIX:?}/fixtures" "${PREFIX:?}/bin"
 cp -r web fixtures bin "$PREFIX/"
 cp VERSION SHA256SUMS "$PREFIX/"
 mkdir -p "$PREFIX/var"
