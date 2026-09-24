@@ -74,3 +74,16 @@ source_modules =
 forbidden_modules =
     typesafe_sdk
     anthropic
+
+[importlinter:contract:passes-is-independent]
+name = The pass module knows nothing about conjunction risk, sync internals or the API
+type = forbidden
+source_modules =
+    sentinel.passes
+forbidden_modules =
+    sentinel.risk
+    sentinel.cdm
+    sentinel.conjunction
+    sentinel.sync
+    sentinel.api
+    sentinel.ai
