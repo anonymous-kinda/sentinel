@@ -83,17 +83,21 @@ operator opt-in and a usable measured link.""" }
 
 [[control.by]]
 component = "nats"
-status = "partial"
-statement = """OPSEC by configuration: the edge's leafnode remote denies exporting unit.>, passes.> \
-and node.>, and denies importing node.> (deploy/nats/edge.conf.tmpl), so a ground unit's position, \
-its pass windows and the edge's console events cannot cross to the hub through the bus. Console \
-events use node-scoped subjects (sentinel/bus/subjects.py, ADR-009). Every DDIL harness scenario \
-runs with this configuration."""
-tests = ["tests/compliance/test_deploy_conformance.py::test_edge_never_exports_unit_passes_or_node_subjects"]
-files = ["deploy/nats/edge.conf.tmpl", "sentinel/bus/subjects.py", "harness/cluster.py"]
-plan = """Add a harness scenario that publishes on unit.> and passes.> at the edge and asserts nothing \
-arrives at the hub, so the denial is shown on a real leaf link and not only in the configuration. \
-The pass module that publishes those subjects is still in development."""
+status = "implemented"
+statement = """OPSEC by architecture (ADR-010): the edge's leafnode remote denies exporting unit.>, \
+passes.> and node.>, and denies importing node.> (deploy/nats/edge.conf.tmpl); console events use \
+node-scoped subjects (sentinel/bus/subjects.py, ADR-009); and a unit's position is not a sync record. \
+The OPSEC harness scenario shows it on a real leaf link: with a unit set on the edge and its passes \
+computed, nothing the hub's nats-server carries contains the unit's id or coordinates in any checked \
+serialization, a deliberate canary on unit.>, passes.> and node.> never reaches the hub, and the hub \
+holds no unit - with controls showing each negative is not vacuous."""
+tests = [
+    "tests/compliance/test_deploy_conformance.py::test_edge_never_exports_unit_passes_or_node_subjects",
+    "tests/test_harness_opsec.py::test_it_finds_binary_coordinates_in_cbor_and_raw_floats",
+    "tests/test_harness_opsec.py::test_it_stays_silent_on_what_legitimately_crosses_the_link",
+]
+harness = ["opsec"]
+files = ["deploy/nats/edge.conf.tmpl", "sentinel/bus/subjects.py", "harness/opsec.py"]
 
 [[control.by]]
 component = "node"
@@ -1078,23 +1082,22 @@ cosign (CM-14, SI-7). Third-party binaries and trust material are pinned by vers
 (deploy/tools.lock); a mismatch writes nothing (scripts/fetch_tools.py, used by every job that \
 fetches a tool). Python dependencies are hash-locked and installed offline with --require-hashes. \
 Upstream data (NASA CARA, CelesTrak, NIST, DISA) is vendored unmodified with provenance and \
-checksums that the tests verify. Not yet done: actions are pinned by commit SHA in release.yml and \
-in the supply-chain, release-lint and compliance CI jobs, but the other CI jobs (python, web, \
-infra, secrets, mbse) and the harness workflow still pin actions by tag. Signing, SLSA provenance \
-and SBOM attestation of releases exist only in release.yml, which has not run yet."""
+checksums that the tests verify. Every action in every workflow is pinned by commit SHA, which a \
+test enforces (tests/test_workflows_pinned.py). Not yet done: signing, SLSA provenance and SBOM \
+attestation of releases exist only in release.yml, which has not run yet."""
 tests = [
     "tests/supplychain/test_toolslock.py::test_fetch_refuses_a_digest_mismatch_and_writes_nothing",
     "tests/supplychain/test_toolslock.py::test_the_committed_lock_parses_and_pins_both_architectures_for_every_tool",
     "tests/test_tier3_cara_validation.py::test_vendored_nasa_files_are_unmodified",
     "tests/compliance/test_package_integrity.py::test_vendored_upstream_files_are_unmodified",
+    "tests/test_workflows_pinned.py::test_every_action_is_pinned_by_commit_sha",
 ]
 ci = ["ci.yml#supply-chain", "harness.yml#scenario"]
 files = [
     "docs/supply-chain.md", "deploy/tools.lock", "scripts/fetch_tools.py", "supplychain/toolslock.py",
     "deploy/bundle/install.sh", ".github/workflows/release.yml",
 ]
-plan = """Pin every action in ci.yml and harness.yml by commit SHA, as release.yml already does; push the \
-first release tag so that signing, provenance and SBOM attestation run."""
+plan = """Push the first release tag so that signing, provenance and SBOM attestation run."""
 milestone = "M4"
 
 [[control]]
@@ -1145,14 +1148,14 @@ nothing (scripts/fetch_tools.py). Sentinel's own bundles are refused unless thei
 verifies against the approved signer, and the trusted root is checked against its pin before \
 use; the supply-chain CI job exercises both with the real cosign and no network on every push. \
 The Ansible role re-checks the cosign binary's SHA-256 on the target host before running it. The \
-container base images are pinned by registry digest (deploy/containers/Dockerfile). Not yet done: \
-actions are pinned by commit SHA in release.yml and in the supply-chain, release-lint and \
-compliance CI jobs, but not in the other CI jobs or the harness workflow; and APT on the host \
+container base images are pinned by registry digest (deploy/containers/Dockerfile), and every \
+workflow action by commit SHA (tests/test_workflows_pinned.py). Not yet done: APT on the host \
 refuses unauthenticated packages only once the STIG role, not yet applied, has run."""
 tests = [
     "tests/supplychain/test_toolslock.py::test_fetch_refuses_a_digest_mismatch_and_writes_nothing",
     "tests/supplychain/test_verify_signature.py::test_a_pinned_trusted_root_digest_is_checked_before_use",
     "tests/supplychain/test_verify_signature.py::test_a_rejected_signature_fails_closed",
+    "tests/test_workflows_pinned.py::test_every_action_is_pinned_by_commit_sha",
 ]
 ci = ["ci.yml#supply-chain", "harness.yml#scenario"]
 files = [
@@ -1160,5 +1163,5 @@ files = [
     "deploy/ansible/roles/sentinel/tasks/verify.yml", "deploy/containers/Dockerfile",
     "deploy/ansible/roles/stig/tasks/packages.yml",
 ]
-plan = "Pin every action in ci.yml and harness.yml by commit SHA; apply the STIG role to the hub and scan."
+plan = "Apply the STIG role to the hub and scan."
 milestone = "M4"

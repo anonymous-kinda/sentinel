@@ -23,11 +23,11 @@ does not support is refused rather than printed.
 
 Tailored baseline: **37** controls.
 
-- By overall status: **8** implemented controls; **29** partial controls; **0** planned controls.
+- By overall status: **9** implemented controls; **28** partial controls; **0** planned controls.
 - A control is usually met by more than one component (the node software, its
   message bus, the host, the AWS hub, the pipeline, the owning organization).
-  There are **65** contributions: **16** implemented contributions;
-  **40** partial contributions; **9** planned contributions.
+  There are **65** contributions: **17** implemented contributions;
+  **39** partial contributions; **9** planned contributions.
 - DISA Canonical Ubuntu 24.04 LTS STIG V1R6 (194 rules): **55** applied rules;
   **25** deviating rules, grouped into **10** deviations; **8** not applicable rules;
   **106** unassessed rules.
@@ -272,9 +272,11 @@ The POA&M lists everything; these matter most:
    strips it. Signatures bind decisions to nodes, not yet to people.
 2. **The leaf link is not encrypted** (SC-8). The templates leave a place for
    mTLS; none is configured.
-3. **AC-4 is proven in configuration, not on the wire.** A harness scenario that
-   publishes on `unit.>` and `passes.>` at the edge and asserts nothing arrives
-   at the hub would close it.
+3. **AC-4 is now shown on the wire, but only between one hub and one edge.** The
+   OPSEC harness scenario runs real processes: nothing the hub's nats-server
+   carries contains the unit, and a deliberate canary on `unit.>`, `passes.>`
+   and `node.>` never arrives. The hub side does not also deny importing those
+   subjects from leaves; adding that would give defence in depth.
 4. **The host baseline is unverified** until the STIG role and its scan run.
 5. **The release path has never run** (CM-8, CM-14, SI-7, SR-3, SR-4, SR-11,
    RA-5). The `supply-chain` CI job runs on every push: the SBOM completeness
@@ -283,8 +285,9 @@ The POA&M lists everything; these matter most:
    SLSA provenance and SBOM attestation happen only in `release.yml`, which runs
    on a tag. It has been checked statically, and no release has been signed yet.
    The full offline install is proven only on a developer machine. No scan runs
-   on a schedule. The container's base layer is in no SBOM. The older CI jobs
-   and the harness workflow still pin actions by tag rather than by commit SHA.
+   on a schedule. The container's base layer is in no SBOM. No CI job has run
+   on GitHub yet, because the repository has not been pushed: every CI citation
+   describes configuration, and each step was run locally.
    `docs/supply-chain.md` has the control map.
 6. **Organizational responsibilities** (review cadences, approval authority,
    remediation timelines) are listed against a `program` component as planned,

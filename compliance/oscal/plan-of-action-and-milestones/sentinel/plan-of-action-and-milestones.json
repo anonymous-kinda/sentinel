@@ -1,9 +1,9 @@
 {
   "plan-of-action-and-milestones": {
-    "uuid": "7064de5b-d6f9-5f6c-942a-521724a53b3a",
+    "uuid": "a418e64a-c9fb-5d3a-befa-82751c0c8761",
     "metadata": {
       "title": "Sentinel plan of action and milestones",
-      "last-modified": "2026-09-24T08:14:36Z",
+      "last-modified": "2026-09-24T08:20:57Z",
       "version": "0.2.0",
       "oscal-version": "1.2.1"
     },
@@ -87,21 +87,6 @@
             "lifecycle": "planned",
             "title": "Planned remediation",
             "description": "Verify the sandbox on a deployed host (systemd-analyze security) and apply the STIG role."
-          }
-        ]
-      },
-      {
-        "uuid": "48adca3c-d5c8-552a-b279-29b2603177ba",
-        "title": "AC-4 (Node message bus (nats-server)): partial",
-        "description": "Add a harness scenario that publishes on unit.> and passes.> at the edge and asserts nothing arrives at the hub, so the denial is shown on a real leaf link and not only in the configuration. The pass module that publishes those subjects is still in development.",
-        "statement": "Stated in the SSP as partial: OPSEC by configuration: the edge's leafnode remote denies exporting unit.>, passes.> and node.>, and denies importing node.> (deploy/nats/edge.conf.tmpl), so a ground unit's position, its pass windows and the edge's console events cannot cross to the hub through the bus. Console events use node-scoped subjects (sentinel/bus/subjects.py, ADR-009). Every DDIL harness scenario runs with this configuration.",
-        "status": "open",
-        "remediations": [
-          {
-            "uuid": "b034878f-16eb-52aa-bae3-05941e950077",
-            "lifecycle": "planned",
-            "title": "Planned remediation",
-            "description": "Add a harness scenario that publishes on unit.> and passes.> at the edge and asserts nothing arrives at the hub, so the denial is shown on a real leaf link and not only in the configuration. The pass module that publishes those subjects is still in development."
           }
         ]
       },
@@ -723,15 +708,15 @@
       {
         "uuid": "30906a7a-2397-53a0-bce1-ceab33d3e9a6",
         "title": "SR-3 (Build, test and release pipeline): partial",
-        "description": "Pin every action in ci.yml and harness.yml by commit SHA, as release.yml already does; push the first release tag so that signing, provenance and SBOM attestation run.",
-        "statement": "Stated in the SSP as partial: The supply-chain controls are documented in docs/supply-chain.md, and the supply-chain CI job runs them on every push: SBOMs with a completeness gate (CM-8), a Trivy scan that fails on any finding no reviewed VEX statement answers (RA-5), and offline signature verification with the real cosign (CM-14, SI-7). Third-party binaries and trust material are pinned by version and SHA-256 (deploy/tools.lock); a mismatch writes nothing (scripts/fetch_tools.py, used by every job that fetches a tool). Python dependencies are hash-locked and installed offline with --require-hashes. Upstream data (NASA CARA, CelesTrak, NIST, DISA) is vendored unmodified with provenance and checksums that the tests verify. Not yet done: actions are pinned by commit SHA in release.yml and in the supply-chain, release-lint and compliance CI jobs, but the other CI jobs (python, web, infra, secrets, mbse) and the harness workflow still pin actions by tag. Signing, SLSA provenance and SBOM attestation of releases exist only in release.yml, which has not run yet.",
+        "description": "Push the first release tag so that signing, provenance and SBOM attestation run.",
+        "statement": "Stated in the SSP as partial: The supply-chain controls are documented in docs/supply-chain.md, and the supply-chain CI job runs them on every push: SBOMs with a completeness gate (CM-8), a Trivy scan that fails on any finding no reviewed VEX statement answers (RA-5), and offline signature verification with the real cosign (CM-14, SI-7). Third-party binaries and trust material are pinned by version and SHA-256 (deploy/tools.lock); a mismatch writes nothing (scripts/fetch_tools.py, used by every job that fetches a tool). Python dependencies are hash-locked and installed offline with --require-hashes. Upstream data (NASA CARA, CelesTrak, NIST, DISA) is vendored unmodified with provenance and checksums that the tests verify. Every action in every workflow is pinned by commit SHA, which a test enforces (tests/test_workflows_pinned.py). Not yet done: signing, SLSA provenance and SBOM attestation of releases exist only in release.yml, which has not run yet.",
         "status": "open",
         "remediations": [
           {
             "uuid": "5e63845e-5d91-5bc1-bcb5-cae569c8fb1b",
             "lifecycle": "planned",
             "title": "Planned remediation",
-            "description": "Pin every action in ci.yml and harness.yml by commit SHA, as release.yml already does; push the first release tag so that signing, provenance and SBOM attestation run."
+            "description": "Push the first release tag so that signing, provenance and SBOM attestation run."
           }
         ]
       },
@@ -753,15 +738,15 @@
       {
         "uuid": "2d9ef5eb-157a-5174-a6db-0c5a8066d964",
         "title": "SR-11 (Build, test and release pipeline): partial",
-        "description": "Pin every action in ci.yml and harness.yml by commit SHA; apply the STIG role to the hub and scan.",
-        "statement": "Stated in the SSP as partial: A component is refused unless it is what was pinned. Downloaded tools and the Sigstore trusted root are accepted only if their SHA-256 matches deploy/tools.lock, and a mismatch writes nothing (scripts/fetch_tools.py). Sentinel's own bundles are refused unless their cosign signature verifies against the approved signer, and the trusted root is checked against its pin before use; the supply-chain CI job exercises both with the real cosign and no network on every push. The Ansible role re-checks the cosign binary's SHA-256 on the target host before running it. The container base images are pinned by registry digest (deploy/containers/Dockerfile). Not yet done: actions are pinned by commit SHA in release.yml and in the supply-chain, release-lint and compliance CI jobs, but not in the other CI jobs or the harness workflow; and APT on the host refuses unauthenticated packages only once the STIG role, not yet applied, has run.",
+        "description": "Apply the STIG role to the hub and scan.",
+        "statement": "Stated in the SSP as partial: A component is refused unless it is what was pinned. Downloaded tools and the Sigstore trusted root are accepted only if their SHA-256 matches deploy/tools.lock, and a mismatch writes nothing (scripts/fetch_tools.py). Sentinel's own bundles are refused unless their cosign signature verifies against the approved signer, and the trusted root is checked against its pin before use; the supply-chain CI job exercises both with the real cosign and no network on every push. The Ansible role re-checks the cosign binary's SHA-256 on the target host before running it. The container base images are pinned by registry digest (deploy/containers/Dockerfile), and every workflow action by commit SHA (tests/test_workflows_pinned.py). Not yet done: APT on the host refuses unauthenticated packages only once the STIG role, not yet applied, has run.",
         "status": "open",
         "remediations": [
           {
             "uuid": "6110a1b6-034a-5c96-b23a-f69626621df4",
             "lifecycle": "planned",
             "title": "Planned remediation",
-            "description": "Pin every action in ci.yml and harness.yml by commit SHA; apply the STIG role to the hub and scan."
+            "description": "Apply the STIG role to the hub and scan."
           }
         ]
       },
@@ -1109,33 +1094,6 @@
         "related-risks": [
           {
             "risk-uuid": "6d14a3ba-e082-54bd-8d8e-f46eeb70ed3e"
-          }
-        ]
-      },
-      {
-        "uuid": "e418df99-125c-534a-a7d3-34d897cb6f12",
-        "title": "AC-4 (Node message bus (nats-server)): partial",
-        "description": "Add a harness scenario that publishes on unit.> and passes.> at the edge and asserts nothing arrives at the hub, so the denial is shown on a real leaf link and not only in the configuration. The pass module that publishes those subjects is still in development.",
-        "props": [
-          {
-            "name": "related-control",
-            "ns": "urn:sentinel:oscal",
-            "value": "ac-4"
-          },
-          {
-            "name": "component",
-            "ns": "urn:sentinel:oscal",
-            "value": "nats"
-          },
-          {
-            "name": "implementation-status",
-            "ns": "urn:sentinel:oscal",
-            "value": "partial"
-          }
-        ],
-        "related-risks": [
-          {
-            "risk-uuid": "48adca3c-d5c8-552a-b279-29b2603177ba"
           }
         ]
       },
@@ -2279,7 +2237,7 @@
       {
         "uuid": "c01ca073-9ee3-588a-9f65-76902933b24b",
         "title": "SR-3 (Build, test and release pipeline): partial",
-        "description": "Pin every action in ci.yml and harness.yml by commit SHA, as release.yml already does; push the first release tag so that signing, provenance and SBOM attestation run.",
+        "description": "Push the first release tag so that signing, provenance and SBOM attestation run.",
         "props": [
           {
             "name": "related-control",
@@ -2343,7 +2301,7 @@
       {
         "uuid": "60d83d43-4d33-50b0-9d0e-5f514425618d",
         "title": "SR-11 (Build, test and release pipeline): partial",
-        "description": "Pin every action in ci.yml and harness.yml by commit SHA; apply the STIG role to the hub and scan.",
+        "description": "Apply the STIG role to the hub and scan.",
         "props": [
           {
             "name": "related-control",
