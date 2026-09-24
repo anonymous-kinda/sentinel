@@ -112,12 +112,14 @@ def build(arch: str, out_dir: pathlib.Path) -> pathlib.Path:
     shutil.copy2(ROOT / "deploy" / "bundle" / "install.sh", stage / "install.sh")
     shutil.copy2(ROOT / "LICENSE", stage / "LICENSE")
     commit = run("git", "rev-parse", "HEAD", cwd=ROOT, capture=True).strip()
-    (stage / "VERSION").write_text(f"sentinel {ver}\ncommit {commit[:12]}\narch {arch}\npython {PYTHON_TAG}\n")
+    dirty = bool(run("git", "status", "--porcelain", "--untracked-files=no", cwd=ROOT, capture=True).strip())
+    tree = "dirty" if dirty else "clean"
+    (stage / "VERSION").write_text(f"sentinel {ver}\ncommit {commit[:12]} ({tree})\narch {arch}\npython {PYTHON_TAG}\n")
 
     # 6. Machine-readable manifest, then the integrity manifest over everything, written last.
     manifest = bundle_manifest(
         stage, version=ver, arch=arch, python=PYTHON_TAG, commit=commit, source_date_epoch=epoch,
-        pins=read_lock(ROOT / "deploy" / "tools.lock"), shipped_tools=SHIPPED_TOOLS,
+        pins=read_lock(ROOT / "deploy" / "tools.lock"), shipped_tools=SHIPPED_TOOLS, dirty=dirty,
     )
     (stage / "BUNDLE.json").write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n")
     write_manifest(stage)

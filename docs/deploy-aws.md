@@ -29,13 +29,25 @@ terraform output -raw ansible_inventory > ../../ansible/inventory.ini
 
 ## 2. Node
 
+A release bundle, signed keyless in CI. Put `sentinel-<ver>-aarch64.tar.gz`, its `.sha256` and its `.sigstore.json` in `dist/`, then, from the repository root:
+
 ```bash
-make bundle ARCH=aarch64          # dist/sentinel-<ver>-aarch64.tar.gz and .sha256
+uv run python scripts/fetch_tools.py --arch aarch64 cosign sigstore-trusted-root.json
 cd deploy/ansible
-uvx --from ansible-core ansible-playbook site.yml
+uvx --from ansible-core ansible-playbook site.yml -e sentinel_repository=OWNER/sentinel
 ```
 
-The playbook checks the tarball digest, unpacks it, and runs `install.sh`, which checks every file against `SHA256SUMS` and installs dependencies offline with hashes required. It then writes the node settings: read-only, exercise data plus the NASA reference set. Last, it configures Caddy for `https://<ip-with-dashes>.sslip.io`, a TLS-capable name that needs no DNS setup.
+Or a bundle built here, signed with an ephemeral local key (a demo, not a release). From the repository root:
+
+```bash
+make bundle ARCH=aarch64 && make sign-local
+uv run python scripts/fetch_tools.py --arch aarch64 cosign
+cd deploy/ansible
+uvx --from ansible-core ansible-playbook site.yml \
+  -e sentinel_verify_mode=key -e sentinel_verify_key="$PWD/../../dist/local-signing-key.pub"
+```
+
+On the host, the playbook first verifies the bundle's signature. It uses the cosign binary pinned in `deploy/tools.lock`, checks that binary's own digest, and needs no network; without a signature policy the play stops (`docs/supply-chain.md`). It then checks the tarball digest, unpacks it, and runs `install.sh`, which checks every file against `SHA256SUMS` and installs dependencies offline with hashes required. It then writes the node settings: read-only, exercise data plus the NASA reference set. Last, it configures Caddy for `https://<ip-with-dashes>.sslip.io`, a TLS-capable name that needs no DNS setup.
 
 ## 3. Check
 

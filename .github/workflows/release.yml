@@ -207,6 +207,7 @@ jobs:
             unshare -rn bash deploy/bundle/verify_signature.sh "${f}"
           done
       - name: SLSA build provenance
+        id: provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
@@ -214,6 +215,7 @@ jobs:
             dist/sentinel-*.container.tar
       # attest-sbom v4 is a thin wrapper over actions/attest (same inputs); see docs/supply-chain.md.
       - name: SBOM attestation, Python runtime
+        id: sbom-python
         uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
         with:
           subject-path: |
@@ -221,12 +223,22 @@ jobs:
             dist/sentinel-*.container.tar
           sbom-path: dist/sentinel-python-runtime.spdx.json
       - name: SBOM attestation, web console
+        id: sbom-web
         uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
         with:
           subject-path: |
             dist/sentinel-*.tar.gz
             dist/sentinel-*.container.tar
           sbom-path: dist/sentinel-web-console.spdx.json
+      - name: Ship the attestation bundles, so provenance verifies offline too
+        env:
+          PROVENANCE: ${{ steps.provenance.outputs.bundle-path }}
+          SBOM_PYTHON: ${{ steps.sbom-python.outputs.bundle-path }}
+          SBOM_WEB: ${{ steps.sbom-web.outputs.bundle-path }}
+        run: |
+          cp "${PROVENANCE}" dist/provenance.intoto.sigstore.json
+          cp "${SBOM_PYTHON}" dist/sbom-python-runtime.intoto.sigstore.json
+          cp "${SBOM_WEB}" dist/sbom-web-console.intoto.sigstore.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-signed

@@ -65,7 +65,10 @@ def bundle_manifest(
     source_date_epoch: int,
     pins: Iterable[ToolPin],
     shipped_tools: Sequence[str],
+    dirty: bool,
 ) -> dict:
+    """`dirty` records that the build included uncommitted changes, so the
+    commit id alone does not describe what is inside."""
     tools = sorted(select(pins, arch, shipped_tools), key=lambda p: p.name)
     wheels = sorted((stage / "wheels").glob("*.whl"))
     return {
@@ -76,6 +79,7 @@ def bundle_manifest(
             "arch": arch,
             "python": python,
             "commit": commit,
+            "source_tree": "dirty" if dirty else "clean",
             "source_date_epoch": source_date_epoch,
         },
         "tools": [
