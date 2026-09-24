@@ -295,6 +295,8 @@ An edge measures its hub link and uses that as the WAN state. A hub or standalon
 
 **Hosted SDKs load lazily.** A provider is loaded only when its key variable is set, and its SDK is imported only then (`_load_provider` in `sentinel/api/ai_routes.py`). A bundle built without the `ai` extra serves the local tier.
 
+**Readiness check.** `make ai-live-check` makes one real Jev routing call and one real Claude narration through the production adapters, each only if its key is set (`.env.example` lists them). It prints the tool, confidence, latency and bytes for Jev, and the model, latency, grounding result and tokens for Claude. A key that is not set is reported, not failed; a configured call that fails exits 1 with the adapter's reason code. It writes nothing: `make ai-eval` publishes.
+
 **Drafts, not actions.** `draft_decision` returns a draft id. `POST /api/ai/confirm` turns it into a signed `DECISION` entry once, carrying router, confidence, model and the audit sequence of the ask. It is refused with HTTP 409 if the CDM the draft was made against has been superseded since. A read-only node answers questions but never records.
 
 **Audit.** The log lives at `<SENTINEL_VAR>/ai-audit.jsonl`. `GET /api/ai/audit/verify` recomputes the chain and reports the first bad line.
