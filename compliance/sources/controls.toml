@@ -192,8 +192,9 @@ tests = [
     "tests/api/test_api.py::test_upload_is_idempotent_and_wrong_input_is_quarantined",
     "tests/test_logging_policy.py::test_log_messages_are_constants_with_values_as_fields",
     "tests/test_obs.py::test_json_formatter_emits_one_object_per_line",
+    "tests/test_ops_log.py::test_resolving_a_conflict_appends_a_signed_resolution_naming_what_it_superseded",
 ]
-files = ["sentinel/audit/chain.py", "sentinel/crdt/log.py", "sentinel/obs.py"]
+files = ["sentinel/audit/chain.py", "sentinel/crdt/log.py", "sentinel/obs.py", "sentinel/ops/service.py"]
 
 [[control.by]]
 component = "host"
@@ -216,7 +217,8 @@ status = "implemented"
 statement = """A decision-log entry records its author (the operator identity the proxy asserts; see \
 IA-2), the authoring node and its sequence (the dot), wall time and Lamport time, the kind and body \
 of the decision, the event and CDM message it was made against, the previous entry's hash and an \
-Ed25519 signature. An AI audit record carries its sequence, time, author, the question, the tier, \
+Ed25519 signature. The entry that resolves a conflict also names the field, the new value and each \
+value it superseded, with that value's author and node. An AI audit record carries its sequence, time, author, the question, the tier, \
 the chosen route, which narrator phrased the answer, the grounding verdict, any fallback, the \
 answer, a hash of the tool facts and the chain hash. Service logs are JSON with time, level, logger, \
 message and fields."""
@@ -225,8 +227,9 @@ tests = [
     "tests/ai/test_assistant.py::test_a_draft_writes_nothing_until_a_person_confirms_it",
     "tests/test_obs.py::test_message_stays_stable_and_values_become_fields",
     "tests/test_tier6_contract.py::test_result_is_serialisable_for_the_decision_log",
+    "tests/test_ops_log.py::test_resolving_a_conflict_appends_a_signed_resolution_naming_what_it_superseded",
 ]
-files = ["sentinel/crdt/log.py", "sentinel/ai/assistant.py", "sentinel/obs.py"]
+files = ["sentinel/crdt/log.py", "sentinel/ai/assistant.py", "sentinel/obs.py", "sentinel/ops/service.py"]
 
 [[control]]
 id = "au-6"

@@ -1,6 +1,6 @@
 {
   "system-security-plan": {
-    "uuid": "ee7f8b5e-8cf8-52bc-8608-2ef567d73a1c",
+    "uuid": "53fbe5fe-bf9c-558f-b34c-f50b7bf5d17f",
     "metadata": {
       "title": "Sentinel system security plan (draft)",
       "last-modified": "2026-09-24T22:00:00Z",
@@ -623,6 +623,11 @@
                   "value": "tests/test_obs.py::test_json_formatter_emits_one_object_per_line"
                 },
                 {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/test_ops_log.py::test_resolving_a_conflict_appends_a_signed_resolution_naming_what_it_superseded"
+                },
+                {
                   "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
                   "value": "sentinel/audit/chain.py"
@@ -636,6 +641,11 @@
                   "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
                   "value": "sentinel/obs.py"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "sentinel/ops/service.py"
                 }
               ],
               "implementation-status": {
@@ -685,7 +695,7 @@
             {
               "component-uuid": "cd16ef70-2e73-501e-9c7f-4caa10a38352",
               "uuid": "f4cbff50-ef1e-5424-a29e-28679d2c9550",
-              "description": "A decision-log entry records its author (the operator identity the proxy asserts; see IA-2), the authoring node and its sequence (the dot), wall time and Lamport time, the kind and body of the decision, the event and CDM message it was made against, the previous entry's hash and an Ed25519 signature. An AI audit record carries its sequence, time, author, the question, the tier, the chosen route, which narrator phrased the answer, the grounding verdict, any fallback, the answer, a hash of the tool facts and the chain hash. Service logs are JSON with time, level, logger, message and fields.",
+              "description": "A decision-log entry records its author (the operator identity the proxy asserts; see IA-2), the authoring node and its sequence (the dot), wall time and Lamport time, the kind and body of the decision, the event and CDM message it was made against, the previous entry's hash and an Ed25519 signature. The entry that resolves a conflict also names the field, the new value and each value it superseded, with that value's author and node. An AI audit record carries its sequence, time, author, the question, the tier, the chosen route, which narrator phrased the answer, the grounding verdict, any fallback, the answer, a hash of the tool facts and the chain hash. Service logs are JSON with time, level, logger, message and fields.",
               "props": [
                 {
                   "name": "evidence-test",
@@ -708,6 +718,11 @@
                   "value": "tests/test_tier6_contract.py::test_result_is_serialisable_for_the_decision_log"
                 },
                 {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/test_ops_log.py::test_resolving_a_conflict_appends_a_signed_resolution_naming_what_it_superseded"
+                },
+                {
                   "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
                   "value": "sentinel/crdt/log.py"
@@ -721,6 +736,11 @@
                   "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
                   "value": "sentinel/obs.py"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "sentinel/ops/service.py"
                 }
               ],
               "implementation-status": {
