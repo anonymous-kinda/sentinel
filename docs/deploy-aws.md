@@ -12,7 +12,7 @@ edges    --7422, allow-listed--> nats-server leafnode   (closed by default; no T
 
 - An AWS account, with credentials in the environment (`aws configure` or `AWS_PROFILE`).
 - Terraform 1.6+. It is not pinned in `deploy/tools.lock`, and `make tools` does not fetch it.
-- `uvx` (ships with uv) for Ansible: `uvx --from ansible-core ansible-playbook ...`.
+- `uvx` (ships with uv) for Ansible: `uvx --from ansible-core==2.21.4 ansible-playbook ...`.
 
 ## 1. Infrastructure
 
@@ -34,7 +34,7 @@ A release bundle, signed keyless in CI. Put `sentinel-<ver>-aarch64.tar.gz`, its
 ```bash
 uv run python scripts/fetch_tools.py --arch aarch64 cosign sigstore-trusted-root.json
 cd deploy/ansible
-uvx --from ansible-core ansible-playbook site.yml -e sentinel_repository=OWNER/sentinel
+uvx --from ansible-core==2.21.4 ansible-playbook site.yml -e sentinel_repository=OWNER/sentinel
 ```
 
 Or a bundle built here, signed with an ephemeral local key (a demo, not a release). From the repository root:
@@ -43,7 +43,7 @@ Or a bundle built here, signed with an ephemeral local key (a demo, not a releas
 make bundle ARCH=aarch64 && make sign-local
 uv run python scripts/fetch_tools.py --arch aarch64 cosign
 cd deploy/ansible
-uvx --from ansible-core ansible-playbook site.yml \
+uvx --from ansible-core==2.21.4 ansible-playbook site.yml \
   -e sentinel_verify_mode=key -e sentinel_verify_key="$PWD/../../dist/local-signing-key.pub"
 ```
 

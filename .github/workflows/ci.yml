@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+# Every uv command runs against uv.lock exactly; a stale lock fails the job
+# (uv run would otherwise re-lock silently). tests/test_workflows_pinned.py.
+env:
+  UV_LOCKED: "1"
+
 jobs:
   python:
     runs-on: ubuntu-24.04
@@ -79,7 +84,7 @@ jobs:
         working-directory: deploy/ansible
         run: |
           cp inventory.example.ini inventory.ini
-          uvx --from ansible-core ansible-playbook --syntax-check site.yml
+          uvx --from ansible-core==2.21.4 ansible-playbook --syntax-check site.yml
 
   secrets:
     runs-on: ubuntu-24.04
