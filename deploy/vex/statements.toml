@@ -1,0 +1,42 @@
+# Reviewed VEX statements: the human input behind deploy/vex/sentinel.openvex.json.
+#
+#   make vex     # rescan, re-check every statement and its evidence, rewrite the document
+#   make scan    # same checks, fails if the committed document is out of date
+#
+# Rules (docs/supply-chain.md, "VEX process"):
+# - A statement answers a finding that a real, raw (un-VEXed) scan reported.
+#   If no scan reports it any more, the build fails until the statement is removed.
+# - not_affected needs an OpenVEX justification AND an impact_statement saying why.
+# - Where the reason can be re-checked mechanically, say how in [statement.evidence];
+#   it runs on every scan against the binaries that ship.
+# - Never write a statement for a vulnerability no scan produced.
+
+[document]
+id = "urn:sentinel:openvex:release"
+author = "Sentinel maintainers"
+role = "Document Creator"
+version = 1
+timestamp = "2026-09-24T06:40:25Z"
+
+[[statement]]
+vulnerability = "GO-2026-5932"
+products = ["pkg:golang/github.com/nats-io/nats-server/v2@v2.15.0"]
+subcomponents = ["pkg:golang/golang.org/x/crypto@v0.57.0"]
+status = "not_affected"
+justification = "vulnerable_code_not_present"
+impact_statement = """\
+GO-2026-5932 is an advisory against the golang.org/x/crypto/openpgp package \
+(unmaintained, unsafe by design; no fixed version). Trivy matches it at module \
+level because nats-server v2.15.0 depends on golang.org/x/crypto v0.57.0. \
+The nats-server binaries Sentinel ships (x86_64 and aarch64, pinned by sha256 \
+in deploy/tools.lock) do not link that package: their function tables contain \
+no golang.org/x/crypto/openpgp symbol, while symbols of the x/crypto packages \
+nats-server does use (bcrypt, ocsp, chacha20poly1305) are present. Sentinel \
+never processes OpenPGP data. Re-verified on every scan (supplychain.evidence)."""
+timestamp = "2026-09-24T06:40:25Z"
+
+[statement.evidence]
+kind = "go-package-absent"
+package = "golang.org/x/crypto/openpgp"
+control = "golang.org/x/crypto/bcrypt"
+binaries = ["x86_64/nats-server", "aarch64/nats-server"]

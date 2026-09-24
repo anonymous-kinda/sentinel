@@ -1,10 +1,15 @@
 # Configure the Sentinel cloud hub created by deploy/aws/terraform.
 #
-#   make bundle ARCH=aarch64
-#   ansible-playbook -i inventory.ini site.yml
+#   # release assets for aarch64 in ../../dist: tarball, .sha256, .sigstore.json
+#   uv run python ../../scripts/fetch_tools.py --arch aarch64 cosign sigstore-trusted-root.json
+#   ansible-playbook -i inventory.ini site.yml -e sentinel_repository=OWNER/sentinel
 #
 # Idempotent. The node is installed from the same signed bundle an edge or
 # a disconnected enclave would receive; this playbook only adds TLS in front.
+# The sentinel role verifies the bundle's signature on the host before
+# anything is unpacked (roles/sentinel/tasks/verify.yml, SI-7 / CM-14). Without
+# sentinel_repository (keyless) or sentinel_verify_mode=key + sentinel_verify_key
+# (a site key) the play stops: an unverified bundle is never installed.
 - name: Sentinel hub
   hosts: hub
   become: true

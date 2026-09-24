@@ -36,7 +36,7 @@ echo "==> installing hash-pinned dependencies (offline)"
   --no-index --no-deps --reinstall-package sentinel wheels/sentinel-*.whl
 
 echo "==> installing console, reference data and binaries"
-rm -rf "$PREFIX/web" "$PREFIX/fixtures" "$PREFIX/bin"
+rm -rf "${PREFIX:?}/web" "${PREFIX:?}/fixtures" "${PREFIX:?}/bin"
 cp -r web fixtures bin "$PREFIX/"
 cp VERSION SHA256SUMS "$PREFIX/"
 mkdir -p "$PREFIX/var"
@@ -46,6 +46,7 @@ if [[ ! -f "$PREFIX/sentinel.env" ]]; then
 SENTINEL_NODE_ID=$(hostname -s)
 SENTINEL_ROLE=$ROLE
 SENTINEL_DB=$PREFIX/var/sentinel.db
+SENTINEL_VAR=$PREFIX/var
 SENTINEL_WEB_DIST=$PREFIX/web
 SENTINEL_FIXTURES=$PREFIX/fixtures
 SENTINEL_MARKING="UNCLASSIFIED // EXERCISE"

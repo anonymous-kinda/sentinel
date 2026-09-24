@@ -1,0 +1,15 @@
+# Exercise the sentinel role's signature gate on this machine; no VM needed.
+# Driven by deploy/ansible/tests/test_verify.sh, which supplies the variables.
+- name: Sentinel signature gate
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Bundle name
+      ansible.builtin.set_fact:
+        bundle_name: "sentinel-{{ sentinel_version }}-{{ sentinel_arch }}"
+
+    - name: Signature gate from the sentinel role
+      ansible.builtin.include_role:
+        name: sentinel
+        tasks_from: verify

@@ -99,3 +99,62 @@ jobs:
       - name: SysML v2 syntax (pilot grammar via sysml2py, isolated env)
         run: make sysml-check
   # --- M6 MBSE (end) --------------------------------------------------------
+
+  # ---- M4 supply chain (begin) ---------------------------------------------
+  # Actions here are pinned by full commit SHA; tools by sha256 in deploy/tools.lock.
+  release-lint:
+    name: Workflows, container and deploy scripts (actionlint, hadolint, shellcheck)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Pinned linters (sha256-verified)
+        run: python3 scripts/fetch_tools.py --arch x86_64 actionlint shellcheck hadolint
+      - name: actionlint (with shellcheck on every run block)
+        run: .tools/x86_64/actionlint -shellcheck .tools/x86_64/shellcheck
+      - name: hadolint
+        run: .tools/x86_64/hadolint deploy/containers/Dockerfile
+      - name: shellcheck
+        run: .tools/x86_64/shellcheck deploy/bundle/*.sh deploy/ansible/tests/*.sh
+
+  supply-chain:
+    name: SBOMs, vulnerability gate, offline signature checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: "3.12"
+          activate-environment: true
+      - name: Install
+        run: uv pip install -e .
+      - name: Pinned tools and trust root (sha256-verified)
+        run: python scripts/fetch_tools.py --arch x86_64 syft trivy cosign cosign.sigstore.json sigstore-trusted-root.json
+      - name: SBOMs (fails if empty or missing a shipped component)
+        run: python scripts/sbom.py
+      - name: Vulnerability gate (raw scan, reviewed VEX and its evidence checked, SARIF)
+        run: python scripts/scan.py
+      - name: Offline signature self-test (real cosign inside unshare -rn)
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          deploy/bundle/selftest_signature.sh
+      - name: Ansible signature gate refuses tampered and unsigned bundles
+        run: deploy/ansible/tests/test_verify.sh
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: ${{ !cancelled() }}
+        with:
+          name: sbom-and-scan
+          path: |
+            dist/sbom/*.json
+            dist/scan/*.sarif
+            dist/scan/*.json
+          if-no-files-found: ignore
+  # ---- M4 supply chain (end) -----------------------------------------------

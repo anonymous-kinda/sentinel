@@ -1,0 +1,359 @@
+name: release
+
+# Tag-triggered release (vX.Y.Z = sentinel.__version__). Produces, for x86_64
+# and aarch64: the air-gap bundle, a container image archive, SBOMs (SPDX and
+# CycloneDX), the reviewed OpenVEX document, the Sigstore trusted root, and
+# SHA256SUMS over all of it. Every artifact is signed keyless (cosign, GitHub
+# OIDC -> Fulcio, logged in Rekor) and gets SLSA provenance and SBOM
+# attestations. Every signature is verified offline before anything is
+# published, and each bundle is installed and run with no network on its own
+# architecture. The result is a DRAFT release that a maintainer publishes.
+#
+# SLSA Build L2: a hosted build platform generates and signs the provenance.
+# Not L3: the build steps and the signing job belong to the same repository
+# workflow, so a malicious workflow change could have the platform sign false
+# provenance. L3 needs the provenance generated in an isolated, trusted
+# reusable workflow. docs/supply-chain.md has the full statement.
+#
+# Hardening: third-party actions pinned by full commit SHA; permissions {}
+# at the top and granted per job; no dependency caches (nothing restored from
+# another run); the only job that can mint an OIDC token runs no build code.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Bundles, SBOMs, vulnerability gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: "3.12"
+          activate-environment: true
+          enable-cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Install
+        run: uv pip install -e .
+      - name: The tag names the package version
+        id: version
+        run: |
+          version=$(python -c 'import sentinel; print(sentinel.__version__)')
+          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match sentinel ${version}"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+      - name: Pinned tools (sha256-verified, deploy/tools.lock)
+        run: python scripts/fetch_tools.py --arch x86_64 syft trivy
+      - name: Console
+        run: |
+          npm --prefix web ci --no-audit --no-fund
+          npm --prefix web run build
+      - name: Air-gap bundles, reproducible (SOURCE_DATE_EPOCH = commit time)
+        run: python scripts/build_bundle.py --arch x86_64 --arch aarch64
+      - name: SBOMs, SPDX and CycloneDX (python runtime, web console)
+        run: python scripts/sbom.py
+      - name: Vulnerability gate (raw scan, reviewed VEX checked and applied)
+        run: python scripts/scan.py
+      - name: Keep the scan results, pass or fail
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sarif-build
+          path: dist/scan/*.sarif
+          if-no-files-found: ignore
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-unsigned
+          if-no-files-found: error
+          path: |
+            dist/sentinel-*.tar.gz
+            dist/sentinel-*.tar.gz.sha256
+            dist/sbom/*.json
+
+  container:
+    name: Container (${{ matrix.arch }})
+    needs: build
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { arch: x86_64, runner: ubuntu-24.04 }
+          - { arch: aarch64, runner: ubuntu-24.04-arm }
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+      ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-unsigned
+          path: dist
+      - name: Build from the unpacked bundle (Chainguard base pinned by digest)
+        run: |
+          (cd dist && sha256sum --strict -c "sentinel-${VERSION}-${ARCH}.tar.gz.sha256")
+          mkdir -p build
+          tar -xzf "dist/sentinel-${VERSION}-${ARCH}.tar.gz" -C build
+          docker build -f deploy/containers/Dockerfile \
+            --build-arg VERSION="${VERSION}" --build-arg REVISION="${GITHUB_SHA}" \
+            -t "sentinel:${VERSION}" "build/sentinel-${VERSION}-${ARCH}"
+      - name: Smoke test (read-only root, non-root, no capabilities, NASA validation)
+        run: |
+          test "$(docker inspect --format '{{.Config.User}}' "sentinel:${VERSION}")" = "65532:65532"
+          docker run -d --name sentinel --read-only --cap-drop ALL --security-opt no-new-privileges \
+            -v sentinel-var:/var/lib/sentinel -p 127.0.0.1:18800:8000 "sentinel:${VERSION}"
+          for _ in $(seq 1 60); do curl -sf -m 1 http://127.0.0.1:18800/api/health >/dev/null && break; sleep 1; done
+          curl -sf http://127.0.0.1:18800/api/health || { docker logs sentinel; exit 1; }
+          curl -sf http://127.0.0.1:18800/api/validation | python3 -c '
+          import json, sys
+          d = json.load(sys.stdin)
+          assert d["available"] and d["operational_count"] == 53 and d["confusion"]["fn"] == 0, d
+          print("validation reproduced in the container:", d["operational_count"], "events")'
+          docker rm -f sentinel
+      - name: Image archive for air-gapped transfer (docker load / podman load)
+        run: docker save "sentinel:${VERSION}" -o "sentinel-${VERSION}-${ARCH}.container.tar"
+      - name: Image scan (reported, not gated; see docs/supply-chain.md)
+        run: |
+          python3 scripts/fetch_tools.py --arch "${ARCH}" trivy
+          ".tools/${ARCH}/trivy" image --input "sentinel-${VERSION}-${ARCH}.container.tar" \
+            --scanners vuln --format sarif --output "container-${ARCH}.sarif" \
+            --disable-telemetry --skip-version-check --no-progress
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: container-${{ matrix.arch }}
+          path: sentinel-*.container.tar
+          if-no-files-found: error
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sarif-container-${{ matrix.arch }}
+          path: container-*.sarif
+          if-no-files-found: ignore
+
+  sign:
+    name: Sign, attest, verify offline
+    needs: [build, container]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write      # GitHub OIDC token -> Sigstore (Fulcio) signing certificate
+      attestations: write  # store provenance and SBOM attestations with the repository
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: "{release-unsigned,container-*}"
+          merge-multiple: true
+          path: dist
+      - name: Pinned cosign and Sigstore trusted root (sha256-verified)
+        run: python3 scripts/fetch_tools.py --arch x86_64 cosign sigstore-trusted-root.json
+      - name: Assemble the release set and SHA256SUMS
+        working-directory: dist
+        run: |
+          cp sbom/*.json .
+          cp ../deploy/vex/sentinel.openvex.json .
+          cp ../.tools/noarch/sigstore-trusted-root.json trusted_root.json
+          sha256sum sentinel-*.tar.gz sentinel-*.container.tar ./*.spdx.json ./*.cdx.json \
+            sentinel.openvex.json trusted_root.json | sed 's# \./# #' > SHA256SUMS
+          cat SHA256SUMS
+      - name: Keyless signatures (identity = this workflow at this tag)
+        run: |
+          for f in dist/sentinel-*.tar.gz dist/sentinel-*.container.tar dist/SHA256SUMS; do
+            .tools/x86_64/cosign sign-blob --yes --bundle "${f}.sigstore.json" "${f}"
+          done
+      - name: Verify every signature offline, exactly as an enclave would
+        env:
+          COSIGN: ${{ github.workspace }}/.tools/x86_64/cosign
+          SENTINEL_TRUSTED_ROOT: ${{ github.workspace }}/dist/trusted_root.json
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          SENTINEL_TRUSTED_ROOT_SHA256=$(awk '$1 == "sigstore-trusted-root.json" {print $4}' deploy/tools.lock)
+          SENTINEL_CERT_IDENTITY="${GITHUB_SERVER_URL}/${GITHUB_WORKFLOW_REF}"
+          export SENTINEL_TRUSTED_ROOT_SHA256 SENTINEL_CERT_IDENTITY
+          for f in dist/sentinel-*.tar.gz dist/sentinel-*.container.tar dist/SHA256SUMS; do
+            unshare -rn bash deploy/bundle/verify_signature.sh "${f}"
+          done
+      - name: SLSA build provenance
+        id: provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/sentinel-*.tar.gz
+            dist/sentinel-*.container.tar
+      # attest-sbom v4 is a thin wrapper over actions/attest (same inputs); see docs/supply-chain.md.
+      - name: SBOM attestation, Python runtime
+        id: sbom-python
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-path: |
+            dist/sentinel-*.tar.gz
+            dist/sentinel-*.container.tar
+          sbom-path: dist/sentinel-python-runtime.spdx.json
+      - name: SBOM attestation, web console
+        id: sbom-web
+        uses: actions/attest-sbom@c604332985a26aa8cf1bdc465b92731239ec6b9e # v4.1.0
+        with:
+          subject-path: |
+            dist/sentinel-*.tar.gz
+            dist/sentinel-*.container.tar
+          sbom-path: dist/sentinel-web-console.spdx.json
+      - name: Ship the attestation bundles, so provenance verifies offline too
+        env:
+          PROVENANCE: ${{ steps.provenance.outputs.bundle-path }}
+          SBOM_PYTHON: ${{ steps.sbom-python.outputs.bundle-path }}
+          SBOM_WEB: ${{ steps.sbom-web.outputs.bundle-path }}
+        run: |
+          cp "${PROVENANCE}" dist/provenance.intoto.sigstore.json
+          cp "${SBOM_PYTHON}" dist/sbom-python-runtime.intoto.sigstore.json
+          cp "${SBOM_WEB}" dist/sbom-web-console.intoto.sigstore.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release-signed
+          if-no-files-found: error
+          path: |
+            dist/sentinel-*.tar.gz
+            dist/sentinel-*.tar.gz.sha256
+            dist/sentinel-*.container.tar
+            dist/*.sigstore.json
+            dist/*.spdx.json
+            dist/*.cdx.json
+            dist/sentinel.openvex.json
+            dist/trusted_root.json
+            dist/SHA256SUMS
+
+  verify:
+    name: Offline verify and install (${{ matrix.arch }})
+    needs: [build, sign]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { arch: x86_64, runner: ubuntu-24.04 }
+          - { arch: aarch64, runner: ubuntu-24.04-arm }
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+      ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-signed
+          path: dist
+      - name: Pinned cosign for this architecture
+        run: python3 scripts/fetch_tools.py --arch "${ARCH}" cosign
+      - name: Signature, install and run with no network (unshare -rn)
+        env:
+          COSIGN: ${{ github.workspace }}/.tools/${{ matrix.arch }}/cosign
+          SENTINEL_TRUSTED_ROOT: ${{ github.workspace }}/dist/trusted_root.json
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          SENTINEL_TRUSTED_ROOT_SHA256=$(awk '$1 == "sigstore-trusted-root.json" {print $4}' deploy/tools.lock)
+          SENTINEL_CERT_IDENTITY="${GITHUB_SERVER_URL}/${GITHUB_WORKFLOW_REF}"
+          export SENTINEL_TRUSTED_ROOT_SHA256 SENTINEL_CERT_IDENTITY
+          deploy/bundle/verify_offline.sh "dist/sentinel-${VERSION}-${ARCH}.tar.gz"
+
+  code-scanning:
+    name: Upload scan results (SARIF)
+    needs: [build, container]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      security-events: write  # upload SARIF to code scanning
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: sarif-*
+          merge-multiple: true
+          path: sarif
+      - name: Source dependencies (uv.lock, package-lock.json)
+        if: ${{ hashFiles('sarif/source.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        with:
+          sarif_file: sarif/source.sarif
+          category: trivy-source
+      - name: Bundled binaries (nats-server, uv)
+        if: ${{ hashFiles('sarif/binaries.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        with:
+          sarif_file: sarif/binaries.sarif
+          category: trivy-binaries
+      - name: Container image, x86_64
+        if: ${{ hashFiles('sarif/container-x86_64.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        with:
+          sarif_file: sarif/container-x86_64.sarif
+          category: trivy-container-x86_64
+      - name: Container image, aarch64
+        if: ${{ hashFiles('sarif/container-aarch64.sarif') != '' }}
+        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        with:
+          sarif_file: sarif/container-aarch64.sarif
+          category: trivy-container-aarch64
+
+  publish:
+    name: Draft GitHub release
+    needs: [build, sign, verify]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write  # create the draft release and upload its assets
+    env:
+      VERSION: ${{ needs.build.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-signed
+          path: dist
+      - name: Draft the release (a maintainer reviews and publishes it)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "Sentinel ${VERSION}. Every artifact is signed keyless by"
+            echo "${GITHUB_SERVER_URL}/${GITHUB_WORKFLOW_REF}"
+            echo "and carries SLSA Build L2 provenance and SBOM attestations."
+            echo "Verify online or offline: docs/supply-chain.md."
+          } > notes.md
+          gh release create "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --draft --verify-tag \
+            --title "Sentinel ${VERSION}" --notes-file notes.md dist/*
