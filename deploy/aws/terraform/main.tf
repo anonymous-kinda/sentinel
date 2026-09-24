@@ -1,7 +1,7 @@
 # The Sentinel cloud hub: one hardened Graviton instance in its own VPC.
 #
 #   internet --443/80--> Caddy (TLS, Let's Encrypt) --127.0.0.1:8000--> sentinel
-#   edge nodes --7422 (mTLS, allow-listed)--> nats-server leafnode    [M2]
+#   edge nodes --7422 (allow-listed; no leaf TLS yet, SC-8)--> nats-server leafnode
 #   admin --22 from admin_cidr only--> sshd;  SSM Session Manager as the break-glass path
 #
 # Deliberately small. The same bundle that installs here installs on an edge
@@ -88,7 +88,7 @@ resource "aws_vpc_security_group_ingress_rule" "ssh_admin" {
 resource "aws_vpc_security_group_ingress_rule" "nats_leaf" {
   for_each          = toset(var.leaf_allowed_cidrs)
   security_group_id = aws_security_group.hub.id
-  description       = "NATS leafnode (mTLS) from an allow-listed edge"
+  description       = "NATS leafnode from an allow-listed edge (no TLS yet, SC-8)"
   cidr_ipv4         = each.value
   ip_protocol       = "tcp"
   from_port         = 7422

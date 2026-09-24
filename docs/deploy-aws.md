@@ -1,17 +1,17 @@
 # Deploying the cloud hub on AWS
 
-One Graviton instance (t4g.small, about $17.50/month including the public IPv4 address) in its own VPC. Terraform builds the infrastructure; Ansible installs the same bundle an edge node or a disconnected enclave receives, and puts Caddy (automatic TLS) in front.
+One Graviton instance (t4g.small with a 20 GB root volume; about $17.50/month at us-east-1 on-demand prices, including the public IPv4 address) in its own VPC. Terraform builds the infrastructure; Ansible installs the same bundle an edge node or a disconnected enclave receives, and puts Caddy (automatic TLS) in front.
 
 ```
 internet --443--> Caddy (Let's Encrypt) --127.0.0.1:8000--> sentinel (systemd, hardened)
 admin    --22 from admin_cidr only--> sshd        break-glass: SSM Session Manager
-edges    --7422 mTLS, allow-listed--> nats-server leafnode   (closed until M2)
+edges    --7422, allow-listed--> nats-server leafnode   (closed by default; no TLS yet, SC-8)
 ```
 
 ## Prerequisites
 
 - An AWS account, with credentials in the environment (`aws configure` or `AWS_PROFILE`).
-- Terraform 1.6+ (or run `make tools`; a pinned binary is not bundled for the operator side).
+- Terraform 1.6+. It is not pinned in `deploy/tools.lock`, and `make tools` does not fetch it.
 - `uvx` (ships with uv) for Ansible: `uvx --from ansible-core ansible-playbook ...`.
 
 ## 1. Infrastructure
@@ -66,5 +66,5 @@ terraform -chdir=deploy/aws/terraform destroy
 ## What the public node does not do
 
 - **Accept uploads.** `SENTINEL_READ_ONLY=1` disables the ingest endpoint.
-- **Run the AI assistant.** That would add abuse and cost risk; it is shown locally and in the demo video.
+- **Run the AI assistant.** That would add abuse and cost risk; the playbook sets `sentinel_ai: false`, and the assistant runs on a local node instead.
 - **Serve Space-Track data.** Its terms restrict redistribution. The public node serves exercise data and NASA's published reference set only.

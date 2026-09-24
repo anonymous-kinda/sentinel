@@ -35,7 +35,7 @@ variable "ssh_public_key" {
 }
 
 variable "leaf_allowed_cidrs" {
-  description = "Networks allowed to reach the NATS leaf port (7422, mTLS). Empty keeps it closed."
+  description = "Networks allowed to reach the NATS leaf port (7422; no TLS yet, SC-8). Empty keeps it closed."
   type        = list(string)
   default     = []
 }

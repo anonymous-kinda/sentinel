@@ -2,7 +2,7 @@
 
 A DDIL-resilient conjunction assessment decision aid for satellite operators.
 
-**Status: risk engine (validated against NASA CARA), operator console, hub/edge DDIL sync (tested on a real two-node network) and the AI decision layer are implemented and tested. Army pass module and ATO evidence in progress.**
+**Status: implemented and tested end to end: the risk engine (validated against NASA CARA), the operator console, hub/edge DDIL sync on a real two-node network, the Army overhead-pass module, AI decision support, a signed and offline-verifiable supply chain, a generated OSCAL package (no ATO is claimed) and a SysML v2 requirement trace. Nothing has been fielded.**
 
 ![Sentinel operator console](docs/img/console.png)
 
@@ -77,7 +77,7 @@ every number in an AI-written answer came from the validated code (ADR-007).
 - **NASA reference.** The 53 CARA operational events, ingested through the same parser.
 - **Validation.** The node re-runs the NASA comparison with the engine it is actually running and shows the agreement.
 
-The globe is CesiumJS (Wayfinder's rendering engine) using imagery bundled with the application, with no ion token, geocoder or CDN. The node serves the console under a `default-src 'self'` Content-Security-Policy (asserted in `tests/api/test_api.py`), so the browser itself blocks any request beyond the node; a headless-browser session during development recorded **zero requests beyond the node**. The console works on a network with no route to the internet, or it is not a field tool.
+The globe is CesiumJS using imagery bundled with the application, with no ion token, geocoder or CDN. The node serves the console under a `default-src 'self'` Content-Security-Policy (asserted in `tests/api/test_api.py`), so the browser itself blocks any request beyond the node. The console works on a network with no route to the internet, or it is not a field tool.
 
 ![Validation tab](docs/img/validation.png)
 
@@ -89,10 +89,10 @@ Claim two, built and measured. Each node runs its own `nats-server` and serves i
 
 ```bash
 make demo-local      # hub :8000, edge :8001 - the edge's LINK chip shapes the real link
-make ddil            # five scenarios on real processes -> docs/ddil-results.md
+make ddil            # every scenario on real processes -> docs/ddil-results.md
 ```
 
-**Denied: the edge keeps working.** The console stays up (2.7 ms p95 while cut off). Operators triage events and record signed decisions locally, and the link state is *measured*, not configured.
+**Denied: the edge keeps working.** The console stays up (2.8 ms p95 while cut off). Operators triage events and record signed decisions locally, and the link state is *measured*, not configured.
 
 ![Edge node while the link is denied](docs/img/edge-denied.png)
 
@@ -134,7 +134,7 @@ Claim three. The assistant never produces a risk number, and that is enforced ra
 
 ![Assistant tab: tier, grounding, ask-back and a draft awaiting confirmation](docs/img/assistant.png)
 
-**Measured, not claimed.** `make ai-eval` scores the routers on 60 labelled requests through the assistant's own confidence gate, reporting accuracy, coverage, abstention, Brier score, ECE and a reliability diagram (`docs/ai-eval.md`). The deterministic floor routes about half of natural-language requests to the right tool, which is the gap a model has to close. Jev's column is filled only by a real run with `TYPESAFE_API_KEY` set; no Jev number in this repository was produced any other way.
+**Measured, not claimed.** `make ai-eval` scores the routers on 60 labelled requests through the assistant's own confidence gate, reporting accuracy, coverage, abstention, Brier score, ECE and a reliability diagram (`docs/ai-eval.md`). The deterministic floor routes under half of in-scope requests (0.46) to the right tool, which is the gap a model has to close. Jev's column is filled only by a real run with `TYPESAFE_API_KEY` set; no Jev number in this repository was produced any other way.
 
 ```bash
 SENTINEL_AI_CLOUD=1 TYPESAFE_API_KEY=... ANTHROPIC_API_KEY=... make serve   # hosted tiers (opt-in)
@@ -143,16 +143,30 @@ make ai-eval                                                               # sco
 
 ---
 
+## Overhead passes for a disconnected Army unit
+
+The second mission module. A unit on the ground needs to know when a catalogued imaging satellite can see it, and when none can for long enough to move.
+
+- **What it computes.** Pass windows for 38 public-catalog EO and SAR imagers, from public CelesTrak element sets and each imager's field of regard. Fields of regard are planning assumptions with cited sources, chosen to err wide. EO passes count only when the unit is lit. The next window long enough for the unit's reaction time is shown as a date-time group.
+- **What it will not say.** A gap is labelled *not observed by catalogued imagers*, never "safe": uncatalogued and non-public sensors are outside the model, and a test keeps the word out of the module and the console. Element-set error is covered by a timing pad that widens with age, and sets older than three days are flagged stale.
+- **Two providers, one contract.** Local SGP4 and a CCSDS OEM ephemeris provider must both pass one conformance suite: rise and set within 2 s of a brute-force oracle. A Wayfinder adapter feeds the second provider, on an *assumed* schema (see `docs/adapters/wayfinder.md`) (ADR-011).
+- **The unit's position never leaves the edge (ADR-010).** It is not a sync record, never logged, stored in one 0600 file, and the edge's leaf link denies the subjects that could carry it. The OPSEC harness scenario checks this on real processes: the hub's wire never carries the unit in any checked encoding, and a deliberate canary never crosses. The results are in `docs/ddil-results.md`.
+- **Reference data rides the same sync.** Public element sets reach the edge through the unchanged priority agent. The hub offers edges only the imaging catalog, and ADR-008 records what that costs on a thin link.
+
+![Passes tab: next unobserved window, the unit, and 24 h of pass windows by imager](docs/img/passes.png)
+
+---
+
 ## Supply chain: signed, attested, verifiable offline
 
 A classified or disconnected site has to trust a bundle without reaching the internet to check it.
 
-- **Signing.** Releases are signed keyless with Sigstore from GitHub Actions. They carry SLSA **Build L2** provenance and SBOM attestations in SPDX and CycloneDX. Build L2 is the honest level; `docs/supply-chain.md` explains why this is not L3.
-- **Offline verification.** Every installer verifies the signature against a pinned Sigstore trust root before unpacking anything, with no network: `install.sh`, `make airgap-verify` and the Ansible role all use the same policy.
+- **Signing.** Releases are signed keyless with Sigstore from GitHub Actions. They carry SLSA **Build L2** provenance and SPDX SBOM attestations; SPDX and CycloneDX SBOMs ship alongside, covered by the signed checksum list. Build L2 is the honest level; `docs/supply-chain.md` explains why this is not L3.
+- **Offline verification.** Every install path verifies the signature against a pinned Sigstore trust root (or a site key) before unpacking anything, with no network. `make airgap-verify` and the Ansible role run the same gate, `deploy/bundle/verify_signature.sh`; the bundle's `install.sh` then checks every file against its `SHA256SUMS`.
 - **Local proofs.**
   - `make airgap-selftest` shows that a tampered, unsigned, wrong-key or wrong-identity bundle is refused.
   - `make airgap-local` builds a bundle, signs it with a throwaway key, and installs it inside a network namespace with only loopback. There it reproduces the NASA validation.
-- **Vulnerability gate.** Scans fail on any finding without a reviewed VEX statement. The one current finding (GO-2026-5932, in a Go module vendored by `nats-server`) is shown not to be linked into the binary, and that check re-runs on every scan.
+- **Vulnerability gate.** Scans fail on any finding without a reviewed VEX statement. The one current finding (GO-2026-5932, against the `openpgp` package of a Go module `nats-server` depends on) is shown not to be linked into the binary, and that check re-runs on every scan.
 
 ## Traceability, generated
 
@@ -160,7 +174,7 @@ A classified or disconnected site has to trust a bundle without reaching the int
 - the part that satisfies it;
 - the evidence that verifies it: a test, a harness scenario, an import contract or a CI step.
 
-CI regenerates `docs/traceability.md`, and fails on any reference to evidence that does not exist. Work not built yet is marked *planned* and reported as unverified, never as verified. A real SysML v2 grammar (sysml2py, the pilot implementation's grammar) parses the model in CI. That check covers syntax, not semantics, and the docs say so.
+CI regenerates `docs/traceability.md`, and fails on any reference to evidence that does not exist. Work not built yet is marked *planned* and reported as unverified, never as verified. The current trace has 54 requirements: 53 verified, 1 unverified (planned), 0 broken references. A real SysML v2 grammar (sysml2py, the pilot implementation's grammar) parses the model in CI. That check covers syntax, not semantics, and the docs say so.
 
 ---
 
@@ -178,7 +192,7 @@ What Sentinel does with element sets instead is *demonstration mode*.
 `sentinel screen --primary 40115 --hours 24` screens a satellite against the
 bundled public CelesTrak snapshot and lists every close approach: object,
 time of closest approach, miss distance and relative speed. Every line says
-*Pc: refused - element sets have no covariance*. With `--out DIR` it writes
+*Pc: refused — element sets have no covariance*. With `--out DIR` it writes
 each approach as a DERIVED CCSDS CDM. Fed back in, the risk engine refuses it
 with `NO_COVARIANCE`, the same gate any covariance-less CDM meets. There is
 no special case in the engine (ADR-002).
@@ -190,7 +204,7 @@ tripped the gate, rather than returning something that looks authoritative.
 Implementing the 3D numerical method that *would* handle those cases is
 deferred; detecting that it is needed is not.
 
-**No Pc where NASA's own reference says the 2D method is wrong.** CARA publishes 53 real operational conjunctions with its verdict on whether the 2D method applies. Sentinel's gate refuses **every one** of the 29 that CARA flags. On those events CARA's 3D result differs from the 2D value by up to 60,000× at orbital speeds, and by up to 162 orders of magnitude at low relative velocity. The threshold was calibrated on that same set, and the validation report states this next to the result.
+**No Pc where NASA's own reference says the 2D method is wrong.** CARA publishes 53 real operational conjunctions with its verdict on whether the 2D method applies. Sentinel's gate refuses **every one** of the 29 that CARA flags. On those events CARA's 3D result differs from the 2D value by up to 60,722× at orbital speeds, and by up to 162 orders of magnitude at low relative velocity. The threshold was calibrated on that same set, and the validation report states this next to the result.
 
 ---
 
@@ -260,14 +274,16 @@ sentinel/ephemeris/    CCSDS OEM codec and Earth-fixed state tables
 sentinel/adapters/     source adapters (Wayfinder, on an assumed schema - see docs/adapters/)
 sentinel/screening/    demonstration mode: element-set close approaches, geometry only (ADR-002)
 sentinel/api/          the node: FastAPI, SSE, strict CSP, static console; composes module records for sync
+sentinel/validation/   NASA CARA published cases, shared by the Tier 3 tests, the report and the Validation tab
 sentinel/obs.py        structured logging: stable messages, values as fields
 web/                   React + TypeScript + CesiumJS console (offline imagery, no ion, no CDN)
 harness/               real two-node DDIL scenarios (nats-server + Toxiproxy, no containers)
-deploy/                bundle builder, offline installer, systemd, NATS configs, AWS Terraform, Ansible
+deploy/                offline installer and signature gate, systemd, NATS configs, container, AWS Terraform, Ansible
 fixtures/cara/         NASA CARA data, unmodified, with licence, provenance and checksums
 fixtures/omm/          public CelesTrak element-set snapshot, with provenance and checksums
 supplychain/           build-side tooling: SBOMs, Trivy + VEX, bundle manifests (not shipped)
 mbse/                  SysML v2 model and the trace generator -> docs/traceability.md
+compliance/            OSCAL generator and sources; generated SSP, assessment results and POA&M (docs/compliance.md)
 evals/                 labelled operator requests for the routing eval
 docs/                  ADRs, ICDs, supply chain, generated validation / DDIL / AI-eval / trace reports
 ```
