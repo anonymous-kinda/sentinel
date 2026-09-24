@@ -39,3 +39,6 @@ web/test-results/
 deploy/aws/terraform/terraform.tfvars
 deploy/ansible/inventory.ini
 harness/results/
+
+# agent worktrees and local assistant state
+.claude/
