@@ -7,21 +7,24 @@ two Sentinel nodes (hub and edge) on top. Nothing is simulated in-process.
 
 | scenario | result | assertions | ran |
 |---|---|---|---|
-| DENIED | PASS | 11/11 | 2026-09-24T02:39Z |
-| LIMITED | PASS | 3/3 | 2026-09-24T02:40Z |
-| INTERMITTENT | PASS | 4/4 | 2026-09-24T02:41Z |
-| DEGRADED | PASS | 3/3 | 2026-09-24T02:41Z |
-| RECOVERY | PASS | 3/3 | 2026-09-24T02:43Z |
+| DENIED | PASS | 11/11 | 2026-09-24T07:58Z |
+| LIMITED | PASS | 3/3 | 2026-09-24T07:59Z |
+| INTERMITTENT | PASS | 4/4 | 2026-09-24T08:00Z |
+| DEGRADED | PASS | 3/3 | 2026-09-24T08:00Z |
+| RECOVERY | PASS | 3/3 | 2026-09-24T08:01Z |
+| OPSEC | PASS | 10/10 | 2026-09-24T08:01Z |
 
 ## DENIED
 
-- PASS - edge console stays available while denied (p95 < 200 ms) (p95 2.7 ms over 40 requests)
+The hub serves conjunction CDMs only (hub_elements=False): this scenario measures conjunction sync. Element-set sync between real processes is exercised by OPSEC.
+
+- PASS - edge console stays available while denied (p95 < 200 ms) (p95 2.8 ms over 40 requests)
 - PASS - edge measured the link as DENIED (not configured - measured)
 - PASS - no data loss: every hub CDM reached the edge (set difference empty) (16 events, 29 CDMs)
 - PASS - every event re-assessed at the edge and VERIFIED against the hub
 - PASS - operator data converged (log and annotations digests equal) (1 log entries, 1 annotation registers)
 - PASS - concurrent triage edits kept as a CONFLICT, not last-writer-wins (values ['MANEUVER_PLANNING', 'WATCH'])
-- PASS - the decision made offline is flagged REVIEW REQUIRED (its CDM was superseded) (decided against EX-DIL-03-20260923T223848)
+- PASS - the decision made offline is flagged REVIEW REQUIRED (its CDM was superseded) (decided against EX-DIL-03-20260924T035751)
 - PASS - the edge's offline decision is signed and verified at the hub
 - PASS - catch-up order: urgent before routine before history (P1_URGENT > P2_ROUTINE > P4_BULK)
 - PASS - catch-up order: earliest deadline first within urgent (Kendall tau >= 0.95) (tau 1.000 over 5 records)
@@ -32,8 +35,8 @@ two Sentinel nodes (hub and edge) on top. Nothing is simulated in-process.
 | denial_wall_s | 20.0 |
 | edge_events_during_denial | 8 |
 | hub_events_during_denial | 16 |
-| convergence_after_reconnect_s | 2.36 |
-| edge_api_p95_ms_while_denied | 2.7 |
+| convergence_after_reconnect_s | 1.32 |
+| edge_api_p95_ms_while_denied | 2.8 |
 | catch_up_records | 16 |
 | catch_up_p1_kendall_tau | 1.0 |
 
@@ -41,22 +44,26 @@ two Sentinel nodes (hub and edge) on top. Nothing is simulated in-process.
 
 Toxiproxy bandwidth 1 kB/s each way plus 600 ms latency; NATS leafnode s2_auto compression on.
 
-- PASS - every event visible as a summary before its full record (EDF) (summaries at 2.5 s, all verified at 28.2 s)
-- PASS - most urgent full CDM arrives sooner with EDF than with FIFO (same link, same bytes) (EDF 5.5 s vs FIFO 38.2 s (6.9x))
-- PASS - the edge measured the link as LIMITED (measured 1810 B/s)
+The hub serves conjunction CDMs only (hub_elements=False): this scenario measures conjunction sync. Element-set sync between real processes is exercised by OPSEC.
+
+- PASS - every event visible as a summary before its full record (EDF) (summaries at 3.0 s, all verified at 29.2 s)
+- PASS - most urgent full CDM arrives sooner with EDF than with FIFO (same link, same bytes) (EDF 5.5 s vs FIFO 37.8 s (6.9x))
+- PASS - the edge measured the link as LIMITED (measured 1770 B/s)
 
 | measured over ~8 kbit/s + 600 ms | EDF (Sentinel) | FIFO (transport order) |
 |---|---|---|
-| every event visible (summaries) | 2.5 s | 3.0 s |
-| **most urgent event's full CDM** | **5.5 s** | **38.2 s** |
-| every event verified | 28.2 s | 49.8 s |
-| measured payload rate | 1810 B/s | 1800 B/s |
+| every event visible (summaries) | 3.0 s | 3.0 s |
+| **most urgent event's full CDM** | **5.5 s** | **37.8 s** |
+| every event verified | 29.2 s | 50.4 s |
+| measured payload rate | 1770 B/s | 1748 B/s |
 
 Same link, same 13 records (64,058 bytes of KVN), only the order differs:
 the most urgent full record arrives **6.9x sooner** with earliest-deadline-first.
 The payload rate exceeds the 1 kB/s link rate because NATS compresses the leafnode stream (s2).
 
 ## INTERMITTENT
+
+The hub serves conjunction CDMs only (hub_elements=False): this scenario measures conjunction sync. Element-set sync between real processes is exercised by OPSEC.
 
 - PASS - no duplicate or lost log entries (count equals notes written, both nodes) (hub 24, edge 24, written 24)
 - PASS - operator data converged
@@ -74,23 +81,54 @@ The payload rate exceeds the 1 kB/s link rate because NATS compresses the leafno
 
 Toxiproxy latency 600 +/- 200 ms each way, bandwidth 32 kB/s.
 
-- PASS - converges over a degraded link (21.2 s)
+The hub serves conjunction CDMs only (hub_elements=False): this scenario measures conjunction sync. Element-set sync between real processes is exercised by OPSEC.
+
+- PASS - converges over a degraded link (21.3 s)
 - PASS - edge measured degradation (DEGRADED or LIMITED, not CONNECTED) (LIMITED)
 - PASS - no process restarted
 
 | metric | value |
 |---|---|
-| convergence_s | 21.2 |
+| convergence_s | 21.3 |
 | measured_state | LIMITED |
 
 ## RECOVERY
 
-- PASS - leaf re-establishes over ~8 kbit/s after a denial (5.5 s)
-- PASS - operator data written while denied reaches the hub over the thin link (converged in 7.3 s)
+The hub serves conjunction CDMs only (hub_elements=False): this scenario measures conjunction sync. Element-set sync between real processes is exercised by OPSEC.
+
+- PASS - leaf re-establishes over ~8 kbit/s after a denial (16.4 s)
+- PASS - operator data written while denied reaches the hub over the thin link (converged in 18.5 s)
 - PASS - no process restarted
 
 | metric | value |
 |---|---|
-| leaf_reconnect_s | 5.5 |
-| convergence_s | 7.3 |
+| leaf_reconnect_s | 16.4 |
+| convergence_s | 18.5 |
+
+## OPSEC
+
+NIST SP 800-53 AC-4 (information flow enforcement). The ground unit's position and the pass windows computed from it stay on the edge node: the application publishes only a coordinate-free node-scoped event, and the edge's leafnode permissions deny exporting unit.>, passes.> and node.>. Evidence: a subscriber to > on the hub's nats-server during a real edge computation, a deliberate canary publish of the unit at the edge, and a byte scan of every hub file.
+
+- PASS - element sets reached the edge through sync (the edge loads none itself) (167 element sets crossed in 0.5 s; edge assessed 38 imagers)
+- PASS - the edge accepted the unit and computed its passes locally (57 windows, 28 gaps over 24 h)
+- PASS - control: the hub's capture sees what the edge exports (a harmless canary crossed) (hub capture: 433 messages, 156,221 bytes)
+- PASS - control: the edge did publish passes.updated on its own bus (2 events on node.edge-alpha.passes.updated)
+- PASS - nothing on the hub's wire carries the unit id or its coordinates, in any serialization (23 patterns over 433 messages, 156,221 bytes)
+- PASS - no pass or unit subject reached the hub, not even a deliberate canary on unit.>, passes.> or node.> (none)
+- PASS - the hub has no unit (GET /api/passes/unit is 404) (HTTP 404)
+- PASS - no file on the hub holds the unit (var, database, NATS config, logs) (8 files scanned)
+- PASS - control: on the edge the unit rests only in var/unit.json, mode 0600 (files holding the unit: ['var/unit.json']; mode 0o600)
+- PASS - no process restarted
+
+| metric | value |
+|---|---|
+| element_sync_s | 0.5 |
+| hub_messages_captured | 433 |
+| hub_bytes_captured | 156221 |
+| hub_subjects | _INBOX 216, sync.hub 198, ops.hub 18, opsec.control 1 |
+| element_sets_crossed | 167 |
+| leak_patterns_checked | 23 |
+| edge_windows_24h | 57 |
+| edge_gaps_24h | 28 |
+| edge_passes_updated_events | 2 |
 
