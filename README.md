@@ -89,8 +89,18 @@ Claim two, built and measured. Each node runs its own `nats-server` and serves i
 
 ```bash
 make demo-local      # hub :8000, edge :8001 - the edge's LINK chip shapes the real link
+make compose-up      # the same hub and edge in containers; only Docker needed (docs/compose.md)
 make ddil            # every scenario on real processes -> docs/ddil-results.md
 ```
+
+**In containers.** `make compose-up` runs the same topology with only Docker needed.
+- Each node's `nats-server` and console share a network namespace.
+- The edge reaches the hub only through Toxiproxy.
+- The NATS configs are rendered from the same templates by the harness's own code, so the leaf permissions and DDIL fixes are identical.
+
+`make compose-link PRESET=DENIED` shapes the link. `make compose-smoke` checks that the edge syncs and verifies the hub's events, keeps answering while DENIED, reconverges, and never lets a unit reach the hub.
+
+The containers themselves have not run yet: the `compose-smoke` CI job is their first real run. The smoke test has passed against the process harness. See `docs/compose.md`.
 
 **Denied: the edge keeps working.** The console stays up (2.8 ms p95 while cut off). Operators triage events and record signed decisions locally, and the link state is *measured*, not configured.
 
@@ -174,7 +184,7 @@ A classified or disconnected site has to trust a bundle without reaching the int
 - the part that satisfies it;
 - the evidence that verifies it: a test, a harness scenario, an import contract or a CI step.
 
-CI regenerates `docs/traceability.md`, and fails on any reference to evidence that does not exist. Work not built yet is marked *planned* and reported as unverified, never as verified. The current trace has 54 requirements: 53 verified, 1 unverified (planned), 0 broken references. A real SysML v2 grammar (sysml2py, the pilot implementation's grammar) parses the model in CI. That check covers syntax, not semantics, and the docs say so.
+CI regenerates `docs/traceability.md`, and fails on any reference to evidence that does not exist. Work not built yet is marked *planned* and reported as unverified, never as verified. The current trace has 54 requirements: 54 verified, 0 unverified, 0 broken references. A real SysML v2 grammar (sysml2py, the pilot implementation's grammar) parses the model in CI. That check covers syntax, not semantics, and the docs say so.
 
 ---
 
@@ -297,6 +307,7 @@ The architecture decisions, including the ones rejected and why, are in
 anyone can choose a message bus, the useful part is being able to say why not
 the other one.
 
+- **Engineers:** the [technical guide](docs/technical-guide.md) covers architecture, data flows, the configuration reference and how to extend. [`docs/index.md`](docs/index.md) lists every document, and [`CONTRIBUTING.md`](CONTRIBUTING.md) the rules and checks.
 - **Interfaces:** [`docs/icd/`](docs/icd/README.md) has the OpenAPI, AsyncAPI 3.0, CDM admission profile and sync envelope. Each is held to the code by `tests/docs/`.
 - **For program offices and operators:**
   - the [white paper](docs/white-paper.md);
