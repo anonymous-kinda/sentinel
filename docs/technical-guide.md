@@ -250,7 +250,7 @@ Round trip and throughput are exponentially weighted (α = 0.3). Throughput is m
 `sentinel/crdt/` holds the data types; `sentinel/ops/service.py` persists and exchanges them:
 
 - **Decision log** (`SignedLog`, `sentinel/crdt/log.py`): a grow-only set of immutable entries, each Ed25519-signed by its node and hash-chained per node, encoded as canonical CBOR (`sentinel/crdt/codec.py`). An entry from an untrusted node or with a bad signature is rejected before merge and counted. The same dot arriving with different content raises `IntegrityError`.
-- **Annotations** (`MVMap`, `sentinel/crdt/mvmap.py`): multi-value registers for `triage_status`, `assignee` and `note`. Concurrent writes are all kept and shown as a CONFLICT. A person resolves one by writing a value that supersedes both.
+- **Annotations** (`MVMap`, `sentinel/crdt/mvmap.py`): multi-value registers for `triage_status`, `assignee` and `note`. Concurrent writes are all kept and shown as a CONFLICT. A person resolves one by writing a value that supersedes both, and that write appends a signed `RESOLUTION` entry to the log naming the field, the new value and every value it superseded (`tests/test_ops_log.py`). The log's entry kinds are `DECISION`, `NOTE` and `RESOLUTION` (`ENTRY_KINDS`).
 - **REVIEW REQUIRED.** Every decision records the CDM it was made against. If a newer CDM for that event has arrived since, the decision is flagged `review_required`. The ops service asks the conjunction module through a callback (`current_ref`), so it never imports a mission module.
 - **Trust.** Each node creates its key at `<SENTINEL_VAR>/keys/<node_id>.ed25519.pem` on first start. Without `SENTINEL_TRUST_FILE`, a node trusts only itself: it can author entries but will not merge anyone else's.
 
@@ -374,7 +374,7 @@ Every node setting is an environment variable read at start-up; `sentinel/api/se
 | Variable | Default | Effect |
 |---|---|---|
 | `SENTINEL_NODE_ID` | `standalone` | The node's identity: its subject namespace (`node.<id>.>`), its signing-key file name, the default operator (`operator@<id>`) |
-| `SENTINEL_ROLE` | `standalone` | `hub` starts `SyncServer`; `edge` starts `SyncAgent` when `SENTINEL_HUB_ID` is set; anything other than `standalone` adds `sync` to the modules the node reports. The value is not validated. |
+| `SENTINEL_ROLE` | `standalone` | `hub` starts `SyncServer`; `edge` starts `SyncAgent` when `SENTINEL_HUB_ID` is set. The node reports the `sync` module only when it runs one of them. Any value other than `hub`, `edge` or `standalone` stops the node at start-up with `ValueError`. |
 | `SENTINEL_HUB_ID` | unset | Edge only: the hub to sync from. Without it an edge runs no sync agent. |
 | `SENTINEL_NATS_URL` | unset | This node's own `nats-server`, for example `nats://127.0.0.1:4222`. Unset means the in-process bus. The node retries the connection 60 times at 0.5 s intervals, then fails to start. |
 | `SENTINEL_SYNC_MODE` | `edf` | Edge only: `edf` (earliest deadline first, with admission control) or `fifo` (the measured baseline). Any other value stops the edge at start-up with `ValueError`. |
@@ -401,7 +401,7 @@ Every node setting is an environment variable read at start-up; `sentinel/api/se
 | Variable | Default | Effect |
 |---|---|---|
 | `SENTINEL_LOG_FORMAT` | `text` | `json` writes one JSON object per line (the container sets it); anything else writes `key=value` text |
-| `SENTINEL_LOG_LEVEL` | `INFO` | Root log level for the scripts that call `configure_logging()` without a level (`scripts/trace.py`, `scripts/oscal_evidence.py`, `scripts/sysml_check.py`, `scripts/sbom.py`, `scripts/scan.py`). `sentinel serve` ignores it: use `--log-level`. |
+| `SENTINEL_LOG_LEVEL` | `INFO` | Root log level for `sentinel serve` when `--log-level` is not given, and for the scripts that call `configure_logging()` without a level (`scripts/trace.py`, `scripts/oscal_evidence.py`, `scripts/sysml_check.py`, `scripts/sbom.py`, `scripts/scan.py`). The flag wins over the variable; `deploy/systemd/sentinel.service` passes `--log-level warning`. |
 
 ### Installer and offline signature verification
 
@@ -504,10 +504,10 @@ Two nodes on one machine, each with its own `nats-server`, joined by a leafnode 
 make demo-local              # hub http://127.0.0.1:8000, edge http://127.0.0.1:8001; Ctrl-C stops both
 ```
 
-`make demo-local` depends on `make tools`, which downloads every binary pinned in `deploy/tools.lock` for the host architecture from GitHub, sha256-verified, into `.tools/`. The demo needs only two of them:
+`make demo-local` depends on `make tools`, which downloads the two binaries the demo and the harness run, `nats-server` and `toxiproxy`, as pinned in `deploy/tools.lock` for the host architecture, from GitHub, sha256-verified, into `.tools/`. The supply-chain tools have their own target, `make supply-tools`. By hand:
 
 ```bash
-uv run python scripts/fetch_tools.py nats-server toxiproxy     # GitHub download
+uv run python scripts/fetch_tools.py nats-server toxiproxy     # what make tools runs; GitHub download
 uv run python -m harness.demo                                  # what demo-local runs
 ```
 
@@ -521,14 +521,14 @@ On the edge's console, the LINK chip applies Toxiproxy presets to the real leaf 
 uv run python -m harness.run recovery                  # one scenario; needs nats-server and toxiproxy in .tools/
 uv run python -m harness.run denied --denial-s 60      # a longer denial
 make ddil                                              # all six, then rewrites docs/ddil-results.md
-make opsec                                             # the OPSEC scenario, then rewrites docs/ddil-results.md
+make opsec                                             # the OPSEC scenario; rewrites docs/ddil-results.md only if all six have results
 ```
 
 The scenarios are `denied`, `limited`, `intermittent`, `degraded`, `recovery` and `opsec` (`harness/scenarios.py`). Each runs the hub's default configuration: the hub loads the vendored element sets and offers edges the imaging catalog, so conjunction CDMs and element sets share the link.
 
-`python -m harness.report` renders whatever results are in `harness/results/`. After `make opsec` on a fresh clone, that is the OPSEC result alone, and the rewritten `docs/ddil-results.md` loses the other five scenarios. Commit the report only from a complete, passing run of all six (`make ddil`).
+`python -m harness.report` writes `docs/ddil-results.md` from all six results in `harness/results/` or not at all: with any missing, it names them, writes nothing and exits 1. `make opsec` passes `--if-complete`, so after one scenario on a fresh clone it says what is missing, leaves the report alone and succeeds. Commit the report only from a complete, passing run of all six (`make ddil`).
 
-For this guide, `recovery` and `opsec` were run through `python -m harness.run`, which writes only the git-ignored `harness/results/`. `recovery` passed. `opsec` failed one assertion, from the harness race described under [Troubleshooting](#other-symptoms), not from a leak. `make ddil` and `make opsec` were not run, because they rewrite the committed report.
+For this guide, `recovery` and `opsec` were run through `python -m harness.run`, which writes only the git-ignored `harness/results/`. `recovery` passed. `opsec` failed one assertion, not from a leak but from a harness race: it counted element sets on the hub-side capture, which subscribes after the leaf connects and so could miss an early fetch. The scenario now counts them from the edge's own sync record (`SyncLedger` in `harness/opsec.py`) and keeps the capture for leak detection only. `make ddil` was not run, because it rewrites the committed report.
 
 ### The air-gap bundle
 
@@ -641,7 +641,7 @@ The goal is a module whose reference data crosses the link by priority without a
 
    The pass module's proof of the same property is a fixed commit range, `git diff --stat 67199b7 f16e294 -- sentinel/sync sentinel/bus sentinel/crdt sentinel/triage`, which prints nothing. The core changes only deliberately: a bug fix proven by a failing test, typing or documentation with no behaviour change, or a design change recorded in an ADR.
 7. **Interface control documents.** Each interface you add goes in `docs/icd/`, and `uv run pytest -q tests/docs` holds you to it:
-   - your item-id prefix and any header your records set go in `docs/icd/sync-envelope.md`. `tests/docs/test_sync_envelope.py` reads the two existing adapters by file name and the `omm:` prefix by import, so add your adapter and prefix there too, or they go unchecked;
+   - your item-id prefix and any header your records set go in `docs/icd/sync-envelope.md`. `tests/docs/test_sync_envelope.py` finds every class under `sentinel/` that defines the `ReferenceRecords` methods, and every prefix given to `CompositeRecords`, so it fails on your header or prefix until the document lists it. Keep the prefix a string constant or literal it can read;
    - a new node-local event kind or bus header goes in `docs/icd/asyncapi.yaml`. `tests/docs/test_asyncapi.py` finds kinds at the `subjects.local` call sites, and fails on any it cannot find in the document;
    - a new route needs a tag from `sentinel/api/apidoc.py`, a `summary=` and a docstring, which becomes its description; `tests/docs/test_openapi_current.py` checks all three on every route except the pass module's. Then run `make openapi` to regenerate `docs/icd/openapi.json`.
 8. **OPSEC.** Anything that must never leave the edge is not a record. If it travels on the bus, give it a subject the leaf denies (`deny_exports` in `deploy/nats/edge.conf.tmpl`) and add it to the list `tests/compliance/test_deploy_conformance.py` checks.
@@ -733,7 +733,7 @@ Never edit these by hand. Change the input and regenerate.
 |---|---|---|---|
 | `docs/validation-report.md` | closed forms and NASA CARA's published values | `make report` | CI step "Validation report is reproducible" |
 | `docs/ai-eval.md`, `docs/img/ai-reliability.svg` | `evals/routing.jsonl`, the routers | `make ai-eval` | CI step "AI eval report is reproducible (baseline; Jev needs a key CI never has)" |
-| `docs/ddil-results.md` | `harness/results/*.json`, whichever are present | `make ddil` (GitHub download for the tools); `make opsec` renders only the results present | read by the trace as harness evidence; not re-run in CI |
+| `docs/ddil-results.md` | `harness/results/*.json`, one per scenario; the report refuses to write with any missing | `make ddil` (GitHub download for the tools) | read by the trace as harness evidence; not re-run in CI |
 | `docs/traceability.md` | `mbse/*.sysml`, pytest collection, `.importlinter`, `.github/workflows/ci.yml`, `docs/ddil-results.md` | `make trace` | `tests/mbse/test_real_model.py`; the CI `mbse` job |
 | `docs/icd/openapi.json` | the FastAPI app's routes (`scripts/export_openapi.py`) | `make openapi` | `tests/docs/test_openapi_current.py`; CI step "ICDs are current (OpenAPI re-exported; bus, CDM and sync ICDs held to the code)" |
 | `deploy/vex/sentinel.openvex.json` | `deploy/vex/statements.toml` and a raw Trivy scan | `make vex` (GitHub and Trivy's database) | `make scan`; the CI `supply-chain` job |
@@ -743,7 +743,7 @@ Never edit these by hand. Change the input and regenerate.
 | `fixtures/wayfinder/ASSUMED-ephemeris-worldview3.json` and its `SHA256SUMS` | the public WORLDVIEW-3 element set, SGP4 | `make wayfinder-fixture` | `tests/adapters/test_wayfinder.py` re-derives every position |
 | `fixtures/omm/celestrak-resource-20260924.json` | CelesTrak, on the day it was fetched | `uv run python scripts/fetch_omm.py resource` (network; writes a new dated file) | `fixtures/omm/SHA256SUMS`; refresh deliberately, never at test or run time |
 
-For this guide, each command in the table was run and left its committed file unchanged, with these exceptions. `make compliance` and `scripts/oscal_evidence.py` were run on a scratch copy of the worktree, because a new run writes new assessment results by design; the four authored documents came out identical. `make ddil`, `make opsec`, `make vex` and `scripts/fetch_omm.py` were not run, because they rewrite committed files from live measurements or live data.
+For this guide, each command in the table was run and left its committed file unchanged, with these exceptions. `make compliance` and `scripts/oscal_evidence.py` were run on a scratch copy of the worktree, because a new run writes new assessment results by design; the four authored documents came out identical. `make ddil`, `make vex` and `scripts/fetch_omm.py` were not run, because they rewrite committed files from live measurements or live data.
 
 Build output, all git-ignored: `web/dist/` (`make web`), `dist/` (bundles, SBOMs, scan results), `build/compliance/`, `.tools/`, `harness/results/`, and a node's `var/`. The screenshots in `docs/img/*.png` are captured by hand from a running node; no script regenerates them.
 
@@ -779,12 +779,11 @@ The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and t
 | A test fails with `SocketBlockedError` | The test tried to use the network | Use a fixture or a mock transport; `enable_socket` is only for loopback |
 | `make trace` exits 1 | A verification case names evidence that does not exist | The "Problems" section the regenerated `docs/traceability.md` gains after its summary |
 | `uv run lint-imports` reports a broken contract | An import crosses a module boundary | The contract named in the output; the table under [Architecture](#modules-and-their-allowed-dependencies) |
-| `harness/cluster.py` exits with `missing: run make tools` | `nats-server` or `toxiproxy` not in `.tools/<arch>/` | `uv run python scripts/fetch_tools.py nats-server toxiproxy` |
-| OPSEC fails only "element sets reached the edge through sync", counting one fewer set crossing than the edge assessed | A race in the scenario: the hub-side capture subscribes after the leaf connects, and a fetch before that is not counted. The edge loads no element sets of its own (`tests/test_harness_elements.py`), so they did cross. | `harness/scenarios.py`, `opsec`; re-run it |
-| `docs/ddil-results.md` lost scenarios after `make opsec` | The report renders only what is in `harness/results/` | Restore the file, or run `make ddil` |
+| `harness/cluster.py` exits with `missing: run make tools` | `nats-server` or `toxiproxy` not in `.tools/<arch>/` | `make tools` |
+| `python -m harness.report` prints `not writing ddil-results.md: no result for ...` | A scenario has no result in `harness/results/`, so the report would drop it | `make ddil` |
 | The Passes tab lists every imager as skipped, or `GET /api/passes/catalog` is empty on an edge | Element sets have not arrived: the hub holds none (its log says `Element snapshot missing`) or lacks those imagers, or sync has not run yet | `GET /api/sync` on the edge; `SENTINEL_ELEMENTS` and `SENTINEL_SYNC_ELEMENTS` on the hub |
 | `GET /api/passes` returns 409 or 503 | 409: no unit is set. 503: an element set for a catalogued imager cannot be propagated | `PUT /api/passes/unit`; the node log `Pass computation refused` |
 | A node will not start: `SENTINEL_SYNC_ELEMENTS must be one of` | The value is not `catalog` or `all` | the configuration reference above |
+| A node will not start: `SENTINEL_ROLE must be one of` | The value is not `hub`, `edge` or `standalone` | the configuration reference above |
 | Requests reach a node you did not start | `make serve` and `make demo-local` use fixed ports 8000 and 8001; if another process holds them, your node fails to bind and your requests go to the other one | `node_id` and `role` in `GET /api/node`; `ss -ltn` |
 | `make scan` fails on a commit that passed yesterday | Trivy's vulnerability database is not pinned, by design (RA-5) | `dist/scan/`; `docs/supply-chain.md` |
-| `sentinel serve` ignores `SENTINEL_LOG_LEVEL` | `serve` passes `--log-level` (default `info`) explicitly | use `--log-level` |

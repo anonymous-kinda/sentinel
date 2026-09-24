@@ -393,7 +393,7 @@
     },
     "/api/events/{event_id}/annotation": {
       "post": {
-        "description": "Writes a multi-value register. Concurrent writes on different nodes are all kept\nand shown as a conflict, never silently resolved. 422 on an unknown field or triage\nstatus; 403 on a read-only node.",
+        "description": "Writes a multi-value register. Concurrent writes on different nodes are all kept\nand shown as a conflict, never silently resolved. A write over a conflict supersedes\nevery value and appends a signed RESOLUTION entry naming them. 422 on an unknown field\nor triage status; 403 on a read-only node.",
         "operationId": "annotation_api_events__event_id__annotation_post",
         "parameters": [
           {

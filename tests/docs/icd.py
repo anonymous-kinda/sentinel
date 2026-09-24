@@ -1,5 +1,6 @@
-"""What the ICD drift tests share: reading a document's tables, and reading
-facts out of the source by AST, so neither side is restated by hand."""
+"""What the ICD drift tests share: reading a document's tables and the
+AsyncAPI document's channels, and reading facts out of the source by AST,
+so neither side is restated by hand."""
 
 from __future__ import annotations
 
@@ -8,8 +9,12 @@ import dataclasses
 import pathlib
 import re
 
+import yaml
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 ICD = ROOT / "docs" / "icd"
+ASYNCAPI = ICD / "asyncapi.yaml"
+NODE_PREFIX = "node.{node_id}."
 
 _HEADING = re.compile(r"^(#+)\s+(.*?)\s*$")
 _BACKTICKED = re.compile(r"`([^`]+)`")
@@ -70,6 +75,27 @@ def nats_list(conf: str, key: str) -> set[str]:
     return set(re.findall(r'"([^"]+)"', match.group(1))) if match else set()
 
 
+def load_asyncapi(text: str | None = None) -> dict:
+    return yaml.safe_load(ASYNCAPI.read_text() if text is None else text)
+
+
+def family(address: str) -> str:
+    """The address without trailing parameter tokens: cdm.accepted.{event_id} -> cdm.accepted."""
+    tokens = address.split(".")
+    while tokens and tokens[-1].startswith("{"):
+        tokens.pop()
+    return ".".join(tokens)
+
+
+def addresses(doc: dict) -> dict[str, str]:
+    return {name: ch["address"] for name, ch in doc["channels"].items() if ch.get("address")}
+
+
+def documented_node_kinds(doc: dict) -> set[str]:
+    """The node-local event kinds an AsyncAPI document gives a channel: node.{node_id}.<kind>."""
+    return {family(a)[len(NODE_PREFIX) :] for a in addresses(doc).values() if a.startswith(NODE_PREFIX)}
+
+
 def drop_row(markdown: str, token: str) -> str:
     """The document with the table row naming `token` removed: a stale copy."""
     kept = [line for line in markdown.splitlines() if not (line.startswith("|") and f"`{token}`" in line)]
@@ -82,6 +108,7 @@ def drop_row(markdown: str, token: str) -> str:
 class Source:
     path: str               # relative to the scanned root, for reporting
     module: ast.Module
+    root: pathlib.Path = ROOT
 
 
 def tree(relative: str) -> ast.Module:
@@ -89,12 +116,12 @@ def tree(relative: str) -> ast.Module:
     return ast.parse(path.read_text(), filename=str(path))
 
 
+def _source(path: pathlib.Path, root: pathlib.Path) -> Source:
+    return Source(path.relative_to(root).as_posix(), ast.parse(path.read_text(), filename=str(path)), root)
+
+
 def sources(*patterns: str, root: pathlib.Path = ROOT) -> list[Source]:
-    return [
-        Source(str(path.relative_to(root)), ast.parse(path.read_text(), filename=str(path)))
-        for pattern in patterns or ("**/*.py",)
-        for path in sorted(root.glob(pattern))
-    ]
+    return [_source(path, root) for pattern in patterns or ("**/*.py",) for path in sorted(root.glob(pattern))]
 
 
 def trees(*patterns: str) -> list[ast.Module]:
@@ -236,12 +263,14 @@ class _Values:
     """The string constants an expression can take, within one module.
 
     Follows a literal, the leading literal of an f-string up to its first
-    field, a module-level constant, and a function parameter back to the
+    field, a module-level constant, a constant imported by name from another
+    module in the scanned tree, and a function parameter back to the
     arguments of that function's calls in the same module. Anything else is
     unreadable, and the caller reports it rather than guessing.
     """
 
     def __init__(self, source: Source):
+        self.source = source
         self.module = source.module
         self.constants = {
             target.id: node.value.value
@@ -249,6 +278,12 @@ class _Values:
             if isinstance(node, ast.Assign) and _text(node.value) is not None
             for target in node.targets
             if isinstance(target, ast.Name)
+        }
+        self.imports = {
+            alias.asname or alias.name: (node, alias.name)
+            for node in source.module.body
+            if isinstance(node, ast.ImportFrom)
+            for alias in node.names
         }
         self.parents = {child: parent for parent in ast.walk(source.module) for child in ast.iter_child_nodes(parent)}
 
@@ -261,8 +296,17 @@ class _Values:
         if isinstance(expr, ast.Name):
             if expr.id in self.constants:
                 return {self.constants[expr.id]}
+            if expr.id in self.imports:
+                return self._imported(expr.id, hops)
             return self._parameter(expr, hops)
         return None
+
+    def _imported(self, alias: str, hops: int) -> set[str] | None:
+        statement, name = self.imports[alias]
+        origin = _imported_module(self.source, statement)
+        if origin is None or hops >= _MAX_HOPS:
+            return None
+        return _Values(origin).of(ast.Name(id=name), hops + 1)
 
     def _parameter(self, name: ast.Name, hops: int) -> set[str] | None:
         func = self._enclosing(name)
@@ -287,6 +331,19 @@ class _Values:
 
     def _calls(self, name: str) -> list[ast.Call]:
         return [node for node in ast.walk(self.module) if isinstance(node, ast.Call) and _callee(node) == name]
+
+
+def _imported_module(source: Source, statement: ast.ImportFrom) -> Source | None:
+    """The file in the scanned tree that `from <module> import ...` reads, relative or absolute."""
+    package = pathlib.PurePosixPath(source.path).parent.parts
+    base = package[: max(len(package) - statement.level + 1, 0)] if statement.level else ()
+    parts = [*base, *(statement.module.split(".") if statement.module else [])]
+    if not parts:
+        return None
+    for candidate in (source.root.joinpath(*parts).with_suffix(".py"), source.root.joinpath(*parts, "__init__.py")):
+        if candidate.is_file():
+            return _source(candidate, source.root)
+    return None
 
 
 def _parameters(func: ast.FunctionDef) -> list[str]:
@@ -346,3 +403,39 @@ def sentinel_kinds(scanned: list[Source]) -> Found:
                 yield from (v for k, v in zip(node.keys, node.values) if _text(k) == "Sentinel-Kind")
 
     return _collect(scanned, values)
+
+
+# ---------------------------------------------------- what plugs into a seam
+def _is_protocol(cls: ast.ClassDef) -> bool:
+    return any((b.id if isinstance(b, ast.Name) else getattr(b, "attr", None)) == "Protocol" for b in cls.bases)
+
+
+def classes_implementing(scanned: list[Source], methods: set[str]) -> list[ast.ClassDef]:
+    """Every class that defines all of `methods`: structural, as a Protocol is
+    satisfied, so an implementation is found without being registered. The
+    protocol's own definition is not one."""
+    found = []
+    for source in scanned:
+        for node in ast.walk(source.module):
+            if isinstance(node, ast.ClassDef) and not _is_protocol(node):
+                defined = {f.name for f in node.body if isinstance(f, (ast.FunctionDef, ast.AsyncFunctionDef))}
+                if methods <= defined:
+                    found.append(node)
+    return found
+
+
+def mapping_keys(scanned: list[Source], callee: str, position: int, keyword: str) -> Found:
+    """The string keys of the mapping given to every `callee(...)` call, at
+    `position` or as `keyword`. A mapping that is not a dict literal, or a
+    key the resolver cannot read, is reported as unresolved."""
+
+    def keys(module: ast.Module):
+        for node in ast.walk(module):
+            if isinstance(node, ast.Call) and _callee(node) == callee:
+                mapping = _argument(node, position, keyword)
+                if isinstance(mapping, ast.Dict):
+                    yield from (key if key is not None else value for key, value in zip(mapping.keys, mapping.values))
+                elif mapping is not None:
+                    yield mapping
+
+    return _collect(scanned, keys)
