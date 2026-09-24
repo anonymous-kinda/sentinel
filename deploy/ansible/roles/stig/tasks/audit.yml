@@ -1,0 +1,22 @@
+- name: auditd enabled and running (UBTU-24-100410)
+  ansible.builtin.systemd_service:
+    name: auditd
+    enabled: true
+    state: started
+
+- name: Audit rules for identity files, privilege use, sudoers and kernel modules, immutable once loaded (UBTU-24-200280, UBTU-24-200290, UBTU-24-200300, UBTU-24-200310, UBTU-24-200320, UBTU-24-900070, UBTU-24-900170, UBTU-24-900340, UBTU-24-900350, UBTU-24-900510, UBTU-24-900520, UBTU-24-909000)
+  ansible.builtin.copy:
+    src: stig.rules
+    dest: /etc/audit/rules.d/stig.rules
+    owner: root
+    group: root
+    mode: "0640"
+  notify: Load audit rules (stig)
+
+- name: Auditing starts at boot (UBTU-24-102010)
+  ansible.builtin.replace:
+    path: /etc/default/grub
+    # Append audit=1 to either command line that lacks it; a no-op once present.
+    regexp: '^(GRUB_CMDLINE_LINUX(?:_DEFAULT)?=")((?:(?!\baudit=1\b)[^"])*)"$'
+    replace: '\1\2 audit=1"'
+  notify: Update grub (stig)

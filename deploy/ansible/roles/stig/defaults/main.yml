@@ -1,0 +1,75 @@
+# DISA Canonical Ubuntu 24.04 LTS STIG, Version 1 Release 6 (Benchmark Date
+# 01 Jul 2026), applied to a single-purpose Sentinel node.
+#
+# The role applies a documented subset of the benchmark. Every rule decision
+# (applied, deviation, not applicable) is recorded in
+# compliance/sources/stig.toml, and tests/compliance/ checks that every rule id
+# named in this role exists in the vendored DISA XCCDF and is one of them.
+# Deviations become POA&M items with their justification.
+
+# --- firewall (UBTU-24-100300, UBTU-24-100310, UBTU-24-600200) -------------
+stig_manage_firewall: true
+stig_ssh_port: 22
+# Rate-limited (ufw LIMIT). Only SSH: see the rate-limit deviation.
+stig_limited_ports:
+  - { port: "{{ stig_ssh_port }}", proto: tcp }
+# Allowed without rate limiting: the console (443) and ACME HTTP-01 (80).
+stig_allowed_ports:
+  - { port: 443, proto: tcp }
+  - { port: 80, proto: tcp }
+# NATS leafnode listener, allowed only from these networks. Empty keeps it
+# closed, matching leaf_allowed_cidrs in deploy/aws/terraform.
+stig_leaf_port: 7422
+stig_leaf_allowed_cidrs: []
+
+# --- SSH (UBTU-24-100820/100830/100840, UBTU-24-300022/300023/300031) --------
+# Written to /etc/ssh/sshd_config. ClientAliveInterval, ClientAliveCountMax
+# and PermitRootLogin come from the baseline role's drop-in; this role only
+# verifies them (tasks/verify.yml). X11Forwarding is set in both, to the same
+# value: Ubuntu's stock sshd_config says "X11Forwarding yes", and a STIG check
+# reports the two lines as conflicting even though the drop-in wins.
+stig_sshd_settings:
+  Ciphers: aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes128-ctr
+  MACs: hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256
+  KexAlgorithms: ecdh-sha2-nistp521,ecdh-sha2-nistp384,ecdh-sha2-nistp256,diffie-hellman-group-exchange-sha256,diffie-hellman-group16-sha512,diffie-hellman-group14-sha256
+  X11Forwarding: "no"
+  X11UseLocalhost: "yes"
+  PermitEmptyPasswords: "no"
+  PermitUserEnvironment: "no"
+  Banner: "{{ '/etc/issue.dod' if stig_dod_banner | bool else '/etc/issue.net' }}"
+
+# --- login banner (UBTU-24-200640, UBTU-24-200680) --------------------------
+# False: SSH shows the baseline role's exercise notice (/etc/issue.net). The
+# demonstration node is not a U.S. Government information system, so showing
+# the USG notice there would misrepresent it (a documented deviation).
+# True, on a government deployment: SSH shows the DoD Notice and Consent
+# Banner and interactive sessions must acknowledge it.
+stig_dod_banner: false
+
+# --- time (UBTU-24-600160, UBTU-24-600180, UBTU-24-901220) --------------------
+# Default: the Amazon Time Sync Service, reachable from the AWS hub. It is not
+# a DoD authoritative source (a documented deviation); an enclave sets its own.
+stig_time_servers:
+  - 169.254.169.123
+
+# --- removable media (UBTU-24-300039) ----------------------------------------
+stig_disable_usb_storage: true
+
+# --- file integrity (UBTU-24-100100..100130) ----------------------------------
+# Paths the daily AIDE check ignores: runtime state that changes by design.
+stig_aide_exclude:
+  - /opt/sentinel/var
+
+# --- scan and checklist --------------------------------------------------------
+# Off by default: a scan needs the DISA SCAP benchmark, which is downloaded
+# from DISA by the operator (not vendored). With stig_scan true the role runs
+# OpenSCAP on the host, fetches the XCCDF results to stig_results_dir on the
+# controller and converts them to a DISA checklist (.ckl) with the MITRE SAF
+# CLI. Pass the results to `scripts/oscal_evidence.py --xccdf` for the POA&M.
+stig_scan: false
+# Controller path of the DISA SCAP 1.3 benchmark XML, e.g. extracted from
+# U_CAN_Ubuntu_24-04_LTS_V1R5_STIG_SCAP_1-3_Benchmark.zip.
+stig_scap_content: ""
+stig_scap_profile: xccdf_mil.disa.stig_profile_MAC-2_Sensitive
+stig_results_dir: "{{ playbook_dir }}/../../build/stig"
+stig_saf_version: "1.7.0"

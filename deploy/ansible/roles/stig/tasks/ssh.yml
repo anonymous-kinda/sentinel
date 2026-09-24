@@ -1,0 +1,32 @@
+# sshd uses the first value it reads for a keyword, and Ubuntu's sshd_config
+# includes /etc/ssh/sshd_config.d/*.conf first. These settings go in the main
+# file (some DISA checks read only that file); tasks/verify.yml then checks
+# the effective values with `sshd -T`, so a drop-in that overrides one fails
+# the play instead of passing silently.
+- name: SSH ciphers, MACs, key exchange, X11 and environment settings (UBTU-24-100820, UBTU-24-100830, UBTU-24-100840, UBTU-24-300022, UBTU-24-300023, UBTU-24-300031); SSH banner file (UBTU-24-200640)
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^\s*{{ item.key }}\s'
+    line: "{{ item.key }} {{ item.value }}"
+    insertbefore: '^Match\s'
+    validate: /usr/sbin/sshd -t -f %s
+  loop: "{{ stig_sshd_settings | dict2items }}"
+  notify: Restart sshd (stig)
+
+# files/dod-banner.txt and files/ssh_confirm.sh are extracted verbatim from the
+# fix texts of UBTU-24-200640 and UBTU-24-200680 in the vendored V1R6 XCCDF
+# (tests/compliance/test_stig_role.py checks they still match). The check
+# compares them literally, so they carry no header comment.
+- name: DoD Notice and Consent Banner, only on a U.S. Government deployment (UBTU-24-200640)
+  ansible.builtin.copy:
+    dest: /etc/issue.dod
+    src: dod-banner.txt
+    mode: "0644"
+  when: stig_dod_banner | bool
+
+- name: SSH sessions acknowledge the DoD banner, only on a U.S. Government deployment (UBTU-24-200680)
+  ansible.builtin.copy:
+    dest: /etc/profile.d/ssh_confirm.sh
+    src: ssh_confirm.sh
+    mode: "0755"
+  when: stig_dod_banner | bool

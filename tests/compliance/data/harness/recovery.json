@@ -1,0 +1,12 @@
+{
+ "scenario": "RECOVERY",
+ "passed": false,
+ "assertions": [
+  {"name": "leaf re-establishes over ~8 kbit/s after a denial", "passed": true, "detail": "5.1 s"},
+  {"name": "operator data written while denied reaches the hub over the thin link", "passed": false, "detail": "converged in 180.0 s"}
+ ],
+ "metrics": {},
+ "notes": [],
+ "duration_s": 190.0,
+ "ran_at": "2026-09-24T02:43:00.000000+00:00"
+}

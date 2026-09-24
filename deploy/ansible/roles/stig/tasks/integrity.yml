@@ -1,0 +1,27 @@
+# AIDE is installed by packages.yml (UBTU-24-100100). aide.conf is left exactly
+# as the package ships it (UBTU-24-100120 compares its checksum); exclusions go
+# in aide.conf.d.
+- name: Runtime state that changes by design is not integrity-checked
+  ansible.builtin.template:
+    src: aide-exclude.j2
+    dest: /etc/aide/aide.conf.d/90_sentinel
+    mode: "0644"
+
+- name: Initialise the AIDE database (UBTU-24-100110; minutes on first run)
+  ansible.builtin.command: aideinit -y -f
+  args:
+    creates: /var/lib/aide/aide.db
+
+- name: The packaged daily integrity check runs (UBTU-24-100120)
+  ansible.builtin.systemd_service:
+    name: dailyaidecheck.timer
+    enabled: true
+    state: started
+
+- name: Integrity changes are reported, not silenced (UBTU-24-100130)
+  ansible.builtin.lineinfile:
+    path: /etc/default/aide
+    regexp: '^#?\s*SILENTREPORTS='
+    line: SILENTREPORTS=no
+    create: true
+    mode: "0644"

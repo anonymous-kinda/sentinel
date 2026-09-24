@@ -1,0 +1,46 @@
+# Least functionality: nothing the node does not use; the security tooling it needs.
+- name: Remove network services the node never uses (UBTU-24-100030 telnetd, UBTU-24-100040 rsh-server, UBTU-24-100050 NFS)
+  ansible.builtin.apt:
+    name: [telnetd, rsh-server, nfs-common, nfs-kernel-server]
+    state: absent
+    purge: true
+
+- name: Remove NTP daemons other than chrony (UBTU-24-100020 ntp, UBTU-24-100010 systemd-timesyncd)
+  ansible.builtin.apt:
+    name: [ntp, systemd-timesyncd]
+    state: absent
+    purge: true
+
+- name: Install the security tooling (UBTU-24-100700 chrony, UBTU-24-100400 auditd, UBTU-24-100500 AppArmor, UBTU-24-100300 ufw, UBTU-24-100100 AIDE, UBTU-24-100200 rsyslog)
+  ansible.builtin.apt:
+    name: [chrony, auditd, apparmor, ufw, aide, aide-common, rsyslog]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: AppArmor enabled and running (UBTU-24-100510)
+  ansible.builtin.systemd_service:
+    name: apparmor
+    enabled: true
+    state: started
+
+- name: rsyslog enabled and running (UBTU-24-100200)
+  ansible.builtin.systemd_service:
+    name: rsyslog
+    enabled: true
+    state: started
+
+- name: APT refuses unauthenticated packages (UBTU-24-300001)
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/99-stig
+    content: |
+      // Managed by Ansible (deploy/ansible/roles/stig). UBTU-24-300001.
+      APT::Get::AllowUnauthenticated "false";
+    mode: "0644"
+
+- name: Unattended upgrades remove superseded components (UBTU-24-700320)
+  ansible.builtin.lineinfile:
+    path: /etc/apt/apt.conf.d/50unattended-upgrades
+    regexp: '^\s*(//)?\s*Unattended-Upgrade::{{ item }}\s'
+    line: 'Unattended-Upgrade::{{ item }} "true";'
+  loop: [Remove-Unused-Dependencies, Remove-Unused-Kernel-Packages]

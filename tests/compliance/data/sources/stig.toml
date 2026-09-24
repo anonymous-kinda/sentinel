@@ -1,0 +1,20 @@
+# Fixture: STIG decisions over real V1R6 rule ids.
+applied = ["UBTU-24-100030", "UBTU-24-100820"]
+
+[benchmark]
+component = "host"
+xccdf = "compliance/vendor/disa/U_CAN_Ubuntu_24-04_LTS_STIG_V1R6_Manual-xccdf.xml"
+cci_list = "compliance/vendor/disa/U_CCI_List.zip"
+role = "deploy/ansible/roles/stig"
+
+[[not_applicable]]
+rules = ["UBTU-24-200020"]
+reason = "No graphical interface is installed."
+
+[[deviation]]
+key = "login-banner"
+title = "Login banner text is not the DoD notice"
+rules = ["UBTU-24-200640"]
+justification = "The demonstration node is not a U.S. Government information system."
+mitigation = "The banner mechanism is configured; only the text differs."
+plan = "Set stig_login_banner to the DoD text on a government deployment."

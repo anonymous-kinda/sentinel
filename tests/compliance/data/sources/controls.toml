@@ -1,0 +1,50 @@
+# Fixture: one control per implementation state.
+[[control]]
+id = "si-10"
+rationale = "CDMs arrive from outside the boundary."
+params = { "si-10_odp" = "Conjunction Data Messages submitted for ingest" }
+
+[[control.by]]
+component = "node"
+status = "implemented"
+statement = "Wrong CDMs are quarantined; incomplete CDMs degrade."
+tests = [
+    "tests/test_cdm_codec.py::test_wrong_messages_are_rejected_with_a_named_reason",
+    "tests/test_cdm_codec.py::test_absent_covariance_degrades_to_geometry_only",
+]
+files = ["sentinel/cdm/validate.py"]
+
+[[control]]
+id = "au-9"
+rationale = "Decisions and AI interactions must be tamper-evident."
+
+[[control.by]]
+component = "node"
+status = "partial"
+statement = "The AI audit log is hash-chained."
+tests = [
+    "tests/ai/test_audit.py::test_editing_a_line_is_detected_at_that_line",
+    "tests/ai/test_audit.py::test_deleting_a_line_is_detected",
+]
+harness = ["denied"]
+plan = "Anchor the chain head off-node so tail truncation is detectable."
+milestone = "M5"
+
+[[control.by]]
+component = "host"
+status = "planned"
+statement = "auditd rules are immutable."
+files = ["deploy/ansible/roles/baseline/tasks/main.yml"]
+plan = "Run the STIG role and scan."
+
+[[control]]
+id = "sc-13"
+rationale = "Signatures protect decisions."
+
+[[control.by]]
+component = "node"
+status = "planned"
+statement = "FIPS-validated cryptography."
+planned_evidence = ["docs/supply-chain.md"]
+plan = "Adopt a FIPS-validated provider."
+milestone = "M4"

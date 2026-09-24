@@ -1,0 +1,178 @@
+# STIG decisions for the Sentinel node host: DISA Canonical Ubuntu 24.04 LTS
+# STIG, Version 1 Release 6 (Benchmark Date 01 Jul 2026), 194 rules.
+#
+# Every rule named here must exist in the vendored XCCDF; titles, severities,
+# CCIs and the NIST SP 800-53 Rev 5 mapping are read from DISA's files, never
+# written here. tests/compliance/test_stig_role.py checks that every applied
+# rule is implemented in deploy/ansible/roles/stig and that the role names no
+# rule this file does not decide.
+#
+# Rules not listed are not yet assessed. Until the role's OpenSCAP scan runs,
+# the POA&M carries one item saying so; with scan results, each failing
+# undecided rule becomes its own item.
+
+# Implemented by deploy/ansible/roles/stig (UBTU-24-600000 and UBTU-24-600010
+# are set by the baseline role and verified by the STIG role; UBTU-24-300027
+# and UBTU-24-700400 are verified, and the play fails if they do not hold).
+applied = [
+    # packages and services
+    "UBTU-24-100010", "UBTU-24-100020", "UBTU-24-100030", "UBTU-24-100040", "UBTU-24-100050",
+    "UBTU-24-100200", "UBTU-24-100500", "UBTU-24-100510", "UBTU-24-100700",
+    # file integrity (AIDE)
+    "UBTU-24-100100", "UBTU-24-100110", "UBTU-24-100120", "UBTU-24-100130",
+    # firewall
+    "UBTU-24-100300", "UBTU-24-100310",
+    # audit
+    "UBTU-24-100400", "UBTU-24-100410", "UBTU-24-102010",
+    "UBTU-24-200280", "UBTU-24-200290", "UBTU-24-200300", "UBTU-24-200310", "UBTU-24-200320",
+    "UBTU-24-900070", "UBTU-24-900170", "UBTU-24-900340", "UBTU-24-900350",
+    "UBTU-24-900510", "UBTU-24-900520", "UBTU-24-909000",
+    # SSH
+    "UBTU-24-100820", "UBTU-24-100830", "UBTU-24-100840",
+    "UBTU-24-300022", "UBTU-24-300023", "UBTU-24-300031", "UBTU-24-600000", "UBTU-24-600010",
+    # accounts and authentication
+    "UBTU-24-200000", "UBTU-24-200260", "UBTU-24-300027", "UBTU-24-300028", "UBTU-24-300030",
+    "UBTU-24-400110",
+    # kernel and system
+    "UBTU-24-300026", "UBTU-24-300039", "UBTU-24-600070", "UBTU-24-600140", "UBTU-24-600190",
+    "UBTU-24-700310",
+    # patching
+    "UBTU-24-300001", "UBTU-24-700320",
+    # time
+    "UBTU-24-600180", "UBTU-24-901220",
+    # platform
+    "UBTU-24-700400",
+]
+
+[benchmark]
+component = "host"
+xccdf = "compliance/vendor/disa/U_CAN_Ubuntu_24-04_LTS_STIG_V1R6_Manual-xccdf.xml"
+cci_list = "compliance/vendor/disa/U_CCI_List.zip"
+role = "deploy/ansible/roles/stig"
+
+[[not_applicable]]
+rules = [
+    "UBTU-24-200020", "UBTU-24-200040", "UBTU-24-200041", "UBTU-24-200042", "UBTU-24-200043",
+    "UBTU-24-200650", "UBTU-24-200660", "UBTU-24-300025",
+]
+reason = """The node is a headless server: no graphical environment is installed. These rules \
+configure a graphical session lock, automount and autorun, the graphical logon banner, and \
+Ctrl-Alt-Delete under a GUI (UBTU-24-300026 masks it for the console and is applied)."""
+
+[[deviation]]
+key = "login-banner"
+title = "SSH shows the exercise notice, not the DoD Notice and Consent Banner"
+rules = ["UBTU-24-200640", "UBTU-24-200680"]
+justification = """The public demonstration node is not a U.S. Government information system. \
+Presenting the USG notice there would misrepresent the system to anyone who connects."""
+mitigation = """The mechanism is in place: sshd's Banner directive is set, and the node shows an \
+UNCLASSIFIED // EXERCISE authorized-use notice (deploy/ansible/roles/baseline). The DoD text and \
+the acknowledgement prompt are in the role, verbatim from the STIG, behind stig_dod_banner."""
+plan = "Set stig_dod_banner: true on any deployment that is a U.S. Government information system."
+
+[[deviation]]
+key = "rate-limit"
+title = "Only SSH is rate-limited by the host firewall"
+rules = ["UBTU-24-600200"]
+justification = """ufw's LIMIT denies a source address after six new connections in thirty \
+seconds. Operators behind one NAT address would share that budget for the console on 443, and an \
+edge's NATS leafnode reconnects every second after a drop (deploy/nats/edge.conf.tmpl, \
+reconnect 1s), so limiting 7422 would block an edge exactly while it recovers from a DDIL outage: \
+the behaviour the RECOVERY harness scenario exists to protect."""
+mitigation = """SSH (22) is rate-limited. 7422 accepts only allow-listed edge networks, in ufw \
+(stig_leaf_allowed_cidrs) and in the AWS security group (leaf_allowed_cidrs, empty by default so \
+the port is closed). 443 is served by Caddy in front of a read-only node."""
+plan = """Replace host-level rate limiting on 443 with request limits at the proxy, sized from \
+measured console behaviour, and document the leafnode port's reconnect profile with the ISSO."""
+
+[[deviation]]
+key = "fips"
+title = "The host does not run in FIPS mode"
+rules = ["UBTU-24-600030"]
+justification = """FIPS mode needs Ubuntu Pro's FIPS-certified kernel and modules, which the \
+demonstration hub does not carry. Sentinel's own signatures (Ed25519, via the Python \
+cryptography package's bundled OpenSSL) do not use a FIPS-validated module either."""
+mitigation = """SSH is restricted to the STIG's FIPS 140-3 approved ciphers, MACs and key exchange \
+algorithms (UBTU-24-100820, UBTU-24-100830, UBTU-24-100840, applied)."""
+plan = """Build the node image with Ubuntu Pro fips-updates, and move Sentinel's signing to a \
+FIPS-validated provider (SC-13 in the SSP)."""
+
+[[deviation]]
+key = "dod-pki"
+title = "No CAC/PIV logon and no DoD PKI certificate authorities"
+rules = [
+    "UBTU-24-100650", "UBTU-24-100660", "UBTU-24-100900", "UBTU-24-100910",
+    "UBTU-24-400020", "UBTU-24-400030", "UBTU-24-400060", "UBTU-24-400340",
+    "UBTU-24-400360", "UBTU-24-400370", "UBTU-24-400375", "UBTU-24-400380",
+    "UBTU-24-600060",
+]
+justification = """PKI-based multifactor logon needs a DoD PKI (CAC/PIV cards, DoD root CAs, OCSP \
+or CRLs) that the demonstration environment does not have."""
+mitigation = """Administrative access is SSH public-key only (password and keyboard-interactive \
+authentication off, root login off), from the admin_cidr network only; the AWS variable rejects \
+0.0.0.0/0. Session Manager is the break-glass path."""
+plan = """On a DoD network: SSSD with pam_pkcs11 for CAC/PIV logon, the DoD root CAs as the trust \
+anchors, and a local revocation cache for disconnected operation (IA-2 in the SSP)."""
+
+[[deviation]]
+key = "sudo-nopasswd"
+title = "The automation account escalates without a password"
+rules = ["UBTU-24-300020"]
+justification = """The Ubuntu cloud image's default account has NOPASSWD sudo \
+(/etc/sudoers.d/90-cloud-init-users), and the Ansible playbook depends on it to become root."""
+mitigation = """The account is reachable only by SSH public key from the admin network; every sudo \
+use is audited (UBTU-24-900170, applied)."""
+plan = """Give Ansible a become password from a vault, or document the account with the ISSO as an \
+administrative group using MFA, as the rule allows."""
+
+[[deviation]]
+key = "data-at-rest"
+title = "Data at rest is encrypted by the platform, not by the operating system"
+rules = ["UBTU-24-600090"]
+justification = """The hub's root volume is encrypted by EBS (deploy/aws/terraform/main.tf, \
+encrypted = true), which the operating-system check (every partition in /etc/crypttab) cannot see."""
+mitigation = "EBS encryption with AWS-managed keys covers the hub's only volume."
+plan = """Edge hardware is provisioned with LUKS full-disk encryption, set up at install time \
+(SC-28 in the SSP)."""
+
+[[deviation]]
+key = "boot-password"
+title = "No boot-loader password"
+rules = ["UBTU-24-102000"]
+justification = """The hub runs on EC2, where there is no interactive boot console unless EC2 \
+serial console access is enabled, and the Terraform does not enable it."""
+mitigation = "Console access to the instance is not configured; administration is SSH and Session Manager."
+plan = "Set a GRUB superuser password, from a managed secret, when edge hardware is provisioned."
+
+[[deviation]]
+key = "audit-offload"
+title = "Audit records stay on the node"
+rules = ["UBTU-24-100450", "UBTU-24-900950"]
+justification = """There is no central audit collector in this deployment, and an edge node cannot \
+reach one while its link is denied, which is the condition Sentinel is designed for."""
+mitigation = """Audit rules are immutable once loaded (UBTU-24-909000); Sentinel's own decision log \
+is signed and hash-chained per node and replicates to the hub when the link returns."""
+plan = """Offload with audisp-remote to a collector on reconnect; for a standalone edge, a weekly \
+offload to removable media as UBTU-24-900950 describes."""
+
+[[deviation]]
+key = "time-source"
+title = "The default time source is not a DoD authoritative source"
+rules = ["UBTU-24-600160"]
+justification = """The AWS hub uses the Amazon Time Sync Service (169.254.169.123), the source it \
+can reach. The role applies the rest of the rule: only the configured sources, polled at least \
+every 24 hours (maxpoll 16), with the Ubuntu pools disabled."""
+mitigation = "Clocks step when more than one second out (UBTU-24-600180, applied) and use UTC (UBTU-24-901220, applied)."
+plan = "Set stig_time_servers to the enclave's authoritative DoD time source on any DoD deployment."
+
+[[deviation]]
+key = "audit-alerts"
+title = "Audit storage and failure alerts are not mailed to the SA and ISSO"
+rules = ["UBTU-24-900960", "UBTU-24-900980"]
+justification = """The node has no mail transport, and an edge has no route to a mail relay while \
+disconnected."""
+mitigation = """In upstream auditd 3.1.2's default configuration, low storage is logged to syslog \
+(space_left_action = SYSLOG); a full or failing disk suspends audit logging (SUSPEND). Neither \
+reaches a person, which is why this is a POA&M item."""
+plan = """Raise audit storage and failure alerts through auditd's exec action into the node's own \
+alerting path, which reaches the operator console locally and the hub when connected."""

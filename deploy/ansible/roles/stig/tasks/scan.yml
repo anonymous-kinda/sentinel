@@ -1,0 +1,56 @@
+# OpenSCAP against the DISA SCAP benchmark, then a DISA checklist (.ckl) via
+# the MITRE SAF CLI. The benchmark is supplied by the operator (downloaded
+# from DISA; not vendored). Results land on the controller in
+# stig_results_dir/<host>/ and feed the POA&M:
+#   uv run python scripts/oscal_evidence.py --junit ... --xccdf <results.xml>
+- name: The DISA SCAP benchmark is supplied
+  ansible.builtin.assert:
+    that: stig_scap_content | length > 0
+    fail_msg: "Set stig_scap_content to the DISA SCAP 1.3 benchmark XML on the controller"
+
+- name: OpenSCAP scanner (universe)
+  ansible.builtin.apt:
+    name: openscap-scanner
+    state: present
+
+- name: Scan workspace
+  ansible.builtin.file:
+    path: /var/lib/sentinel-stig
+    state: directory
+    mode: "0700"
+
+- name: Benchmark on the host
+  ansible.builtin.copy:
+    src: "{{ stig_scap_content }}"
+    dest: /var/lib/sentinel-stig/benchmark.xml
+    mode: "0600"
+
+- name: Scan with {{ stig_scap_profile }}
+  ansible.builtin.command: >-
+    oscap xccdf eval
+    --profile {{ stig_scap_profile }}
+    --results /var/lib/sentinel-stig/results.xml
+    --report /var/lib/sentinel-stig/report.html
+    /var/lib/sentinel-stig/benchmark.xml
+  register: stig_oscap
+  changed_when: false
+  # oscap exits 2 when at least one rule fails: that is a result, not an error.
+  failed_when: stig_oscap.rc not in [0, 2]
+
+- name: Results to the controller
+  ansible.builtin.fetch:
+    src: "/var/lib/sentinel-stig/{{ item }}"
+    dest: "{{ stig_results_dir }}/{{ inventory_hostname }}/"
+    flat: true
+  loop: [results.xml, report.html]
+
+- name: XCCDF results to HDF, then to a DISA checklist (MITRE SAF CLI, on the controller)
+  delegate_to: localhost
+  become: false
+  ansible.builtin.command:
+    argv: "{{ ['npx', '--yes', '@mitre/saf@' ~ stig_saf_version] + item }}"
+    chdir: "{{ stig_results_dir }}/{{ inventory_hostname }}"
+  loop:
+    - [convert, xccdf_results2hdf, -i, results.xml, -o, results.hdf.json]
+    - [convert, hdf2ckl, -i, results.hdf.json, -o, "{{ inventory_hostname }}.ckl", -H, "{{ inventory_hostname }}"]
+  changed_when: true

@@ -1,0 +1,29 @@
+# Managed by Ansible (deploy/ansible/roles/stig). DISA Ubuntu 24.04 STIG V1R6.
+# Rules as given in each rule's fix text. augenrules concatenates rules.d in
+# order; this file sorts after Ubuntu's audit.rules, so "-e 2" loads last.
+# The b32 syscall rules need a kernel with 32-bit compat (Ubuntu's amd64 and
+# arm64 kernels both have it); if augenrules rejects them, the handler fails.
+
+## Account changes: UBTU-24-200280, UBTU-24-200290, UBTU-24-200300, UBTU-24-200310, UBTU-24-200320
+-w /etc/passwd -p wa -k usergroup_modification
+-w /etc/group -p wa -k usergroup_modification
+-w /etc/shadow -p wa -k usergroup_modification
+-w /etc/gshadow -p wa -k usergroup_modification
+-w /etc/security/opasswd -p wa -k usergroup_modification
+
+## Privilege use: UBTU-24-900070 (su), UBTU-24-900170 (sudo)
+-a always,exit -F path=/bin/su -F perm=x -F auid>=1000 -F auid!=-1 -k privileged-priv_change
+-a always,exit -F path=/usr/bin/sudo -F perm=x -F auid>=1000 -F auid!=-1 -k priv_cmd
+
+## Privilege configuration: UBTU-24-900510, UBTU-24-900520
+-w /etc/sudoers -p wa -k privilege_modification
+-w /etc/sudoers.d -p wa -k privilege_modification
+
+## Kernel modules: UBTU-24-900340, UBTU-24-900350
+-a always,exit -F arch=b32 -S init_module,finit_module -F auid>=1000 -F auid!=-1 -k module_chng
+-a always,exit -F arch=b64 -S init_module,finit_module -F auid>=1000 -F auid!=-1 -k module_chng
+-a always,exit -F arch=b32 -S delete_module -F auid>=1000 -F auid!=-1 -k module_chng
+-a always,exit -F arch=b64 -S delete_module -F auid>=1000 -F auid!=-1 -k module_chng
+
+## Immutable until reboot: UBTU-24-909000. Must stay the last rule.
+-e 2

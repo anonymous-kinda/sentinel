@@ -1,0 +1,665 @@
+{
+  "profile": {
+    "uuid": "8fe771e5-8add-579f-ba56-bfe8e1424918",
+    "metadata": {
+      "title": "Sentinel tailored baseline: NIST SP 800-53 Rev 5",
+      "last-modified": "2026-09-23T00:00:00Z",
+      "version": "0.1.0",
+      "oscal-version": "1.2.1"
+    },
+    "imports": [
+      {
+        "href": "trestle://catalogs/nist-800-53-rev5/catalog.json",
+        "include-controls": [
+          {
+            "with-ids": [
+              "ac-2",
+              "ac-3",
+              "ac-4",
+              "ac-6",
+              "ac-17",
+              "au-2",
+              "au-3",
+              "au-6",
+              "au-9",
+              "au-10",
+              "ca-7",
+              "cm-2",
+              "cm-3",
+              "cm-6",
+              "cm-7",
+              "cm-8",
+              "cm-14",
+              "ia-2",
+              "ia-5",
+              "ra-5",
+              "sa-10",
+              "sa-11",
+              "sa-15",
+              "sc-7",
+              "sc-8",
+              "sc-12",
+              "sc-13",
+              "sc-28",
+              "si-2",
+              "si-4",
+              "si-7",
+              "si-10",
+              "si-15",
+              "si-17",
+              "sr-3",
+              "sr-4",
+              "sr-11"
+            ]
+          }
+        ]
+      }
+    ],
+    "merge": {
+      "as-is": true
+    },
+    "modify": {
+      "set-parameters": [
+        {
+          "param-id": "ac-04_odp",
+          "values": [
+            "Leafnode subject permissions: an edge never exports unit.>, passes.> or node.> to its hub and never imports node.>; console events are published only on node-scoped subjects (node.<id>.>); requests leave a node for a hosted AI service only with an UNCLASSIFIED marking, operator opt-in and a usable measured link."
+          ]
+        },
+        {
+          "param-id": "sc-13_odp.01",
+          "values": [
+            "Signing operator decision-log entries; hashing assessment inputs, audit records and release files; protecting console sessions (TLS) and administrative sessions (SSH)."
+          ]
+        },
+        {
+          "param-id": "sc-13_odp.02",
+          "values": [
+            "Ed25519 signatures; SHA-256; TLS as negotiated by Caddy; SSH restricted to the DISA STIG's FIPS 140-3 approved ciphers, MACs and key exchange algorithms."
+          ]
+        },
+        {
+          "param-id": "si-10_odp",
+          "values": [
+            "Conjunction Data Messages (CCSDS 508.0-B-1 KVN) submitted for ingest or fetched from a hub; decision-log entries received from peer nodes; operator questions to the assistant."
+          ]
+        },
+        {
+          "param-id": "si-15_odp",
+          "values": [
+            "The AI assistant's narrated answers, whose numbers must each appear, at the stated precision, in the tool results or the operator's question; and every probability of collision the API or console shows, which must carry its method."
+          ]
+        },
+        {
+          "param-id": "si-17_odp.02",
+          "values": [
+            "Loss or degradation of the link to the hub (DENIED, DEGRADED, INTERMITTENT, LIMITED); a hosted AI service failing or unreachable; conjunction inputs outside the 2D Pc method's validity (low relative velocity, curvilinear uncertainty, absent or non-positive-definite covariance)."
+          ]
+        },
+        {
+          "param-id": "si-17_odp.01",
+          "values": [
+            "The node keeps serving its console and recording signed decisions on local data, and reconciles when the link returns; the assistant falls back to its local router and templates within the same answer and says so; the risk engine returns REFUSED with the reason and the value that tripped the gate instead of a Pc."
+          ]
+        }
+      ],
+      "alters": [
+        {
+          "control-id": "ac-2",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "Operators record decisions that must be attributable, and administrators hold root on nodes."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "ac-3",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "A public node must refuse writes, and replicas must accept decisions only from trusted nodes."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "ac-4",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "A ground unit's position and its pass windows must never leave the edge that holds them, and nothing leaves a node for a hosted AI service unless policy allows it."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "ac-6",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "The AI layer must have no path to the maths, and the service and hub need no more privilege than they use."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "ac-17",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "Administrators reach nodes remotely; the path must be narrow and strongly protected. The STIG's SSH rules map here (DISA CCI list)."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "au-2",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "Decisions, AI interactions and rejected input must be reconstructable after the fact."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "au-3",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "A decision record is useful only if it says who, what, when, where and against which data."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "au-6",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "Tamper evidence is worth little unless someone checks it and acts on what it shows."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "au-9",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "The decision log is the record of what operators decided; it must be tamper-evident on every node."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "au-10",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "Signed decisions: a decision cannot later be disowned or attributed to another node."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "ca-7",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "Evidence is regenerated on every change, not collected once for an assessment."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "cm-2",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "A node installs identically in the cloud, at the edge and in an air-gapped enclave only if its baseline is code."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "cm-3",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "A change to the engine or the sync layer changes what operators are told; it must be tested and traceable."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "cm-6",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "Vendor defaults assumed a LAN and would have broken a satellite-linked edge; settings must be deliberate and documented."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "cm-7",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "A field node should do one job; everything else is attack surface."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "cm-8",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "An air-gapped enclave must know exactly what it installed."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "cm-14",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "A node must refuse to install software it cannot attribute to its publisher."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "ia-2",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "Decisions are attributed to people; today the node takes the proxy's word for who they are."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "ia-5",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "Node signing keys and administrator keys are the authenticators everything else trusts."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "ra-5",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "Dependencies and host configuration drift; both must be scanned, and findings must land in the POA&M."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "sa-10",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "The evidence is only as good as the control over the code and data it came from."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "sa-11",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "The risk engine's numbers decide whether propellant is spent; they must be proven against an independent reference."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "sa-15",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "The process that produces the code is part of the evidence."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "sc-7",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "The hub faces the internet; edges face contested links."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "sc-8",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "Console sessions cross the internet and the edge link crosses contested networks."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "sc-12",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "Signatures are only as trustworthy as the way keys are made and distributed."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "sc-13",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "Signatures and hashes carry the integrity claims; the algorithms and modules must be named."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "sc-28",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "Edges are deployed where hardware can be lost; the hub holds every node's replicated decisions."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "si-2",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "Flaws found by tests, scans and updates must be tracked to closure."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "si-4",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "At the edge, knowing the state of the link is part of knowing the state of the system."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "si-7",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "Verify before install, verify before merge: nothing is trusted because of where it came from."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "si-10",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "The engine's answer is only as good as its input: a CDM in the wrong units or frame produces a confident, wrong Pc."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "si-15",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "A language model may phrase an answer; it must not be able to put an unsupported number in front of an operator."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "si-17",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "The two failures Sentinel is built for are losing the link and receiving input the method cannot handle; in both it must fail to a known, honest state."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "sr-3",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "The same bundle installs in an air-gapped enclave; everything in it must be pinned and checked."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "sr-4",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "Every number Sentinel shows traces to its inputs; every input should trace to its origin."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "control-id": "sr-11",
+          "adds": [
+            {
+              "position": "ending",
+              "props": [
+                {
+                  "name": "tailoring-rationale",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "Counterfeit or tampered components must be refused before they run."
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
