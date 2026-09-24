@@ -1,0 +1,70 @@
+# Interface control: pass module HTTP API
+
+Edge-local. Nothing on this interface is a sync record; the unit's position
+and its pass windows never leave the node (ADR-010). Times are ISO 8601 UTC.
+The module reports itself as `"passes"` in `GET /api/node` → `modules`.
+
+## Unit
+
+`GET /api/passes/unit` → `200 Unit` or `404` when no unit is set.
+
+`PUT /api/passes/unit` with a `Unit` body → `200 Unit`. `422` on wrong input:
+latitude outside [-90, 90], longitude outside [-180, 180], reaction time not
+positive, missing id. `403` on a read-only node.
+
+`DELETE /api/passes/unit` → `204`.
+
+```json
+{"unit_id": "EX-UNIT-1", "lat_deg": 35.26, "lon_deg": -116.68, "alt_m": 700.0, "reaction_time_min": 30.0}
+```
+
+## Windows and gaps
+
+`GET /api/passes?hours=24` (1 to 72) → `409` when no unit is set, else:
+
+```json
+{
+  "unit": {"unit_id": "EX-UNIT-1", "lat_deg": 35.26, "lon_deg": -116.68, "alt_m": 700.0, "reaction_time_min": 30.0},
+  "start": "2026-09-24T06:00:00+00:00",
+  "end": "2026-09-25T06:00:00+00:00",
+  "provider": "skyfield-local",
+  "label": "not observed by catalogued imagers",
+  "windows": [
+    {"norad_id": 40115, "name": "WORLDVIEW-3 (WV-3)", "sensor": "EO",
+     "rise": "...", "culmination": "...", "set": "...",
+     "padded_start": "...", "padded_end": "...", "pad_s": 75.0,
+     "max_elevation_deg": 61.2, "mask_elevation_deg": 40.3,
+     "element_age_days": 0.5, "stale": false, "sunlit": true, "usable": true}
+  ],
+  "gaps": [{"start": "...", "end": "...", "duration_s": 5400.0, "low_confidence": false}],
+  "next_unobserved": {"start": "...", "end": "...", "duration_s": 5400.0, "low_confidence": false},
+  "catalog": {"imagers": 38, "skipped": [{"norad_id": 0, "name": "...", "reason": "..."}]},
+  "elements": {"oldest_age_days": 0.9, "newest_age_days": 0.1, "stale": 0}
+}
+```
+
+- `windows`: every pass overlapping the interval, sorted by rise, including
+  unusable ones (EO at night) so the operator sees them; `usable` says which
+  count against the unit.
+- `gaps`: the interval minus padded usable windows. A gap is time *not
+  observed by catalogued imagers* - never "safe": uncatalogued and
+  non-public sensors are outside this model.
+- `next_unobserved`: the first gap at least `reaction_time_min` long that
+  ends after now, or `null`.
+- `low_confidence` / `stale`: an element set older than 3 days fed the result.
+
+## Catalog
+
+`GET /api/passes/catalog` →
+
+```json
+{"imagers": [{"norad_id": 40115, "name": "WORLDVIEW-3 (WV-3)", "sensor": "EO",
+              "max_off_nadir_deg": 45.0, "gsd_m": 0.31, "basis": "...",
+              "element_epoch": "...", "element_age_days": 0.5, "stale": false}],
+ "skipped": [{"norad_id": 0, "name": "...", "reason": "..."}]}
+```
+
+## Tracks (visualization only)
+
+`GET /api/passes/tracks?norad_id=40115&start=...&end=...` (at most 30 min) →
+`{"norad_id": 40115, "positions_ecef_m": [[x, y, z], ...], "step_s": 20, "note": "visualization only"}`.
