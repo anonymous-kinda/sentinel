@@ -1,5 +1,6 @@
-"""What the ICD drift tests share: reading a document's tables, and reading
-facts out of the source by AST, so neither side is restated by hand."""
+"""What the ICD drift tests share: reading a document's tables and the
+AsyncAPI document's channels, and reading facts out of the source by AST,
+so neither side is restated by hand."""
 
 from __future__ import annotations
 
@@ -8,8 +9,12 @@ import dataclasses
 import pathlib
 import re
 
+import yaml
+
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 ICD = ROOT / "docs" / "icd"
+ASYNCAPI = ICD / "asyncapi.yaml"
+NODE_PREFIX = "node.{node_id}."
 
 _HEADING = re.compile(r"^(#+)\s+(.*?)\s*$")
 _BACKTICKED = re.compile(r"`([^`]+)`")
@@ -68,6 +73,27 @@ def nats_list(conf: str, key: str) -> set[str]:
     """A quoted-string list setting from a nats-server config, e.g. deny_exports."""
     match = re.search(rf"{key}:\s*\[([^\]]*)\]", conf)
     return set(re.findall(r'"([^"]+)"', match.group(1))) if match else set()
+
+
+def load_asyncapi(text: str | None = None) -> dict:
+    return yaml.safe_load(ASYNCAPI.read_text() if text is None else text)
+
+
+def family(address: str) -> str:
+    """The address without trailing parameter tokens: cdm.accepted.{event_id} -> cdm.accepted."""
+    tokens = address.split(".")
+    while tokens and tokens[-1].startswith("{"):
+        tokens.pop()
+    return ".".join(tokens)
+
+
+def addresses(doc: dict) -> dict[str, str]:
+    return {name: ch["address"] for name, ch in doc["channels"].items() if ch.get("address")}
+
+
+def documented_node_kinds(doc: dict) -> set[str]:
+    """The node-local event kinds an AsyncAPI document gives a channel: node.{node_id}.<kind>."""
+    return {family(a)[len(NODE_PREFIX) :] for a in addresses(doc).values() if a.startswith(NODE_PREFIX)}
 
 
 def drop_row(markdown: str, token: str) -> str:
