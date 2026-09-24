@@ -55,3 +55,9 @@ demo-local: web tools  ## hub on :8000 and edge on :8001 over an emulated link (
 ddil:  ## run all four DDIL scenarios on a real two-node cluster, then write docs/ddil-results.md
 	$(UV) run python -m harness.run all
 	$(UV) run python -m harness.report
+
+# --- M3 tabulated-ephemeris provider (append-only block) ---
+.PHONY: wayfinder-fixture
+wayfinder-fixture:  ## regenerate the ASSUMED-schema Wayfinder contract fixture (offline, deterministic)
+	$(UV) run python scripts/make_assumed_wayfinder_fixture.py
+# --- end M3 tabulated-ephemeris block ---
