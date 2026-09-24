@@ -14,13 +14,14 @@ shorter than an orbit in low Earth orbit, so every pass that overlaps the
 interval is found whole: true rise, culmination and set, even when those
 fall outside it (the model.PassProvider convention). An element set beyond
 low Earth orbit is refused rather than risk a clipped or missing pass.
+Rise and set are refined so each window contains the true pass
+(skyfield_passes).
 """
 
 from __future__ import annotations
 
-import dataclasses
 import datetime as dt
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 
 from skyfield.api import EarthSatellite, load, wgs84
 from skyfield.timelib import Timescale
@@ -38,6 +39,7 @@ from ..elements import (
 )
 from ..geometry import min_elevation_deg, sun_elevation_deg
 from ..model import Imager, PassWindow, Unit
+from .skyfield_passes import Pass, find_passes
 
 log = get_logger(__name__)
 
@@ -47,16 +49,6 @@ EO_MIN_SUN_ELEVATION_DEG = 10.0
 
 # The conventional upper bound on a low-Earth-orbit period.
 MAX_LEO_PERIOD_S = 128 * 60.0
-
-RISE, CULMINATION, SET = 0, 1, 2
-
-
-@dataclasses.dataclass(frozen=True)
-class _Pass:
-    rise: dt.datetime
-    culmination: dt.datetime
-    set: dt.datetime
-    max_elevation_deg: float
 
 
 class SkyfieldProvider:
@@ -79,11 +71,19 @@ class SkyfieldProvider:
     def _imager_windows(self, unit: Unit, imager: Imager, start: dt.datetime, end: dt.datetime) -> list[PassWindow]:
         element_set = self._element_set(imager)
         mask_deg = min_elevation_deg(imager.max_off_nadir_deg, mean_altitude_km(element_set))
+        margin = dt.timedelta(seconds=orbital_period_s(element_set))
+        passes = find_passes(
+            self._satellite(imager.norad_id, element_set),
+            wgs84.latlon(unit.lat_deg, unit.lon_deg, elevation_m=unit.alt_m),
+            self._ts.from_datetime(start - margin),
+            self._ts.from_datetime(end + margin),
+            mask_deg,
+        )
         epoch = epoch_utc(element_set)
         windows = [
-            _window(unit, imager, element_set["OBJECT_NAME"], p, mask_deg, epoch, self.name)
-            for p in self._passes(unit, imager, element_set, mask_deg, start, end)
-            if p.rise <= end and p.set >= start
+            _window(unit, imager, element_set["OBJECT_NAME"], found, mask_deg, epoch, self.name)
+            for found in passes
+            if found.rise <= end and found.set >= start
         ]
         _warn_if_stale(imager, epoch, windows)
         return windows
@@ -104,52 +104,21 @@ class SkyfieldProvider:
             self._satellites[norad_id] = EarthSatellite.from_omm(self._ts, element_set)
         return self._satellites[norad_id]
 
-    def _passes(
-        self, unit: Unit, imager: Imager, element_set: ElementSet, mask_deg: float, start: dt.datetime, end: dt.datetime
-    ) -> Iterator[_Pass]:
-        satellite = self._satellite(imager.norad_id, element_set)
-        observer = wgs84.latlon(unit.lat_deg, unit.lon_deg, elevation_m=unit.alt_m)
-        margin = dt.timedelta(seconds=orbital_period_s(element_set))
-        times, events = satellite.find_events(
-            observer, self._ts.from_datetime(start - margin), self._ts.from_datetime(end + margin), altitude_degrees=mask_deg
-        )
-        if len(times) == 0:
-            return iter(())
-        elevations_deg = (satellite - observer).at(times).altaz()[0].degrees
-        return _whole_passes(times.utc_datetime(), events, elevations_deg)
-
-
-def _whole_passes(times, events, elevations_deg) -> Iterator[_Pass]:
-    """Group rise, culmination(s) and set into passes. A pass cut by the
-    edge of the search (a set with no rise, a rise with no set) lies inside
-    the one-orbit margin, so it cannot overlap the interval and is dropped."""
-    rise = None
-    peaks: list[tuple[float, dt.datetime]] = []
-    for when, event, elevation_deg in zip(times, events, elevations_deg):
-        if event == RISE:
-            rise, peaks = when, []
-        elif event == CULMINATION:
-            peaks.append((float(elevation_deg), when))
-        elif rise is not None:
-            highest_deg, culmination = max(peaks)
-            yield _Pass(rise, culmination, when, highest_deg)
-            rise = None
-
 
 def _window(
-    unit: Unit, imager: Imager, object_name: str, pass_: _Pass, mask_deg: float, epoch: dt.datetime, provider: str
+    unit: Unit, imager: Imager, object_name: str, found: Pass, mask_deg: float, epoch: dt.datetime, provider: str
 ) -> PassWindow:
     return PassWindow(
         norad_id=imager.norad_id,
         name=object_name,
         sensor=imager.sensor,
-        rise=pass_.rise,
-        culmination=pass_.culmination,
-        set=pass_.set,
-        max_elevation_deg=pass_.max_elevation_deg,
+        rise=found.rise,
+        culmination=found.culmination,
+        set=found.set,
+        max_elevation_deg=found.max_elevation_deg,
         mask_elevation_deg=mask_deg,
-        element_age_days=(pass_.culmination - epoch).total_seconds() / SECONDS_PER_DAY,
-        sunlit=_sunlit(imager.sensor, pass_.culmination, unit),
+        element_age_days=(found.culmination - epoch).total_seconds() / SECONDS_PER_DAY,
+        sunlit=_sunlit(imager.sensor, found.culmination, unit),
         provider=provider,
     )
 
