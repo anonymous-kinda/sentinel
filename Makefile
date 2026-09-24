@@ -159,3 +159,10 @@ compliance-catalog:  ## verify the vendored NIST SP 800-53 Rev 5 catalog, then i
 	rm -rf compliance/oscal/catalogs/nist-800-53-rev5
 	cd compliance/oscal && $(TRESTLE) import -f ../vendor/nist/NIST_SP-800-53_rev5_catalog-min.json -o nist-800-53-rev5
 # <<< compliance (M4) <<<
+
+# --- M3 pass service: OPSEC evidence (NIST AC-4) -------------------------------
+.PHONY: opsec
+opsec: tools  ## OPSEC scenario on real processes: a unit set at the edge never reaches the hub; then docs/ddil-results.md
+	$(UV) run python -m harness.run opsec
+	$(UV) run python -m harness.report
+# --- end M3 pass service ------------------------------------------------------

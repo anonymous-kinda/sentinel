@@ -81,8 +81,10 @@ class Cluster:
         web: bool = False,
         hub_port: int | None = None,
         edge_port: int | None = None,
+        hub_elements: bool = True,
     ):
         self.sync_mode = sync_mode
+        self.hub_elements = hub_elements
         self.clock = clock
         self.hub_exercise = hub_exercise
         self.sync_interval_s = sync_interval_s
@@ -137,12 +139,25 @@ class Cluster:
         path.write_text(json.dumps(trust, indent=1))
         return path
 
+    def elements_env(self) -> dict[str, dict[str, str]]:
+        """SENTINEL_ELEMENTS per node. Empty means the node's role default:
+        the hub loads the vendored snapshot, and the edge loads none and
+        syncs element sets from the hub - whatever the calling shell sets.
+        A conjunction-only hub starts from an empty snapshot."""
+        hub = ""
+        if not self.hub_elements:
+            empty = self.dir / "no-elements.json"
+            empty.write_text("[]")
+            hub = str(empty)
+        return {"hub": {"SENTINEL_ELEMENTS": hub}, "edge": {"SENTINEL_ELEMENTS": ""}}
+
     def start(self) -> Cluster:
         for tool in ("nats-server", "toxiproxy"):
             if not (TOOLS / tool).exists():
                 raise SystemExit(f"{TOOLS / tool} missing: run `make tools`")
         p = self.ports
         trust = self._identities()
+        elements = self.elements_env()
 
         self._spawn("toxiproxy", [str(TOOLS / "toxiproxy"), "-host", "127.0.0.1", "-port", str(p["toxi_api"])])
         wait_until(lambda: http("GET", f"{self.toxi}/version") is not None or True, 10, what="toxiproxy")
@@ -171,6 +186,7 @@ class Cluster:
         }
         self._spawn("hub", [sys.executable, "-m", "sentinel.cli", "serve", "--port", str(p["hub_http"]), "--log-level", "warning"], {
             **common,
+            **elements["hub"],
             "SENTINEL_NODE_ID": "hub", "SENTINEL_ROLE": "hub",
             "SENTINEL_NATS_URL": f"nats://127.0.0.1:{p['hub_client']}",
             "SENTINEL_DB": str(self.dir / "hub" / "sentinel.db"),
@@ -179,6 +195,7 @@ class Cluster:
         })
         self._spawn("edge", [sys.executable, "-m", "sentinel.cli", "serve", "--port", str(p["edge_http"]), "--log-level", "warning"], {
             **common,
+            **elements["edge"],
             "SENTINEL_NODE_ID": "edge-alpha", "SENTINEL_ROLE": "edge", "SENTINEL_HUB_ID": "hub",
             "SENTINEL_NATS_URL": f"nats://127.0.0.1:{p['edge_client']}",
             "SENTINEL_DB": str(self.dir / "edge-alpha" / "sentinel.db"),

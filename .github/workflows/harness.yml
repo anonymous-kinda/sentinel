@@ -5,7 +5,8 @@ name: ddil-harness
 # the layers it exercises, and nightly with a longer denial.
 on:
   pull_request:
-    paths: ["sentinel/sync/**", "sentinel/bus/**", "sentinel/crdt/**", "sentinel/ops/**", "sentinel/linkstate/**", "harness/**", "deploy/nats/**"]
+    # M3 pass service: the OPSEC scenario also guards sentinel/passes and sentinel/api.
+    paths: ["sentinel/sync/**", "sentinel/bus/**", "sentinel/crdt/**", "sentinel/ops/**", "sentinel/linkstate/**", "harness/**", "deploy/nats/**", "sentinel/passes/**", "sentinel/api/**"]
   schedule:
     - cron: "17 6 * * *"
   workflow_dispatch:
@@ -20,7 +21,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        scenario: [denied, limited, intermittent, degraded, recovery]
+        scenario: [denied, limited, intermittent, degraded, recovery, opsec]  # opsec: NIST AC-4, the unit never reaches the hub
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
