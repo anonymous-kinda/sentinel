@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from ..obs import get_logger
 from .service import ConjunctionService
+from .summaries import summary_problem
+
+log = get_logger(__name__)
 
 
 class ConjunctionRecords:
@@ -27,9 +31,14 @@ class ConjunctionRecords:
         return self.service.store.has_cdm_prefix(sha16)
 
     def put_summaries(self, summaries: list[dict], origin: str) -> None:
-        now = self.service.clock.now().isoformat()
+        now = self.service.clock.now()
         for compact in summaries:
-            self.service.store.put_remote_summary(compact["e"], compact, origin, now)
+            problem = summary_problem(compact, now, self.service.policy)
+            if problem is not None:
+                event_id = compact.get("e") if isinstance(compact, dict) else None
+                log.warning("Hub summary rejected", origin=origin, event_id=str(event_id)[:80], reason=problem)
+                continue
+            self.service.store.put_remote_summary(compact["e"], compact, origin, now.isoformat())
 
     async def ingest(self, raw: bytes, source: str, data_class: str, item_id: str | None) -> dict:
         result = await self.service.ingest(raw, source, data_class, event_id=item_id)

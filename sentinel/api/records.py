@@ -33,9 +33,12 @@ class CompositeRecords:
         return any(records.has(sha16) for records in self._all)
 
     def put_summaries(self, summaries: list[dict], origin: str) -> None:
+        """A summary with no readable item id goes to the default module,
+        which rejects and logs what it cannot show."""
         grouped: dict[int, list[dict]] = {}
         for summary in summaries:
-            grouped.setdefault(id(self._for(summary["e"])), []).append(summary)
+            item_id = summary.get("e") if isinstance(summary, dict) else None
+            grouped.setdefault(id(self._for(item_id if isinstance(item_id, str) else None)), []).append(summary)
         for records in self._all:
             records.put_summaries(grouped.get(id(records), []), origin)
 
