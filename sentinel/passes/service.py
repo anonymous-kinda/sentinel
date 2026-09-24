@@ -23,6 +23,7 @@ call, because the cache's start is up to a minute behind now.
 
 from __future__ import annotations
 
+import asyncio
 import collections
 import dataclasses
 import datetime as dt
@@ -47,6 +48,9 @@ MIN_HOURS = 1
 MAX_HOURS = 72
 CACHE_ENTRIES = 16
 UPDATED = "passes.updated"
+# An edge's first sync brings every element set in a burst, one record at a
+# time. The console hears about the burst once, when it settles.
+ELEMENTS_SETTLE_S = 1.0
 
 ProviderFactory = Callable[[Mapping[int, ElementSet]], PassProvider]
 
@@ -110,6 +114,7 @@ class PassService:
         node_id: str,
         provider_factory: ProviderFactory = SkyfieldProvider,
         cache_entries: int = CACHE_ENTRIES,
+        elements_settle_s: float = ELEMENTS_SETTLE_S,
     ):
         self._store = store
         self._catalog = list(catalog)
@@ -122,6 +127,8 @@ class PassService:
         self._cache: collections.OrderedDict[tuple, PassReport] = collections.OrderedDict()
         self._inputs: _Inputs | None = None
         self._lock = threading.Lock()
+        self._elements_settle_s = elements_settle_s
+        self._elements_event: asyncio.Task | None = None
         self._unit = self._load_unit()
 
     # ------------------------------------------------------------------ unit
@@ -144,7 +151,15 @@ class PassService:
         await self._publish("unit_cleared")
 
     async def elements_changed(self) -> None:
-        """A synced element set changed the store: tell the console."""
+        """A synced element set changed the store. The console is told once
+        the burst settles: at most one event per settle interval, and a
+        change after an event is sent always schedules another."""
+        if self._elements_event is None:
+            self._elements_event = asyncio.get_running_loop().create_task(self._publish_elements_when_settled())
+
+    async def _publish_elements_when_settled(self) -> None:
+        await asyncio.sleep(self._elements_settle_s)
+        self._elements_event = None
         await self._publish("elements")
 
     def _load_unit(self) -> Unit | None:

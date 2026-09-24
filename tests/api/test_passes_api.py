@@ -10,6 +10,7 @@ import json
 import logging
 import pathlib
 import stat
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -18,6 +19,7 @@ from sentinel.api import create_app
 from sentinel.api.settings import Settings
 from sentinel.bus import InProcessBus
 from sentinel.clock import FixedClock
+from sentinel.passes.service import ELEMENTS_SETTLE_S
 
 SNAPSHOT = pathlib.Path(__file__).resolve().parents[2] / "fixtures" / "omm" / "celestrak-resource-20260924.json"
 NOW = dt.datetime(2026, 9, 24, 6, 0, 30, tzinfo=dt.UTC)
@@ -271,10 +273,16 @@ def test_an_edge_admits_synced_element_sets_and_tells_its_console(tmp_path):
         outcome = edge.portal.call(records.ingest, raw, "sync:hub", "REAL", f"omm:{WV3}")
         assert outcome["status"] == "accepted"
         assert [i["norad_id"] for i in edge.get("/api/passes/catalog").json()["imagers"]] == [WV3]
+
+        def updates():
+            return [json.loads(data) for subject, data in bus.published if subject == "node.edge-alpha.passes.updated"]
+
+        deadline = time.monotonic() + 5 * ELEMENTS_SETTLE_S
+        while not updates() and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert updates() == [{"reason": "elements", "elements_version": 1}], "once the sync burst settles"
     finally:
         edge.__exit__(None, None, None)
-    updates = [json.loads(data) for subject, data in bus.published if subject == "node.edge-alpha.passes.updated"]
-    assert updates == [{"reason": "elements", "elements_version": 1}]
 
 
 def test_settings_read_the_element_snapshot_path_from_the_environment(monkeypatch):

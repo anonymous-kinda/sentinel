@@ -25,6 +25,7 @@ from sentinel.passes.unit import UnitFile
 
 from .exercise import SNAPSHOT, START
 
+SETTLE_S = 0.05
 NODE = "edge-alpha"
 WV3 = 40115
 UNIT = Unit("EX-UNIT-7", lat_deg=35.26417, lon_deg=-116.68273, alt_m=701.0, reaction_time_min=30.0)
@@ -91,8 +92,21 @@ def make(tmp_path, store=None, provider_factory=SkyfieldProvider, now=START) -> 
     store = store if store is not None else snapshot_store()
     clock = FixedClock(now)
     units = UnitFile(tmp_path / "unit.json")
-    service = PassService(store, load_catalog(), clock, units, bus, NODE, provider_factory=provider_factory)
+    service = PassService(
+        store, load_catalog(), clock, units, bus, NODE, provider_factory=provider_factory, elements_settle_s=SETTLE_S
+    )
     return Harness(service, store, clock, messages, units)
+
+
+def settle_after(*calls):
+    """Run coroutine functions in one loop, then let a coalesced event go out."""
+
+    async def run():
+        for call in calls:
+            await call()
+        await asyncio.sleep(SETTLE_S * 4)
+
+    asyncio.run(run())
 
 
 @pytest.fixture
@@ -119,14 +133,21 @@ def test_the_unit_is_kept_in_one_private_file_and_survives_a_restart(node, tmp_p
 
 
 def test_the_only_message_is_a_coordinate_free_passes_updated(node):
-    asyncio.run(node.service.clear_unit())
-    asyncio.run(node.service.elements_changed())
+    settle_after(node.service.clear_unit, node.service.elements_changed)
     assert [m.subject for m in node.messages] == [f"node.{NODE}.passes.updated"] * 3
     assert [json.loads(m.data)["reason"] for m in node.messages] == ["unit_set", "unit_cleared", "elements"]
     assert {m.headers["Sentinel-Kind"] for m in node.messages} == {"passes.updated"}
     for m in node.messages:
         text = m.data.decode() + json.dumps(m.headers)
         assert not any(secret in text for secret in SECRETS), text
+
+
+def test_a_burst_of_synced_element_sets_is_one_event_once_it_settles(tmp_path):
+    h = make(tmp_path)
+    settle_after(*[h.service.elements_changed] * 20)
+    assert [json.loads(m.data)["reason"] for m in h.messages] == ["elements"]
+    settle_after(h.service.elements_changed)
+    assert len(h.messages) == 2, "a later change is a new event"
 
 
 def test_nothing_logged_carries_the_unit(tmp_path, caplog):
