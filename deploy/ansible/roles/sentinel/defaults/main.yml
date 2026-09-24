@@ -1,0 +1,26 @@
+# Where the bundle is staged on the target, and where the verifier runs from.
+sentinel_stage_dir: /var/tmp
+sentinel_verify_dir: "{{ sentinel_stage_dir }}/sentinel-verify"
+
+# Signature policy (SI-7, CM-14, SR-11). An unsigned or wrongly signed bundle
+# is never unpacked. Exactly one mode:
+#   keyless  the release workflow's Sigstore signature, verified offline against
+#            the pinned Sigstore trusted root. Set sentinel_repository.
+#   key      a site key, e.g. an enclave's countersignature after its own review
+#            (no transparency log exists for those). Set sentinel_verify_key.
+sentinel_verify_mode: keyless
+sentinel_repository: ""   # OWNER/REPO whose .github/workflows/release.yml signed the release
+sentinel_signer_identity: "https://github.com/{{ sentinel_repository }}/.github/workflows/release.yml@refs/tags/v{{ sentinel_version }}"
+sentinel_signer_issuer: https://token.actions.githubusercontent.com
+sentinel_verify_key: ""   # key mode: controller path to the site's public key
+
+# Verifier material on the controller, pinned in deploy/tools.lock:
+#   uv run python scripts/fetch_tools.py --arch <target arch> cosign sigstore-trusted-root.json
+sentinel_repo_root: "{{ playbook_dir }}/../.."
+sentinel_tools_lock: "{{ lookup('ansible.builtin.file', sentinel_repo_root ~ '/deploy/tools.lock') }}"
+sentinel_cosign: "{{ sentinel_repo_root }}/.tools/{{ sentinel_arch }}/cosign"
+sentinel_cosign_sha256: >-
+  {{ sentinel_tools_lock | regex_search('^cosign\s+\S+\s+' ~ sentinel_arch ~ '\s+([0-9a-f]{64})', '\1', multiline=True) | first }}
+sentinel_trusted_root: "{{ sentinel_repo_root }}/.tools/noarch/sigstore-trusted-root.json"
+sentinel_trusted_root_sha256: >-
+  {{ sentinel_tools_lock | regex_search('^sigstore-trusted-root\.json\s+\S+\s+noarch\s+([0-9a-f]{64})', '\1', multiline=True) | first }}

@@ -1,0 +1,68 @@
+# The signature gate (SI-7, CM-14, SR-11): runs on the target, before anything
+# is unpacked. The verifier is deploy/bundle/verify_signature.sh - the same
+# policy `make airgap-verify` and the release workflow use - run with a cosign
+# binary whose sha256 is checked against deploy/tools.lock first. No network
+# is needed on the target: the trust root travels with the verifier.
+- name: Signature policy is complete (fail closed)
+  ansible.builtin.assert:
+    that:
+      - sentinel_verify_mode in ['keyless', 'key']
+      - sentinel_verify_mode != 'keyless' or (sentinel_repository | length > 0)
+      - sentinel_verify_mode != 'key' or (sentinel_verify_key | length > 0)
+    fail_msg: >-
+      No usable signature policy: set sentinel_repository (keyless release signatures)
+      or sentinel_verify_mode=key with sentinel_verify_key. An unverified bundle is never installed.
+    quiet: true
+
+- name: Verifier directory
+  ansible.builtin.file:
+    path: "{{ sentinel_verify_dir }}"
+    state: directory
+    mode: "0700"
+
+- name: Copy the pinned cosign, the verifier and the trust anchor
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ sentinel_verify_dir }}/{{ item.dest }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { src: "{{ sentinel_cosign }}", dest: cosign, mode: "0755" }
+    - { src: "{{ sentinel_repo_root }}/deploy/bundle/verify_signature.sh", dest: verify_signature.sh, mode: "0755" }
+    - src: "{{ sentinel_trusted_root if sentinel_verify_mode == 'keyless' else sentinel_verify_key }}"
+      dest: "{{ 'trusted_root.json' if sentinel_verify_mode == 'keyless' else 'site.pub' }}"
+      mode: "0644"
+  loop_control:
+    label: "{{ item.dest }}"
+
+- name: The cosign binary matches its pin in deploy/tools.lock
+  ansible.builtin.command: sha256sum --quiet --strict -c -
+  args:
+    chdir: "{{ sentinel_verify_dir }}"
+    stdin: "{{ sentinel_cosign_sha256 }}  cosign"
+  changed_when: false
+
+- name: Copy bundle, digest and signature
+  ansible.builtin.copy:
+    src: "{{ sentinel_bundle_dir }}/{{ item }}"
+    dest: "{{ sentinel_stage_dir }}/{{ item }}"
+    mode: "0600"
+  loop:
+    - "{{ bundle_name }}.tar.gz"
+    - "{{ bundle_name }}.tar.gz.sha256"
+    - "{{ bundle_name }}.tar.gz.sigstore.json"
+
+- name: Verify the bundle signature before anything is unpacked
+  ansible.builtin.command: "{{ sentinel_verify_dir }}/verify_signature.sh {{ sentinel_stage_dir }}/{{ bundle_name }}.tar.gz"
+  environment: "{{ verify_env[sentinel_verify_mode] }}"
+  vars:
+    verify_env:
+      keyless:
+        COSIGN: "{{ sentinel_verify_dir }}/cosign"
+        SENTINEL_TRUSTED_ROOT: "{{ sentinel_verify_dir }}/trusted_root.json"
+        SENTINEL_TRUSTED_ROOT_SHA256: "{{ sentinel_trusted_root_sha256 }}"
+        SENTINEL_CERT_IDENTITY: "{{ sentinel_signer_identity }}"
+        SENTINEL_CERT_ISSUER: "{{ sentinel_signer_issuer }}"
+      key:
+        COSIGN: "{{ sentinel_verify_dir }}/cosign"
+        SENTINEL_VERIFY_KEY: "{{ sentinel_verify_dir }}/site.pub"
+  changed_when: false

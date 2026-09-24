@@ -1,30 +1,25 @@
-# Install from the bundle. The integrity check happens twice: here, against
-# the published .sha256 of the tarball, and inside install.sh against the
-# per-file SHA256SUMS. From M4 the tarball's cosign signature is verified
-# before either (SI-7, CM-14): an unsigned bundle is never installed.
+# Install from the bundle. Nothing is unpacked until the tarball's signature
+# verifies on the target (verify.yml: SI-7, CM-14): an unsigned or wrongly
+# signed bundle is never installed. Integrity is then checked twice more:
+# the tarball's published .sha256 here, and the per-file SHA256SUMS inside
+# install.sh, which also installs every dependency with --require-hashes.
 - name: Bundle names
   ansible.builtin.set_fact:
     bundle_name: "sentinel-{{ sentinel_version }}-{{ sentinel_arch }}"
 
-- name: Copy bundle and its digest
-  ansible.builtin.copy:
-    src: "{{ sentinel_bundle_dir }}/{{ item }}"
-    dest: "/var/tmp/{{ item }}"
-    mode: "0600"
-  loop:
-    - "{{ bundle_name }}.tar.gz"
-    - "{{ bundle_name }}.tar.gz.sha256"
+- name: Signature gate
+  ansible.builtin.include_tasks: verify.yml
 
 - name: Verify bundle digest before unpacking
   ansible.builtin.command: sha256sum --strict -c {{ bundle_name }}.tar.gz.sha256
   args:
-    chdir: /var/tmp
+    chdir: "{{ sentinel_stage_dir }}"
   changed_when: false
 
 - name: Unpack
   ansible.builtin.unarchive:
-    src: "/var/tmp/{{ bundle_name }}.tar.gz"
-    dest: /var/tmp
+    src: "{{ sentinel_stage_dir }}/{{ bundle_name }}.tar.gz"
+    dest: "{{ sentinel_stage_dir }}"
     remote_src: true
 
 - name: Node settings
@@ -37,7 +32,7 @@
 - name: Install (offline, hash-pinned)
   ansible.builtin.command: ./install.sh
   args:
-    chdir: "/var/tmp/{{ bundle_name }}"
+    chdir: "{{ sentinel_stage_dir }}/{{ bundle_name }}"
   environment:
     PREFIX: "{{ sentinel_prefix }}"
     SENTINEL_ROLE: "{{ sentinel_role }}"
