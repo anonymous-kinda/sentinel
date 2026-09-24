@@ -6,7 +6,9 @@ Real processes, real TCP, real NATS leafnode protocol. Toxiproxy shapes the
 one link that matters - the leaf connection - so every scenario exercises
 the same code a deployed edge runs. No containers: nats-server and
 toxiproxy are static binaries (deploy/tools.lock), so this runs the same in
-WSL, on a laptop, and in GitHub Actions.
+WSL, on a laptop, and in GitHub Actions. The Compose stack (deploy/compose,
+harness/compose.py) runs the same topology in containers, from the same
+config rendering below.
 """
 
 from __future__ import annotations
@@ -28,6 +30,34 @@ import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 TOOLS = ROOT / ".tools" / {"amd64": "x86_64", "arm64": "aarch64"}.get(platform.machine(), platform.machine())
+NATS_TEMPLATES = ROOT / "deploy" / "nats"
+HUB_ID = "hub"
+EDGE_ID = "edge-alpha"
+LEAF_PROXY = "leaf"  # the Toxiproxy proxy name sentinel.linkstate.toxiproxy shapes
+
+
+# ------------------------------------------------------------------ configs
+# One rendering for every two-node deployment: this harness and the Compose
+# stack (harness/compose.py) differ only in the addresses they pass in.
+def render_nats(template: str, **values) -> str:
+    return string.Template((NATS_TEMPLATES / template).read_text()).substitute(values)
+
+
+def hub_nats_conf(client_port: int, monitor_port: int, leaf_listen: str) -> str:
+    """The hub's nats-server: its own bus, plus the listener leaves dial."""
+    return render_nats("hub.conf.tmpl", NODE_ID=HUB_ID, CLIENT_PORT=client_port, MONITOR_PORT=monitor_port,
+                       LEAF_LISTEN=leaf_listen, LEAF_TLS="")
+
+
+def edge_nats_conf(client_port: int, monitor_port: int, hub_leaf_url: str) -> str:
+    """The edge's nats-server: its own bus, plus one leaf link to the hub."""
+    return render_nats("edge.conf.tmpl", NODE_ID=EDGE_ID, CLIENT_PORT=client_port, MONITOR_PORT=monitor_port,
+                       HUB_LEAF_URL=hub_leaf_url, REMOTE_TLS="")
+
+
+def leaf_proxy(listen: str, upstream: str) -> dict:
+    """The one Toxiproxy proxy: the edge's leaf connection, on its way to the hub."""
+    return {"name": LEAF_PROXY, "listen": listen, "upstream": upstream, "enabled": True}
 
 
 def allocate_ports(names: list[str]) -> dict[str, int]:
@@ -122,21 +152,23 @@ class Cluster:
             args, stdout=log, stderr=subprocess.STDOUT, env={**os.environ, **(env or {})}, cwd=ROOT
         )
 
-    def _render(self, template: str, out: pathlib.Path, **values) -> None:
-        text = string.Template((ROOT / "deploy" / "nats" / template).read_text()).substitute(values)
-        out.write_text(text)
+    def write_nats_configs(self) -> None:
+        p = self.ports
+        configs = {
+            HUB_ID: hub_nats_conf(p["hub_client"], p["hub_monitor"], f"127.0.0.1:{p['hub_leaf']}"),
+            EDGE_ID: edge_nats_conf(p["edge_client"], p["edge_monitor"], f"nats-leaf://127.0.0.1:{p['toxi_leaf']}"),
+        }
+        for node, text in configs.items():
+            (self.dir / node).mkdir(exist_ok=True)
+            (self.dir / node / "nats.conf").write_text(text)
 
     def _identities(self) -> pathlib.Path:
         sys.path.insert(0, str(ROOT))
-        from sentinel.crdt import NodeKey
+        from .identity import enroll
 
-        trust = {}
-        for node in ("hub", "edge-alpha"):
-            var = self.dir / node / "var"
-            key = NodeKey.load_or_create(node, var / "keys" / f"{node}.ed25519.pem")
-            trust[node] = key.public_hex()
         path = self.dir / "trust.json"
-        path.write_text(json.dumps(trust, indent=1))
+        for node in (HUB_ID, EDGE_ID):
+            enroll(node, self.dir / node / "var", path)
         return path
 
     def elements_env(self) -> dict[str, dict[str, str]]:
@@ -161,21 +193,13 @@ class Cluster:
 
         self._spawn("toxiproxy", [str(TOOLS / "toxiproxy"), "-host", "127.0.0.1", "-port", str(p["toxi_api"])])
         wait_until(lambda: http("GET", f"{self.toxi}/version") is not None or True, 10, what="toxiproxy")
-        wait_until(lambda: http("POST", f"{self.toxi}/proxies", {
-            "name": "leaf", "listen": f"127.0.0.1:{p['toxi_leaf']}",
-            "upstream": f"127.0.0.1:{p['hub_leaf']}", "enabled": True,
-        }), 10, what="toxiproxy proxy")
+        wait_until(lambda: http("POST", f"{self.toxi}/proxies",
+                                leaf_proxy(f"127.0.0.1:{p['toxi_leaf']}", f"127.0.0.1:{p['hub_leaf']}")),
+                   10, what="toxiproxy proxy")
 
-        (self.dir / "hub").mkdir(exist_ok=True)
-        (self.dir / "edge-alpha").mkdir(exist_ok=True)
-        self._render("hub.conf.tmpl", self.dir / "hub" / "nats.conf", NODE_ID="hub",
-                     CLIENT_PORT=p["hub_client"], MONITOR_PORT=p["hub_monitor"],
-                     LEAF_LISTEN=f"127.0.0.1:{p['hub_leaf']}", LEAF_TLS="")
-        self._render("edge.conf.tmpl", self.dir / "edge-alpha" / "nats.conf", NODE_ID="edge-alpha",
-                     CLIENT_PORT=p["edge_client"], MONITOR_PORT=p["edge_monitor"],
-                     HUB_LEAF_URL=f"nats-leaf://127.0.0.1:{p['toxi_leaf']}", REMOTE_TLS="")
-        self._spawn("nats-hub", [str(TOOLS / "nats-server"), "-c", str(self.dir / "hub" / "nats.conf")])
-        self._spawn("nats-edge", [str(TOOLS / "nats-server"), "-c", str(self.dir / "edge-alpha" / "nats.conf")])
+        self.write_nats_configs()
+        self._spawn("nats-hub", [str(TOOLS / "nats-server"), "-c", str(self.dir / HUB_ID / "nats.conf")])
+        self._spawn("nats-edge", [str(TOOLS / "nats-server"), "-c", str(self.dir / EDGE_ID / "nats.conf")])
 
         common = {
             "SENTINEL_CLOCK": self.clock,
@@ -187,19 +211,19 @@ class Cluster:
         self._spawn("hub", [sys.executable, "-m", "sentinel.cli", "serve", "--port", str(p["hub_http"]), "--log-level", "warning"], {
             **common,
             **elements["hub"],
-            "SENTINEL_NODE_ID": "hub", "SENTINEL_ROLE": "hub",
+            "SENTINEL_NODE_ID": HUB_ID, "SENTINEL_ROLE": "hub",
             "SENTINEL_NATS_URL": f"nats://127.0.0.1:{p['hub_client']}",
-            "SENTINEL_DB": str(self.dir / "hub" / "sentinel.db"),
-            "SENTINEL_VAR": str(self.dir / "hub" / "var"),
+            "SENTINEL_DB": str(self.dir / HUB_ID / "sentinel.db"),
+            "SENTINEL_VAR": str(self.dir / HUB_ID / "var"),
             "SENTINEL_EXERCISE": "1" if self.hub_exercise else "0",
         })
         self._spawn("edge", [sys.executable, "-m", "sentinel.cli", "serve", "--port", str(p["edge_http"]), "--log-level", "warning"], {
             **common,
             **elements["edge"],
-            "SENTINEL_NODE_ID": "edge-alpha", "SENTINEL_ROLE": "edge", "SENTINEL_HUB_ID": "hub",
+            "SENTINEL_NODE_ID": EDGE_ID, "SENTINEL_ROLE": "edge", "SENTINEL_HUB_ID": HUB_ID,
             "SENTINEL_NATS_URL": f"nats://127.0.0.1:{p['edge_client']}",
-            "SENTINEL_DB": str(self.dir / "edge-alpha" / "sentinel.db"),
-            "SENTINEL_VAR": str(self.dir / "edge-alpha" / "var"),
+            "SENTINEL_DB": str(self.dir / EDGE_ID / "sentinel.db"),
+            "SENTINEL_VAR": str(self.dir / EDGE_ID / "var"),
             "SENTINEL_EXERCISE": "0",
             "SENTINEL_SYNC_MODE": self.sync_mode,
             "SENTINEL_SYNC_INTERVAL_S": str(self.sync_interval_s),

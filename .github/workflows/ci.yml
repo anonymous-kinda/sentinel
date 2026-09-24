@@ -203,3 +203,42 @@ jobs:
             compliance/oscal/plan-of-action-and-milestones/
             build/compliance/junit.xml
   # <<< compliance (M4) <<<
+
+  # >>> compose (begin) >>>
+  # The hub/edge stack in containers (deploy/compose, docs/compose.md): build
+  # the sentinel image from this checkout, start hub-nats, hub, toxiproxy,
+  # edge-nats and edge, wait until both nodes are healthy, then run the smoke
+  # test: sync VERIFIED, DENIED measured with the console answering,
+  # reconvergence, and a unit set on the edge still 404 on the hub.
+  compose-smoke:
+    name: Hub and edge in containers (compose-smoke)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: "3.12"
+          activate-environment: true
+          enable-cache: false
+      - name: Install (the smoke test reuses the DDIL harness's helpers)
+        run: uv pip install -e .
+      - name: The compose file as Docker Compose reads it
+        run: docker compose -f deploy/compose/compose.yaml config --quiet
+      - name: Build and start; returns once both nodes are healthy
+        run: make compose-up
+      - name: Smoke test
+        run: make compose-smoke
+      - name: Container state and logs
+        if: ${{ failure() }}
+        run: |
+          docker compose -f deploy/compose/compose.yaml ps --all
+          docker compose -f deploy/compose/compose.yaml logs --no-color --timestamps
+      - name: Stop and delete the volumes
+        if: ${{ always() }}
+        run: make compose-down
+  # <<< compose (end) <<<
