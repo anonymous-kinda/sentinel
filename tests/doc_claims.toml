@@ -97,15 +97,22 @@ patterns = ["leaf re-establishes over ~8 kbit/s after a denial (11.8 s)"]
 id = "readme-summary-size"
 doc = "README.md"
 quoted = "a summary of every event (at most 256 bytes each)"
-source = "tests/sync/test_hub_edge.py"
-patterns = ["assert size <= 256"]
+source = "sentinel/conjunction/summaries.py"
+patterns = ["SUMMARY_MAX_BYTES = 256"]
 
 [[claim]]
 id = "adr006-summary-size"
 doc = "docs/system-design.md"
 quoted = "Summaries measure **≤ 256 bytes** each"
-source = "tests/sync/test_hub_edge.py"
-patterns = ["assert size <= 256"]
+source = "sentinel/conjunction/summaries.py"
+patterns = ["SUMMARY_MAX_BYTES = 256"]
+
+[[claim]]
+id = "icd-sync-summary-size"
+doc = "docs/icd/sync-envelope.md"
+quoted = "is at most 256 bytes of CBOR"
+source = "sentinel/conjunction/summaries.py"
+patterns = ["SUMMARY_MAX_BYTES = 256"]
 
 # --- NASA CARA: docs/validation-report.md (scripts/validation_report.py) -------
 
@@ -354,3 +361,201 @@ doc = "docs/system-design.md"
 quoted = "rise and set within 2 s, maximum elevation within 0.1°"
 source = "tests/conformance/test_pass_providers.py"
 patterns = ["RISE_SET_TOLERANCE_S = 2.0", "MAX_ELEVATION_TOLERANCE_DEG = 0.1"]
+
+# --- Technical guide: docs/technical-guide.md -----------------------------------
+
+[[claim]]
+id = "guide-limited-edf-vs-fifo"
+doc = "docs/technical-guide.md"
+quoted = "every event was visible as a summary at 5.5 s, and the most urgent full CDM arrived in 12.1 s with earliest-deadline-first against 46.8 s in FIFO order"
+source = "docs/ddil-results.md"
+patterns = ["summaries at 5.5 s", "EDF 12.1 s vs FIFO 46.8 s"]
+
+[[claim]]
+id = "guide-catalog-element-sets"
+doc = "docs/technical-guide.md"
+quoted = "only the 38 in the imaging catalog"
+source = "docs/ddil-results.md"
+patterns = ["edge assessed 38 imagers"]
+
+[[claim]]
+id = "guide-summary-size"
+doc = "docs/technical-guide.md"
+quoted = "encodes to at most 256 bytes of CBOR"
+source = "sentinel/conjunction/summaries.py"
+patterns = ["SUMMARY_MAX_BYTES = 256"]
+
+[[claim]]
+id = "guide-pass-conformance"
+doc = "docs/technical-guide.md"
+quoted = "rise and set within 2 s, maximum elevation within 0.1°"
+source = "tests/conformance/test_pass_providers.py"
+patterns = ["RISE_SET_TOLERANCE_S = 2.0", "MAX_ELEVATION_TOLERANCE_DEG = 0.1"]
+
+[[claim]]
+id = "guide-cara-event-count"
+doc = "docs/technical-guide.md"
+quoted = "Load NASA CARA's 53 operational conjunctions"
+source = "docs/validation-report.md"
+patterns = ["53 real operational conjunctions"]
+
+[[claim]]
+id = "guide-airgap-validation"
+doc = "docs/technical-guide.md"
+quoted = "53 operational events, a worst relative error below 1e-6 and no false negatives"
+source = "deploy/bundle/verify_offline.sh"
+patterns = ['operational_count\"] == 53', 'worst_rel_error\"] < 1e-6', 'fn\"] == 0']
+
+# --- Program documents: white paper proof points, install guide ---------------
+# Every number a white-paper proof point states is registered here against a
+# generated report; tests/docs/test_program_docs.py fails on any that is not.
+
+[[claim]]
+id = "wp-cara-agreement"
+doc = "docs/white-paper.md"
+quoted = "On 53 real operational conjunctions that NASA CARA published, Sentinel's Pc matches CARA's value with a worst relative error of 1.5e-08."
+source = "docs/validation-report.md"
+patterns = ["53 real operational conjunctions", "| 53 | **1.5e-08** |"]
+
+[[claim]]
+id = "wp-cara-gate"
+doc = "docs/white-paper.md"
+quoted = "CARA flags 29 of those 53 events as outside the 2D method. Sentinel refuses all 29 and returns a Pc for none of them. It also refuses 5 events CARA would compute. The threshold was set on this same set of events, and the report says so."
+source = "docs/validation-report.md"
+patterns = [
+    "| **Sentinel refuses** | 29 | 5 |",
+    "| **Sentinel returns Pc** | **0** | 19 |",
+    "a 2D Pc returned for an event CARA says 2D cannot handle",
+    "The 0.1 threshold was chosen on this same set of 53 events",
+]
+
+[[claim]]
+id = "wp-cara-3d-factors"
+doc = "docs/white-paper.md"
+quoted = "On the refused events above 100 m/s, CARA's own 3D result differs from the 2D value by factors of 0.016 to 60,722."
+source = "docs/validation-report.md"
+patterns = ["above 100 m/s, which only the curvature test catches, CARA's 3D Nc differs from the 2D Pc by factors of 0.016x to 60,722x"]
+
+[[claim]]
+id = "wp-pc-max-closed-form"
+doc = "docs/white-paper.md"
+quoted = "The worst-case Pc matches its closed form to a relative error of 4.17e-14"
+source = "docs/validation-report.md"
+patterns = ["Worst relative error: **4.17e-14**"]
+
+[[claim]]
+id = "wp-denied-console"
+doc = "docs/white-paper.md"
+quoted = "the edge console answered 40 requests at 2.8 ms (95th percentile), and all 11 DENIED checks passed"
+source = "docs/ddil-results.md"
+patterns = ["p95 2.8 ms over 40 requests", "| DENIED | PASS | 11/11 |"]
+
+[[claim]]
+id = "wp-denied-convergence"
+doc = "docs/white-paper.md"
+quoted = "operator data converged in 2.41 s"
+source = "docs/ddil-results.md"
+patterns = ["| convergence_after_reconnect_s | 2.41 |"]
+
+[[claim]]
+id = "wp-limited-edf-vs-fifo"
+doc = "docs/white-paper.md"
+quoted = "Over about 8 kbit/s with 600 ms latency, every event was visible as a summary in 5.5 s. The most urgent full CDM arrived in 12.1 s with earliest-deadline-first, against 46.8 s in arrival order: 3.9 times sooner over the same link with the same 13 records."
+source = "docs/ddil-results.md"
+patterns = ["measured over ~8 kbit/s + 600 ms", "summaries at 5.5 s", "EDF 12.1 s vs FIFO 46.8 s (3.9x)", "same 13 records"]
+
+[[claim]]
+id = "wp-limited-cost"
+doc = "docs/white-paper.md"
+quoted = "(86.8 s against 58.9 s): the order serves the urgent record, not the total. The run shares the link with the 38 public element sets"
+source = "docs/ddil-results.md"
+patterns = ["| every event verified | 86.8 s | 58.9 s |", "38 element sets crossed"]
+
+[[claim]]
+id = "wp-summary-size"
+doc = "docs/white-paper.md"
+quoted = "Each event summary is at most 256 bytes"
+source = "docs/traceability.md"
+patterns = ["every event is visible as a summary of at most 256 bytes"]
+
+[[claim]]
+id = "wp-intermittent"
+doc = "docs/white-paper.md"
+quoted = "Over a link that dropped 8 times, 24 notes were written and 24 arrived on each node"
+source = "docs/ddil-results.md"
+patterns = ["| flaps | 8 |", "(hub 24, edge 24, written 24)"]
+
+[[claim]]
+id = "wp-degraded-recovery"
+doc = "docs/white-paper.md"
+quoted = "Over a degraded link (600 ± 200 ms latency, 32 kB/s) the nodes converged in 23.8 s. After a denial, the link re-established over the thin link in 11.8 s, and work done offline reached the hub in 13.4 s."
+source = "docs/ddil-results.md"
+patterns = [
+    "Toxiproxy latency 600 +/- 200 ms each way, bandwidth 32 kB/s",
+    "converges over a degraded link (23.8 s)",
+    "leaf re-establishes over ~8 kbit/s after a denial (11.8 s)",
+    "(converged in 13.4 s)",
+]
+
+[[claim]]
+id = "wp-routing-eval"
+doc = "docs/white-paper.md"
+quoted = "Routing is scored on 60 labelled requests. The always-available local rules pick the right tool for 0.460 of in-scope requests"
+source = "docs/ai-eval.md"
+patterns = ["60 labelled requests (50 in scope, 10 out of scope)", "| Right tool (in scope) | 0.460 |"]
+
+[[claim]]
+id = "wp-offline-install-validation"
+doc = "docs/white-paper.md"
+quoted = "The installed node reproduces the validation: 53 events and 0 missed refusals."
+source = "docs/validation-report.md"
+patterns = ["53 real operational conjunctions", "| **Sentinel returns Pc** | **0** | 19 |"]
+
+[[claim]]
+id = "wp-pass-oracle"
+doc = "docs/white-paper.md"
+quoted = "rise and set agree with a brute-force oracle to within 2 s"
+source = "docs/traceability.md"
+patterns = ["agree with a brute-force oracle stepping at 1 s to within 2 s"]
+
+[[claim]]
+id = "wp-trace-summary"
+doc = "docs/white-paper.md"
+quoted = "The trace covers 54 requirements: 53 verified, 1 unverified (the full offline install in CI), and 0 broken references."
+source = "docs/traceability.md"
+patterns = ["| **total** | **54** | **53** | **1** | **0** |"]
+
+[[claim]]
+id = "wp-opsec-wire"
+doc = "docs/white-paper.md"
+quoted = "the edge received 38 public element sets through sync and computed 57 pass windows for a unit. Every message the hub's server carried was captured (179 messages, 90,804 bytes): none held the unit's id or coordinates, and a deliberate canary on the unit's subjects never arrived. All 10 checks passed"
+source = "docs/ddil-results.md"
+patterns = ["38 element sets crossed", "57 windows", "hub capture: 179 messages, 90,804 bytes", "| OPSEC | PASS | 10/10 |"]
+
+[[claim]]
+id = "wp-opsec-hub"
+doc = "docs/white-paper.md"
+quoted = "Afterwards the hub has no unit (its unit endpoint returns 404), and none of its 8 files holds the unit."
+source = "docs/ddil-results.md"
+patterns = ["(HTTP 404)", "(8 files scanned)"]
+
+[[claim]]
+id = "install-guide-smoke-test"
+doc = "docs/install-guide.md"
+quoted = "`53 events`, a worst relative error near 1.5e-08 and `false negatives 0`"
+source = "docs/validation-report.md"
+patterns = ["| 53 | **1.5e-08** |", "| **Sentinel returns Pc** | **0** | 19 |"]
+
+[[claim]]
+id = "install-guide-cosign-pin"
+doc = "docs/install-guide.md"
+quoted = "echo \"4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71  cosign\""
+source = "deploy/tools.lock"
+patterns = ["cosign 3.1.3 x86_64 4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71"]
+
+[[claim]]
+id = "install-guide-trust-root-pin"
+doc = "docs/install-guide.md"
+quoted = "echo \"6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66  trusted_root.json\""
+source = "deploy/tools.lock"
+patterns = ["sigstore-trusted-root.json targets-v14 noarch 6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66"]

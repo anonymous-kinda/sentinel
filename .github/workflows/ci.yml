@@ -37,6 +37,13 @@ jobs:
         run: |
           env -u TYPESAFE_API_KEY python scripts/ai_eval.py
           git diff --exit-code docs/ai-eval.md docs/img/ai-reliability.svg
+      # >>> interface control documents (docs/icd) >>>
+      - name: ICDs are current (OpenAPI re-exported; bus, CDM and sync ICDs held to the code)
+        run: |
+          uv run python scripts/export_openapi.py
+          git diff --exit-code docs/icd/openapi.json
+          uv run pytest -q tests/docs
+      # <<< interface control documents (docs/icd) <<<
 
   web:
     runs-on: ubuntu-24.04

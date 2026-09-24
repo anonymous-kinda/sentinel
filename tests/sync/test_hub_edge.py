@@ -16,7 +16,7 @@ from sentinel.clock import FixedClock
 from sentinel.conjunction.exercise import generate
 from sentinel.conjunction.service import ConjunctionService
 from sentinel.conjunction.store import ConjunctionStore
-from sentinel.conjunction.summaries import summary_only
+from sentinel.conjunction.summaries import SUMMARY_MAX_BYTES, summary_only
 from sentinel.conjunction.sync_adapter import ConjunctionRecords
 from sentinel.crdt import NodeKey, TrustStore, codec
 from sentinel.linkstate import LinkMonitor
@@ -62,7 +62,7 @@ def test_summaries_are_small_enough_to_send_first(pair):
     hub, *_ = pair
     for compact in hub.conj.manifest():
         size = len(codec.encode(summary_only(compact)))
-        assert size <= 256, f"{compact['e']}: summary is {size} bytes"
+        assert size <= SUMMARY_MAX_BYTES, f"{compact['e']}: summary is {size} bytes"
 
 
 def test_edge_sees_every_event_as_hub_asserted_before_any_cdm_arrives(pair):

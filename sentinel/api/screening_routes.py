@@ -22,6 +22,7 @@ from ..cdm import emit
 from ..obs import get_logger
 from ..screening.derived_cdm import derived_cdm, nearest_millisecond
 from ..screening.screen import CloseApproach, ScreeningRefused, ScreeningResult, screen
+from . import apidoc
 
 log = get_logger(__name__)
 
@@ -42,8 +43,26 @@ class ScreeningRequest:
 def register(app: FastAPI, node) -> None:
     settings = node.settings
 
-    @app.post("/api/screening")
+    @app.post(
+        "/api/screening",
+        tags=[apidoc.SCREENING],
+        summary="Screen a primary against this node's element sets (no Pc)",
+        openapi_extra=apidoc.json_body(
+            {
+                "primary_norad_id": {"type": "integer", "minimum": 1},
+                "hours": {"type": "number", "default": DEFAULTS["hours"], "exclusiveMinimum": LIMITS["hours"][0],
+                          "maximum": LIMITS["hours"][1]},
+                "threshold_km": {"type": "number", "default": DEFAULTS["threshold_km"],
+                                 "exclusiveMinimum": LIMITS["threshold_km"][0], "maximum": LIMITS["threshold_km"][1]},
+            },
+            required=("primary_norad_id",),
+        ),
+    )
     async def screening(request: Request) -> dict:
+        """Close approaches to the primary over the next `hours`, each filed as a DERIVED CDM
+        with no covariance, so the engine refuses its Pc. 404 when this node has no element
+        set for the primary; 422 on wrong input; 403 on a read-only node. See
+        docs/icd/screening-api.md."""
         if settings.read_only:
             raise HTTPException(403, "this node is read-only")
         asked = _request(await _json(request))

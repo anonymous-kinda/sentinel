@@ -38,8 +38,9 @@ dev = [
     "import-linter>=2.0",
     "openpyxl>=3.1",
     "httpx>=0.27",
-    # deploy/compose: parse compose.yaml and validate it against the vendored compose-spec schema
+    # Reads docs/icd/asyncapi.yaml in its drift test, and deploy/compose/compose.yaml in its tests.
     "pyyaml>=6.0",
+    # Validates deploy/compose/compose.yaml against the vendored compose-spec schema.
     "jsonschema>=4.23",
 ]
 
