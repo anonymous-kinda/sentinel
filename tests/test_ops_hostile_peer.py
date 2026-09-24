@@ -161,3 +161,28 @@ def test_mvmap_keeps_what_the_peer_never_saw():
     mine.write("EV1|triage_status", {"v": "WATCH"})
     mine.merge_register("EV1|triage_status", Register({}, _ctx("bravo", 3)))
     assert mine.read("EV1|triage_status")
+
+
+@pytest.mark.xfail(strict=True, reason=CORE + (
+    "MVMap.missing_for enumerates every dot a register's context covers (DotContext.dots()), "
+    "so one register pushed with a context of {node: 10**9} makes every later anti-entropy "
+    "exchange build a billion-element set: the hub stops answering every edge"))
+def test_a_register_context_claiming_a_huge_history_cannot_stall_anti_entropy(tmp_path):
+    import signal
+
+    from sentinel.crdt import DotContext
+
+    hub = ops("hub", tmp_path / "hub.db")
+    claim = Register({}, DotContext({"bravo": 10**9})).to_wire()
+    run(hub.merge_payload({"reg": {"EV1|assignee": claim}}))
+
+    def expire(_signum, _frame):
+        raise TimeoutError("payload_for did not answer within 5 s")
+
+    previous = signal.signal(signal.SIGALRM, expire)
+    signal.alarm(5)
+    try:
+        hub.payload_for(DotContext().to_wire(), DotContext().to_wire())
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous)

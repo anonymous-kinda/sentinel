@@ -374,3 +374,18 @@ def test_the_composite_routes_a_summary_without_an_item_id_to_rejection_not_to_a
     composite = CompositeRecords(link.edge.records, {ELEMENT_PREFIX: ElementRecords(ElementStore(), link.clock)})
     composite.put_summaries([{"dl": 1}, ["x"], None, *genuine], "hub")
     assert {e["event_id"] for e in link.edge.conj.list_events("all")} == {c["e"] for c in genuine}
+
+
+
+# ---------------------------------------------------- a hostile requester
+@pytest.mark.parametrize("prefix", ["%", "_" * 16, "", "0%", "0" * 15 + "_"])
+def test_a_record_prefix_is_hex_digits_not_a_pattern(link, element_link, prefix):
+    """A fetch names a record by the first hex digits of its sha256. Read as
+    a SQL LIKE pattern (or a str prefix), "%" or "" served an arbitrary
+    record, including ones the hub does not offer, to anyone on the subject.
+    The node's records are the composite the app assembles (api/records.py)."""
+    conjunctions = CompositeRecords(link.hub.records, {})
+    elements = element_link[0].hub.records
+    for records in (conjunctions, elements):
+        assert records.get(prefix) is None
+        assert not records.has(prefix)
