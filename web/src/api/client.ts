@@ -45,8 +45,9 @@ export const putJSON = <T,>(path: string, body: unknown) => sendJSON<T>("PUT", p
 export const deleteJSON = <T = unknown,>(path: string) => sendJSON<T>("DELETE", path);
 
 /** Fetch `path` and refetch whenever `version` changes. Keeps the last good
- *  value while refetching so the console never blanks on an update. `status`
- *  is the HTTP status of the last failed fetch, null after a success. */
+ *  value while refetching so the console never blanks on an update. `error`
+ *  is the server's reason for the last failure and `status` its HTTP status;
+ *  both are null after a success. */
 export function useResource<T>(
   path: string | null,
   version = 0,
@@ -68,7 +69,7 @@ export function useResource<T>(
       })
       .catch((e: unknown) => {
         if (controller.signal.aborted) return;
-        setError(String(e));
+        setError(apiErrorMessage(e));
         setStatus(e instanceof HttpError ? e.status : null);
       });
     return () => controller.abort();

@@ -68,6 +68,7 @@ describe("useResource", () => {
     });
     await waitFor(() => expect(result.current.status).toBe(404));
     expect(result.current.data).toBeNull();
+    expect(result.current.error).toBe("no unit set");
 
     fetchMock.mockImplementation(async () => reply(200, { unit_id: "EX-UNIT-1" }));
     rerender({ v: 1 });
