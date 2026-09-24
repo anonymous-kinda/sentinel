@@ -59,7 +59,7 @@ package SentinelVerification {
         @VerificationMethod { kind = VerificationMethodKind::demo; }
         @Planned {
             milestone = "M4";
-            reason = "deploy/bundle/verify_offline.sh (make airgap-verify) exists, but no CI job runs it and no run is recorded";
+            reason = "make airgap-local proves it on a developer machine (build, sign, verify and install under unshare -rn, NASA validation reproduced), but no CI job runs the full install yet";
         }
         @Evidence { kind = EvidenceKind::ci; locator = "airgap-verify"; }
     }
@@ -451,15 +451,14 @@ package SentinelVerification {
     verification <'VC-SC-001'> vcSbom : SentinelVerification {
         objective { verify sbom; }
         @VerificationMethod { kind = VerificationMethodKind::inspect; }
-        @Planned { milestone = "M4"; reason = "no SBOM is generated yet"; }
-        @Evidence { kind = EvidenceKind::ci; locator = "SBOM (SPDX and CycloneDX)"; }
+        @Evidence { kind = EvidenceKind::ci; locator = "SBOMs (fails if empty or missing a shipped component)"; }
     }
 
     verification <'VC-SC-002'> vcSignedBundles : SentinelVerification {
         objective { verify signedBundles; }
         @VerificationMethod { kind = VerificationMethodKind::test; }
-        @Planned { milestone = "M4"; reason = "bundles carry a SHA-256 manifest but no signature yet"; }
-        @Evidence { kind = EvidenceKind::ci; locator = "Bundle signature verifies offline"; }
+        @Evidence { kind = EvidenceKind::ci; locator = "Offline signature self-test (real cosign inside unshare -rn)"; }
+        @Evidence { kind = EvidenceKind::ci; locator = "Ansible signature gate refuses tampered and unsigned bundles"; }
     }
 
     verification <'VC-SC-003'> vcOscalPackage : SentinelVerification {
