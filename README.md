@@ -96,7 +96,7 @@ make ddil            # five scenarios on real processes -> docs/ddil-results.md
 
 ![Edge node while the link is denied](docs/img/edge-denied.png)
 
-**Limited: what matters crosses first.** The edge gets a summary of every event (at most 256 bytes each) within 3 s. Then full CDMs follow, earliest maneuver commit point first. Each is re-assessed locally and compared with what the hub asserted: an event is HUB-ASSERTED until then, VERIFIED once the local result matches, and MISMATCH if it doesn't. Measured on the same link with the same bytes, the most urgent full record arrives in **5.5 s with earliest-deadline-first vs 37.7 s in FIFO order**.
+**Limited: what matters crosses first.** The edge gets a summary of every event (at most 256 bytes each) within 3 s. Then full CDMs follow, earliest maneuver commit point first. Each is re-assessed locally and compared with what the hub asserted: an event is HUB-ASSERTED until then, VERIFIED once the local result matches, and MISMATCH if it doesn't. Measured on the same link with the same bytes, the most urgent full record arrives in **5.5 s with earliest-deadline-first vs 38.2 s in FIFO order** (latest run in `docs/ddil-results.md`; about 7× across runs).
 
 ![Sync tab over a limited link](docs/img/edge-sync.png)
 

@@ -175,7 +175,7 @@ State-based rather than operation-based CRDTs, because state-based merge tolerat
 
 Admission control handles the case where the full record can't make it in time. If the link rate measured by the agent cannot deliver a full CDM before its deadline, the event is marked SUMMARY-ONLY rather than spending the link on it. At the bottom of the ladder a summary renders as one voice-readable line.
 
-**Measured.** Same link, same bytes, same 13 records: the most urgent event's full CDM arrives in **5.5 s with EDF vs 37.7 s with FIFO**. See `docs/ddil-results.md`.
+**Measured.** Same link, same bytes, same 13 records: the most urgent event's full CDM arrives in **5.5 s with EDF vs 38.2 s with FIFO** in the latest run (`docs/ddil-results.md`, generated; about 7× across runs).
 
 ---
 
@@ -235,7 +235,7 @@ Its documented weaknesses are arithmetic, dates and prompt injection, and each i
 
 An event stays HUB-ASSERTED until that comparison passes (VERIFIED), and any disagreement is flagged MISMATCH.
 
-**Why not a JetStream mirror.** A mirror replicates in stream order. That is exactly the FIFO baseline the LIMITED scenario measures at 6.8–6.9× slower for the record that matters.
+**Why not a JetStream mirror.** A mirror replicates in stream order. That is exactly the FIFO baseline the LIMITED scenario measures at about 7× slower for the record that matters (`docs/ddil-results.md`).
 
 **Why this also buys modularity.** The pull agent reads only generic fields: id, deadline, consequence and record list. It reaches a mission module only through the `ReferenceRecords` protocol, and `.importlinter` forbids `sync` from importing any mission module. The Army pass module (M3) can reuse it unchanged.
 
