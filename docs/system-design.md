@@ -2,7 +2,7 @@
 
 **A DDIL-resilient conjunction assessment decision aid for satellite operators.**
 
-Status: Draft. This document is the design spine. The technical guide derives from it; the white paper derives from the technical guide. Nothing gets coded until the relevant ADR here is marked Accepted.
+Status: living design record; each ADR states its own status. This document is the design spine. The technical guide derives from it; the white paper derives from the technical guide. Nothing gets coded until the relevant ADR here is marked Accepted.
 
 ---
 
@@ -12,7 +12,7 @@ A satellite operator receives a stream of Conjunction Data Messages warning that
 
 Two things make this hard in practice:
 
-**The math is deceptive.** A low probability of collision can mean "we know precisely that these objects will miss" or "we know so little that the probability is smeared thin across a huge uncertainty volume." These are opposite situations that produce similar numbers. NASA CARA documents that in this dilution region, inflating covariance by one order of magnitude drops Pc by two — safety appears to improve as data quality degrades.
+**The math is deceptive.** A low probability of collision can mean "we know precisely that these objects will miss" or "we know so little that the probability is smeared thin across a huge uncertainty volume." These are opposite situations that produce similar numbers. Deep in this dilution region, a tenfold increase in position uncertainty cuts Pc about a hundredfold — safety appears to improve as data quality degrades.
 
 **The tooling assumes connectivity.** Conjunction assessment tooling is overwhelmingly cloud-hosted and API-driven. An operator working from a deployed ground station, a ship, or any environment with a denied or degraded link loses the decision aid exactly when the decision still has to be made. The commit point does not move because the network went down.
 
@@ -42,13 +42,13 @@ Each ADR states a decision, why, and what was rejected. Rejected alternatives ar
 
 ### ADR-001 — CDM as the canonical internal data contract
 
-**Status:** Accepted
+**Status:** Accepted, implemented in `sentinel/cdm`.
 
 **Decision.** Every conjunction that enters Sentinel is normalized to a CCSDS 508.0-B-1 Conjunction Data Message representation, regardless of source. Internal modules consume CDMs. Nothing downstream of ingest knows where the data came from.
 
 **Rationale.** This is the single decision that makes everything else modular. Source adapters become interchangeable, the risk engine has exactly one input format, and the interface is a published international standard rather than something invented for this project — which is the substantive meaning of a modular open systems approach, as opposed to just having separate files.
 
-It also solves the data-access risk. Space-Track CDM access may not be granted. Wayfinder access costs money. CelesTrak provides elements, not CDMs. Because all three normalize to the same contract, the project proceeds regardless of which materializes, and switching is an adapter, not a rewrite.
+It also solves the data-access risk. Space-Track CDM access may not be granted. Wayfinder access may not be available to this project. CelesTrak provides elements, not CDMs. Because all three normalize to the same contract, the project proceeds regardless of which materializes, and switching is an adapter, not a rewrite.
 
 **Rejected.** A bespoke internal JSON schema, simpler to write and worthless as a MOSA demonstration. Passing raw source-specific payloads through, which couples every downstream module to every data source.
 
@@ -66,7 +66,7 @@ It also solves the data-access risk. Space-Track CDM access may not be granted. 
 
 *Assessment mode* consumes real CDMs with covariance and computes Pc using the methods in ADR-003.
 
-**Rationale.** NASA CARA's position is unambiguous — their 2022 best-practices briefing states that TLEs are not sufficient for conjunction assessment, that kilometer-scale theory error is too large for maneuver planning, and that no covariance is available to compute a collision probability. A project that screens on TLEs and reports a Pc anyway is either uninformed or dishonest, and a reviewer who knows the domain will spot it immediately.
+**Rationale.** NASA CARA's position is unambiguous — its best-practices guidance states that TLEs are not sufficient for conjunction assessment, that kilometer-scale theory error is too large for maneuver planning, and that no covariance is available to compute a collision probability. A project that screens on TLEs and reports a Pc anyway is either uninformed or dishonest, and a reviewer who knows the domain will spot it immediately.
 
 Building the limitation into the architecture inverts this. The constraint becomes evidence of domain understanding rather than a flaw to be hidden.
 
@@ -78,7 +78,7 @@ Building the limitation into the architecture inverts this. The constraint becom
 - range sampled every 60 s, with a bound that cannot drop an approach;
 - each minimum refined with Brent's method.
 
-Against brute-force sampling, the measured agreement is under a millisecond in TCA and under a centimetre in miss distance. One primary against the 166-object snapshot for 24 h takes about 0.1 s.
+Against brute-force sampling, the measured agreement is under a millisecond in TCA and under a centimetre in miss distance (`tests/screening/test_screen.py`). One primary against the other 166 objects in the bundled snapshot for 24 h takes about 0.1 s.
 
 Each approach can be written as a DERIVED CDM with no covariance. When it is ingested, the engine's existing `NO_COVARIANCE` gate refuses the Pc. The refusal therefore holds by construction, and the engine has no screening code path. `.importlinter` forbids `sentinel.screening` from importing the engine.
 
@@ -119,9 +119,9 @@ CARA publishes expected values for real conjunctions, including its own judgemen
 
 **Decision.** Sentinel is structured as event-driven modules that talk only through a `Bus` protocol: publish/subscribe plus request/reply. In one process the bus is in-memory. On a deployed node it is NATS: each node runs its own `nats-server`, and the server, not the application, holds the leafnode link to other nodes. The same module code runs in both.
 
-**Rationale.** The job description names microservices, event-driven architectures and modular monoliths in one sentence. That is a hint that the interesting answer is knowing when each applies. For an edge-deployable system the honest answer is both: decompose in the cloud where orchestration is free, and ship a single deployable at the edge where it is not.
+**Rationale.** Microservices, event-driven architectures and modular monoliths are often offered as alternatives. The interesting answer is knowing when each applies. For an edge-deployable system the honest answer is both: decompose in the cloud where orchestration is free, and ship a single deployable at the edge where it is not.
 
-A node's console, store and engine talk only to their *local* NATS server. So a denied link never breaks the node; the leaf reconnects by itself. The DENIED scenario measures this: 2.7 ms p95 console latency while the link is cut.
+A node's console, store and engine talk only to their *local* NATS server. So a denied link never breaks the node; the leaf reconnects by itself. The DENIED scenario measures this: 2.8 ms p95 console latency while the link is cut.
 
 **Amendment: what NATS is used for.**
 - Leafnode connectivity, request/reply, and compression (s2).
@@ -220,7 +220,7 @@ Its documented weaknesses are arithmetic, dates and prompt injection, and each i
 - object names travel as data;
 - the gate and the grounding guard bound what an injected answer can do.
 
-**Why a deterministic floor instead of a local model.** The floor always works and is exact for commands. On natural language it is weak, and the eval says so: `docs/ai-eval.md` measures it at about half of requests routed to the right tool. That gap is what a model has to earn its place against, measured on the same set through the same gate. Jev's numbers are published only from a real run. A local model can slot in later behind the same `Router` protocol as a DENIED or classified tier (open question 4). It is not built.
+**Why a deterministic floor instead of a local model.** The floor always works and is exact for commands. On natural language it is weak, and the eval says so: `docs/ai-eval.md` measures it routing under half of in-scope requests (0.46) to the right tool. That gap is what a model has to earn its place against, measured on the same set through the same gate. Jev's numbers are published only from a real run. A local model can slot in later behind the same `Router` protocol as a DENIED or classified tier (open question 4). It is not built.
 
 **Assumption, stated.** An edge reaches hosted AI over the same link it uses to reach its hub, so the measured hub-link state stands in for the WAN. A hub or standalone node has no upstream link to measure. It is treated as CONNECTED, and the console labels that as assumed.
 
@@ -284,7 +284,7 @@ The real-process harness surfaced four defaults that would have failed a satelli
 | Leaf authentication timeout 2 s | The handshake could not complete over the thin link. | `authorization { timeout: 30 }` |
 | Ping interval 2 min | A black-holed link took minutes to detect. | `ping_interval: 5s`, `ping_max: 3` |
 
-The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and third fixes were in. It now re-establishes the leaf in about 5 s.
+The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and third fixes were in. It now re-establishes the leaf in 11.8 s.
 
 ---
 
@@ -367,7 +367,7 @@ Adding a provider is one factory and one line.
 - SLSA build provenance and SBOM attestations;
 - every action pinned by commit SHA.
 
-Each air-gap bundle carries its Sigstore bundle. The installer verifies it **before unpacking**, against a Sigstore trust root pinned by sha256 in `deploy/tools.lock`. It does this with no network, the same way in `install.sh`, `make airgap-verify` and the Ansible role (NIST SI-7, CM-14). SBOMs are produced in SPDX and CycloneDX. A Trivy gate fails on any finding without a reviewed VEX statement, and every statement's evidence is re-checked on each scan.
+Each air-gap bundle carries its Sigstore bundle. It is verified **before unpacking**, against a Sigstore trust root pinned by sha256 in `deploy/tools.lock`. One gate, `deploy/bundle/verify_signature.sh`, does this with no network for `make airgap-verify` and the Ansible role alike (NIST SI-7, CM-14); the bundle's `install.sh` then checks every file against `SHA256SUMS`. SBOMs are produced in SPDX and CycloneDX. A Trivy gate fails on any finding without a reviewed VEX statement, and every statement's evidence is re-checked on each scan.
 
 **Stated honestly: SLSA Build L2, not L3.** The build is hosted and the provenance is signed. But the provenance is generated inside the repository's own workflow rather than an isolated reusable one.
 
@@ -396,18 +396,20 @@ Each air-gap bundle carries its Sigstore bundle. The installer verifies it **bef
          │                       │                      │
          │                       ▼                      ▼
          │                ┌──────────────────────────────────┐
-         │                │      NATS JetStream (local)      │
+         │                │          NATS (local)            │
          │                └──────────────────────────────────┘
          │                       │              │           │
          ▼                       ▼              ▼           ▼
   ┌──────────────┐        ┌───────────┐  ┌───────────┐ ┌──────────┐
   │ Store &      │        │ Triage /  │  │ Decision  │ │ AI query │
-  │ forward queue│        │ ranking   │  │ log (CRDT)│ │ (local)  │
+  │ forward queue│        │ ranking   │  │ log (CRDT)│ │ (ADR-007)│
   └──────────────┘        └───────────┘  └───────────┘ └──────────┘
          │                                      │
          └──────────── SYNC LAYER ──────────────┘
                    (priority by ADR-006)
 ```
+
+As built, the CelesTrak path runs through demonstration mode (ADR-002), the Wayfinder adapter produces ephemerides for the pass module rather than CDMs (ADR-011), and there is no Space-Track adapter yet. Priority pull (ADR-008) and CRDT anti-entropy (ADR-005) take the place of a store-and-forward queue.
 
 The seam that matters is between normalization and everything downstream. Above it, source-specific. Below it, nothing knows or cares where a CDM came from. That seam is the modular system interface, and it is defined by a published standard rather than by Sentinel.
 
@@ -433,16 +435,18 @@ The sync envelope is the one interface without a standards basis. It is influenc
 
 The project is only credible if the math is provably right, so validation is a deliverable, not a phase.
 
-**Risk engine.** Unit tested against NASA CARA's published test cases. Cross-checked against Orekit where feasible. Dilution-region detection tested against constructed cases where inflating covariance lowers Pc — demonstrating the flag fires on exactly the pathology it exists to catch.
+**Risk engine.** Unit tested against NASA CARA's published test cases, closed forms, and an independent `scipy.integrate.dblquad` oracle (Orekit was dropped; ADR-003). Dilution-region detection tested against constructed cases where inflating covariance lowers Pc — demonstrating the flag fires on exactly the pathology it exists to catch.
 
-**DDIL behavior.** A reproducible test harness using traffic control emulation and fault injection, running named scenarios as CI jobs rather than manual demonstrations:
+**DDIL behavior.** A reproducible harness (`harness/`): real `nats-server` processes, with Toxiproxy shaping the leafnode TCP link. Named scenarios run as CI jobs (`.github/workflows/harness.yml`) rather than manual demonstrations:
 
-- *Denied* — total isolation for six hours, then reconnect. Assert no data loss, correct merge, priority-ordered catch-up.
-- *Degraded* — sustained packet loss and high latency. Assert continued operation.
+- *Denied* — total isolation (20 s per run, 15 minutes nightly), then reconnect. Assert no data loss, correct merge, priority-ordered catch-up.
+- *Degraded* — high, jittery latency and a bandwidth cap. Assert continued operation and convergence.
 - *Intermittent* — repeated short drops. Assert no duplicate decision log entries.
 - *Limited* — hard bandwidth cap at satellite-link rates. Assert priority ordering holds and degraded summaries transit.
+- *Recovery* — DENIED straight to LIMITED. Assert the leaf re-establishes and operator data written while denied reaches the hub.
+- *OPSEC* — see ADR-010.
 
-The recorded output of the Denied scenario is the single most persuasive artifact this project will produce. It should be captured as a short clip.
+The recorded results of the latest run are generated into `docs/ddil-results.md`.
 
 **AI layer.** Three kinds of evidence:
 - Unit tests pin every guard: the tier policy, the confidence gate, grounding, confirm-once and stale drafts, and audit-chain tampering.
@@ -454,8 +458,8 @@ The recorded output of the Denied scenario is the single most persuasive artifac
 ## 7. Open Questions
 
 1. Does Space-Track CDM-class access get granted? Gates demonstration versus assessment mode as the default.
-2. Orekit-python CI viability (ADR-003).
-3. Degraded-summary sizing against a realistic link budget (ADR-006).
+2. ~~Orekit-python CI viability (ADR-003).~~ Answered: Orekit was dropped as the oracle, because CARA's published results are a stronger reference.
+3. ~~Degraded-summary sizing against a realistic link budget (ADR-006).~~ Answered by measurement; see ADR-006.
 4. Whether a local model beats the deterministic floor by enough to justify its footprint at the edge (ADR-007). To be measured with `make ai-eval`, not assumed.
 5. Whether the TraCSS transition changes CDM access mechanics during the build window.
 6. Batched fetch or a reference-data priority class in sync, so public reference data stops competing with urgent CDMs on a thin link (ADR-008). It would be the first change to `sentinel/sync` since M2, made deliberately and measured.
@@ -466,10 +470,10 @@ The recorded output of the Denied scenario is the single most persuasive artifac
 
 | Artifact | Derives from | Audience |
 |---|---|---|
-| This design | Research report | Self, technical reviewers |
+| This design (`docs/system-design.md`, with the maths in `docs/risk-engine-design.md`) | NASA CARA's published methods and data, CCSDS standards | Self, technical reviewers |
 | Technical guide | This design | Engineers reading the repo |
 | White paper | Technical guide | Acquisition, operational, executive |
 | SysML v2 model (`mbse/`) | This design | MBSE demonstration; `docs/traceability.md` is generated from it in CI |
-| OSCAL draft SSP | Implementation | Security/ATO reviewers |
+| OSCAL draft SSP (`compliance/oscal/`, explained in `docs/compliance.md`) | Implementation and CI evidence | Security/ATO reviewers |
 
 Written once, derived three times. The white paper is not a separate research effort; it is this document retargeted at a reader who cares about mission outcome and risk rather than about NATS.

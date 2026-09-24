@@ -47,7 +47,7 @@ As of v4, both actions are thin wrappers over `actions/attest`, which takes the 
 
 These measures narrow the gap without closing it:
 
-- Every third-party action is pinned by full commit SHA.
+- Every third-party action is pinned by full commit SHA (`tests/test_workflows_pinned.py`).
 - `permissions: {}` is set at the top of the workflow and granted per job.
 - No dependency caches are restored in a release.
 - The only job with signing rights runs no build code.
@@ -169,7 +169,7 @@ ansible-playbook -i inventory.ini site.yml -e sentinel_repository=OWNER/sentinel
 
 ## Vulnerability scanning and the VEX process
 
-`make scan` (in CI on every push, and gating in the release):
+`make scan` (in CI on every push to main and every pull request, and gating in the release):
 
 1. **Raw scans, nothing suppressed.**
    - `trivy fs .` reads `uv.lock` and `web/package-lock.json`. For Python this means **every** locked package, including dev tools and the optional AI extras, a superset of what ships. For npm it means production dependencies only.
@@ -198,8 +198,8 @@ Telemetry and version checks are disabled (`--disable-telemetry --skip-version-c
 - **Build context.** An unpacked, signature-verified bundle. The builder re-checks its `SHA256SUMS`, then installs the same hash-locked dependency set (`--require-hashes`, binary wheels only) and the bundle's sentinel wheel.
 - **Runtime.** `cgr.dev/chainguard/python:latest` (no shell, no package manager), as UID 65532. `/var/lib/sentinel` is the only writable path, so the container runs with `--read-only`.
 - **Pins.** Both bases are pinned by digest, resolved from the registry with the pinned crane.
-- **Python version.** Chainguard's free tags track the newest CPython (3.14.7 at these digests), so the cp314 wheels come from PyPI at build time, checked against the same lock hashes.
-- **Checked here.** hadolint is clean. The build and run steps, replayed without Docker on CPython 3.14.7 from the real bundle, installed with every hash checked and reproduced the NASA validation offline, writing nothing outside `SENTINEL_VAR`. The image itself is built and smoke-tested in the release workflow on both architectures: read-only root, `--cap-drop ALL`, non-root user.
+- **Python version.** Chainguard's free tags track the newest CPython (3.14 at these digests), so the cp314 wheels come from PyPI at build time, checked against the same lock hashes.
+- **Checked here.** hadolint is clean. The build and run steps, replayed without Docker on CPython 3.14 from the real bundle, installed with every hash checked and reproduced the NASA validation offline, writing nothing outside `SENTINEL_VAR`. The image itself is built and smoke-tested in the release workflow on both architectures: read-only root, `--cap-drop ALL`, non-root user.
 
 ## Trust root
 
@@ -222,9 +222,9 @@ sha256sum "$TUF_ROOT/tuf-repo-cdn.sigstore.dev/targets/trusted_root.json"
 | **SI-7** Software, Firmware, and Information Integrity | Every release artifact is signed. The signature is verified before unpacking on every install path (Make, air gap, Ansible). Per-file `SHA256SUMS` and hash-locked wheels are checked at install. Tampering, including a regenerated checksum, is rejected. | `deploy/bundle/verify_signature.sh`, `deploy/bundle/verify_offline.sh`, `deploy/bundle/install.sh`, `deploy/ansible/roles/sentinel/tasks/verify.yml`, `deploy/bundle/selftest_signature.sh`, `deploy/ansible/tests/test_verify.sh`, `tests/supplychain/test_verify_signature.py`, `tests/supplychain/test_checksums.py` |
 | **CM-8** System Component Inventory | SPDX and CycloneDX SBOMs for the Python runtime and web console, gated for completeness. `BUNDLE.json` lists the pinned binaries and every wheel digest. `deploy/tools.lock` pins every third-party binary. | `scripts/sbom.py`, `supplychain/sbom.py`, `supplychain/bundle.py`, `deploy/tools.lock`, release assets `*.spdx.json` / `*.cdx.json`, `tests/supplychain/test_sbom.py`, `tests/supplychain/test_bundle.py` |
 | **CM-14** Signed Components | Installation refuses a component without a signature from the approved identity or key. A missing, ambiguous or incomplete policy is refused before cosign runs. Releases are signed keyless in CI. | `deploy/bundle/verify_signature.sh`, `deploy/ansible/roles/sentinel/tasks/verify.yml`, `deploy/ansible/roles/sentinel/defaults/main.yml`, `.github/workflows/release.yml` (`sign` job), `tests/supplychain/test_verify_signature.py` |
-| **RA-5** Vulnerability Monitoring and Scanning | Trivy scans the source lockfiles and the shipped binaries on every push and every release. Any unaddressed finding fails. VEX statements are allowed only for real findings, with justification and re-checked evidence. SARIF goes to code scanning; container images are scanned and reported. | `scripts/scan.py`, `supplychain/trivy.py`, `supplychain/vex.py`, `supplychain/evidence.py`, `deploy/vex/statements.toml`, `deploy/vex/sentinel.openvex.json`, `.github/workflows/ci.yml` (`supply-chain`), `.github/workflows/release.yml` (`build`, `container`, `code-scanning`), `tests/supplychain/test_vex.py`, `tests/supplychain/test_evidence.py`, `tests/supplychain/test_trivy.py` |
+| **RA-5** Vulnerability Monitoring and Scanning | Trivy scans the source lockfiles and the shipped binaries on every push to main, every pull request and every release. Any unaddressed finding fails. VEX statements are allowed only for real findings, with justification and re-checked evidence. SARIF goes to code scanning; container images are scanned and reported. | `scripts/scan.py`, `supplychain/trivy.py`, `supplychain/vex.py`, `supplychain/evidence.py`, `deploy/vex/statements.toml`, `deploy/vex/sentinel.openvex.json`, `.github/workflows/ci.yml` (`supply-chain`), `.github/workflows/release.yml` (`build`, `container`, `code-scanning`), `tests/supplychain/test_vex.py`, `tests/supplychain/test_evidence.py`, `tests/supplychain/test_trivy.py` |
 | **SR-4** Provenance | SLSA v1 build provenance (Build L2) and SBOM attestations for every tarball and image, shipped as files so they verify offline. `BUNDLE.json` records the commit, clean or dirty tree, and epoch. `tools.lock` records the upstream URL and sha256 of every third-party binary. | `.github/workflows/release.yml` (`attest-build-provenance`, `attest-sbom`), `provenance.intoto.sigstore.json`, `supplychain/bundle.py`, `deploy/tools.lock` |
-| **SR-11** Component Authenticity | Third-party binaries and trust material are verified against sha256 pins before use; a mismatch writes nothing. cosign is re-checked on the target host. GitHub Actions are pinned by commit SHA and container bases by registry digest. The Sigstore trust root is pinned. | `supplychain/toolslock.py`, `scripts/fetch_tools.py`, `deploy/tools.lock`, `deploy/ansible/roles/sentinel/tasks/verify.yml`, `.github/workflows/release.yml`, `deploy/containers/Dockerfile`, `tests/supplychain/test_toolslock.py` |
+| **SR-11** Component Authenticity | Third-party binaries and trust material are verified against sha256 pins before use; a mismatch writes nothing. cosign is re-checked on the target host. GitHub Actions are pinned by commit SHA and container bases by registry digest. The Sigstore trust root is pinned. | `supplychain/toolslock.py`, `scripts/fetch_tools.py`, `deploy/tools.lock`, `deploy/ansible/roles/sentinel/tasks/verify.yml`, `.github/workflows/release.yml`, `deploy/containers/Dockerfile`, `tests/supplychain/test_toolslock.py`, `tests/test_workflows_pinned.py` |
 | **SA-10** Developer Configuration Management | Releases come only from a tag equal to the package version and end as a draft for maintainer review. The bundle is byte-reproducible per commit and marks a dirty tree. Workflows, container and deploy scripts are linted in CI (actionlint with shellcheck, hadolint, shellcheck). | `scripts/build_bundle.py`, `supplychain/bundle.py`, `tests/supplychain/test_bundle.py`, `.github/workflows/release.yml`, `.github/workflows/ci.yml` (`release-lint`) |
 
 ## Limits (what is not claimed)
