@@ -52,7 +52,11 @@ include = ["sentinel*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--disable-socket --allow-unix-socket"
-filterwarnings = ["ignore:Using `httpx` with `starlette.testclient`"]
+filterwarnings = [
+    "ignore:Using `httpx` with `starlette.testclient`",
+    # Skyfield 1.55 internals under NumPy 2.5; scoped to skyfield so our own deprecations still show.
+    "ignore:Setting the dtype on a NumPy array:DeprecationWarning:skyfield.*",
+]
 markers = [
     "tier1: geometry, no probability",
     "tier2: integration, analytically checkable",
