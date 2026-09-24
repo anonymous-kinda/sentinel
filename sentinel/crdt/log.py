@@ -20,11 +20,11 @@ Integrity rules, in the spirit of "wrong raises, incomplete degrades":
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Iterable
-from typing import Any
+from collections.abc import Iterable, Mapping
+from typing import Any, TypedDict
 
 from . import codec
-from .dots import Dot, DotContext
+from .dots import Dot, DotContext, WireDot
 from .signing import NodeKey, TrustStore
 
 KINDS = ("DECISION", "NOTE", "RESOLUTION", "AI_DRAFT_CONFIRMED")
@@ -32,6 +32,29 @@ KINDS = ("DECISION", "NOTE", "RESOLUTION", "AI_DRAFT_CONFIRMED")
 
 class IntegrityError(RuntimeError):
     pass
+
+
+class UnsignedEntry(TypedDict):
+    """What an entry's signature covers."""
+
+    dot: WireDot
+    lamport: int
+    wall_time: str
+    kind: str
+    event_ref: dict[str, Any]
+    body: dict[str, Any]
+    author: str
+    prev: str | None
+
+
+class WireEntry(UnsignedEntry):
+    sig: str
+
+
+class Rejection(TypedDict):
+    dot: WireDot
+    reason: str
+    author: str
 
 
 @dataclasses.dataclass(frozen=True)
@@ -46,7 +69,7 @@ class Entry:
     prev: str | None
     sig: str = ""
 
-    def unsigned(self) -> dict:
+    def unsigned(self) -> UnsignedEntry:
         return {
             "dot": self.dot.to_wire(),
             "lamport": self.lamport,
@@ -58,11 +81,11 @@ class Entry:
             "prev": self.prev,
         }
 
-    def to_wire(self) -> dict:
+    def to_wire(self) -> WireEntry:
         return {**self.unsigned(), "sig": self.sig}
 
     @classmethod
-    def from_wire(cls, value: dict) -> Entry:
+    def from_wire(cls, value: Mapping[str, Any]) -> Entry:
         return cls(
             dot=Dot.from_wire(value["dot"]),
             lamport=int(value["lamport"]),
@@ -90,10 +113,10 @@ class SignedLog:
         self.entries: dict[Dot, Entry] = {}
         self.ctx = DotContext()
         self.lamport = 0
-        self.rejected: list[dict] = []
+        self.rejected: list[Rejection] = []
 
     def append(
-        self, kind: str, body: dict, event_ref: dict, author: str, wall_time: str
+        self, kind: str, body: dict[str, Any], event_ref: dict[str, Any], author: str, wall_time: str
     ) -> Entry:
         if kind not in KINDS:
             raise ValueError(f"unknown entry kind {kind!r}")

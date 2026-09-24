@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from ..bus import Bus, Msg, subjects
 from ..crdt import codec
+from .operator_data import OperatorData
 from .records import ReferenceRecords
 
 
 class SyncServer:
-    def __init__(self, bus: Bus, records: ReferenceRecords, ops, node_id: str):
+    def __init__(self, bus: Bus, records: ReferenceRecords, ops: OperatorData, node_id: str):
         self.bus = bus
         self.records = records
         self.ops = ops

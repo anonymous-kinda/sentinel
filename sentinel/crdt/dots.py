@@ -10,7 +10,15 @@ delivers.
 from __future__ import annotations
 
 import dataclasses
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Any, TypedDict
+
+WireDot = list[str | int]  # [node, seq]
+
+
+class WireContext(TypedDict):
+    vv: dict[str, int]
+    cloud: list[WireDot]
 
 
 @dataclasses.dataclass(frozen=True, order=True)
@@ -18,11 +26,11 @@ class Dot:
     node: str
     seq: int
 
-    def to_wire(self) -> list:
+    def to_wire(self) -> WireDot:
         return [self.node, self.seq]
 
     @classmethod
-    def from_wire(cls, value) -> Dot:
+    def from_wire(cls, value: Sequence[Any]) -> Dot:
         return cls(str(value[0]), int(value[1]))
 
 
@@ -76,11 +84,11 @@ class DotContext:
             out.update(Dot(node, i) for i in range(1, seq + 1))
         return out
 
-    def to_wire(self) -> dict:
+    def to_wire(self) -> WireContext:
         return {"vv": dict(sorted(self.vv.items())), "cloud": sorted(d.to_wire() for d in self.cloud)}
 
     @classmethod
-    def from_wire(cls, value: dict) -> DotContext:
+    def from_wire(cls, value: Mapping[str, Any]) -> DotContext:
         return cls(value.get("vv", {}), (Dot.from_wire(d) for d in value.get("cloud", [])))
 
     def __eq__(self, other: object) -> bool:
