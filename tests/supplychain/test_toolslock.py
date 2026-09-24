@@ -120,3 +120,27 @@ def test_the_committed_lock_parses_and_pins_both_architectures_for_every_tool():
     assert all(arches == {"x86_64", "aarch64"} for arches in per_arch.values()), per_arch
     assert {"cosign", "syft", "trivy", "hadolint", "actionlint", "shellcheck", "crane"} <= set(per_arch)
     assert by_name.get("sigstore-trusted-root.json") == {"noarch"}
+
+
+@pytest.mark.parametrize("member", ["-", "dist/tool"])
+def test_a_reused_tool_is_the_verified_one_not_whatever_is_on_disk(tmp_path, member):
+    """The skip-if-present path trusted its stamp, not the file: a binary
+    changed after download was reused (and shipped in the bundle, whose
+    manifest still quoted the pinned digest)."""
+    import io
+    import tarfile
+
+    data = b"genuine binary"
+    blob = data
+    if member != "-":
+        buf = io.BytesIO()
+        with tarfile.open(fileobj=buf, mode="w:gz") as tar:
+            info = tarfile.TarInfo(member)
+            info.size = len(data)
+            tar.addfile(info, io.BytesIO(data))
+        blob = buf.getvalue()
+    p = pin("tool", "x86_64", served(tmp_path, blob), hashlib.sha256(blob).hexdigest(), member=member)
+    dest = fetch(p, tmp_path / "out")
+    dest.write_bytes(b"swapped after download")
+
+    assert fetch(p, tmp_path / "out").read_bytes() == data
