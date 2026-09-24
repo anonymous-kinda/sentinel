@@ -27,6 +27,9 @@ jobs:
         run: uv run ruff check .
       - name: Module boundaries (MOSA interfaces)
         run: uv run lint-imports
+      # Strict on the core and the risk engine, standard on the rest (pyproject.toml).
+      - name: Type check (mypy)
+        run: make typecheck
       - name: Test ladder (network disabled)
         run: uv run pytest -q -rs
       - name: Validation report is reproducible

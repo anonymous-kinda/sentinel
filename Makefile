@@ -178,3 +178,12 @@ openapi:  ## regenerate docs/icd/openapi.json from the FastAPI app (deterministi
 icd: openapi  ## regenerate the OpenAPI export, then run every ICD drift test
 	$(UV) run pytest -q tests/docs
 # <<< interface control documents (docs/icd) <<<
+
+# >>> type check (mypy) >>>
+# Strict on the core (bus, crdt, sync, triage) and the risk engine, standard
+# on the rest of sentinel/. The per-module settings live in pyproject.toml and
+# are held to `mypy --strict` by tests/test_typecheck.py.
+.PHONY: typecheck
+typecheck:  ## mypy over sentinel/: strict on the core and the risk engine, standard on the rest
+	$(UV) run mypy sentinel
+# <<< type check (mypy) <<<
