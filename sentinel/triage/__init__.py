@@ -40,7 +40,7 @@ class TriageKey:
     deadline: dt.datetime | None
     consequence: Consequence
 
-    def sort_key(self) -> tuple:
+    def sort_key(self) -> tuple[int, dt.datetime, int, str]:
         far_future = dt.datetime.max.replace(tzinfo=dt.UTC)
         return (int(self.klass), self.deadline or far_future, -int(self.consequence), self.item_id)
 

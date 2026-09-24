@@ -455,7 +455,8 @@ builder writes BUNDLE.json, which lists every wheel with its digest and every bu
 its version, upstream URL and SHA-256, and refuses a binary with no pin for the target \
 architecture; deploy/tools.lock pins every third-party binary for both architectures. Two gaps \
 remain. The container image's base layer (Chainguard's CPython image) is in no SBOM that Sentinel \
-produces. In CI, bundles are built, and SBOMs published with a release and attested to it, only by \
+produces. The airgap-install CI job builds a bundle for each architecture on every push and installs \
+it offline, but SBOMs are published with a release and attested to it only by \
 .github/workflows/release.yml, which runs on a tag on GitHub, has been checked only statically \
 (actionlint) and has not run yet."""
 tests = [
@@ -466,7 +467,7 @@ tests = [
     "tests/supplychain/test_bundle.py::test_manifest_refuses_a_shipped_tool_with_no_pin_for_the_arch",
     "tests/supplychain/test_toolslock.py::test_the_committed_lock_parses_and_pins_both_architectures_for_every_tool",
 ]
-ci = ["ci.yml#supply-chain"]
+ci = ["ci.yml#supply-chain", "ci.yml#airgap-install"]
 files = [
     "scripts/sbom.py", "supplychain/sbom.py", "supplychain/bundle.py", "deploy/tools.lock", "uv.lock",
     "web/package-lock.json", "docs/supply-chain.md",
@@ -494,11 +495,15 @@ verifies; a tampered artifact, another key's signature and a wrong identity are 
 Sigstore public-good signature verifies offline (deploy/bundle/selftest_signature.sh). The same \
 job runs the Ansible role's gate on localhost (deploy/ansible/tests/test_verify.sh): a tampered \
 bundle with a regenerated digest, a missing policy and another signer's identity are refused. \
+The airgap-install CI job runs the full offline install behind the gate on every push, for each \
+architecture (make airgap-local): it builds a bundle, signs it with a throwaway key, and in a \
+namespace with no network verifies that signature before unpacking, installs and runs the node. \
 Not yet proven: releases are signed keyless only by the sign job of .github/workflows/release.yml, \
 which runs on a tag on GitHub, has been checked only statically (actionlint) and has not run yet, \
-so no Sentinel release signature exists. The full offline install behind the gate \
-(make airgap-local) is proven only on a developer machine. Unpacking a bundle by hand and running \
-install.sh skips the gate by construction: a script inside a bundle cannot vouch for that bundle."""
+so no Sentinel release signature exists, and the full install is exercised on every push only in \
+key mode, not against the release workflow's keyless identity. Unpacking a bundle by hand and \
+running install.sh skips the gate by construction: a script inside a bundle cannot vouch for that \
+bundle."""
 tests = [
     "tests/supplychain/test_verify_signature.py::test_keyless_verifies_against_the_bundle_trust_root_identity_and_issuer",
     "tests/supplychain/test_verify_signature.py::test_keyless_never_skips_the_transparency_log",
@@ -509,15 +514,14 @@ tests = [
     "tests/supplychain/test_verify_signature.py::test_a_missing_signature_bundle_is_refused",
     "tests/supplychain/test_verify_signature.py::test_a_pinned_trusted_root_digest_is_checked_before_use",
 ]
-ci = ["ci.yml#supply-chain"]
+ci = ["ci.yml#supply-chain", "ci.yml#airgap-install"]
 files = [
-    "deploy/bundle/verify_signature.sh", "deploy/bundle/selftest_signature.sh",
+    "deploy/bundle/verify_signature.sh", "deploy/bundle/selftest_signature.sh", "deploy/bundle/verify_offline.sh",
     "deploy/ansible/roles/sentinel/tasks/verify.yml", "deploy/ansible/roles/sentinel/defaults/main.yml",
     "deploy/ansible/tests/test_verify.sh", ".github/workflows/release.yml", "docs/supply-chain.md",
 ]
 plan = """Push the first release tag and confirm that the sign job's offline verification and the verify \
-job (signature, install and run under unshare -rn) pass on both architectures. Then run the full \
-offline install (deploy/bundle/verify_offline.sh) in CI on every push, not only in a release."""
+job (keyless signature, install and run under unshare -rn) pass on both architectures."""
 milestone = "M4"
 
 [[control.by]]
@@ -937,9 +941,11 @@ dependencies offline with --require-hashes. CI exercises the signature gate on e
 localhost, a tampered bundle is refused even when its .sha256 is regenerated to match \
 (deploy/ansible/tests/test_verify.sh, in the supply-chain job). The complete offline path \
 (deploy/bundle/verify_offline.sh: signature, digest, SHA256SUMS, install and run inside \
-unshare -rn) is proven only on a developer machine (make airgap-local) and in the release \
-workflow, which has not run yet. AIDE checks file integrity daily (STIG role), and the STIG role \
-has not been applied to a host."""
+unshare -rn) runs on every push in the airgap-install CI job, on a freshly built bundle for each \
+architecture signed with a throwaway key (make airgap-local); the bundle's SHA256SUMS covers the \
+reference data it ships. The release workflow runs the same path on keyless-signed bundles and has \
+not run yet. AIDE checks file integrity daily (STIG role), and the STIG role has not been applied \
+to a host."""
 files = [
     "deploy/ansible/roles/sentinel/tasks/main.yml", "deploy/ansible/roles/sentinel/tasks/verify.yml",
     "deploy/ansible/tests/test_verify.sh", "deploy/bundle/install.sh", "deploy/bundle/verify_offline.sh",
@@ -948,11 +954,12 @@ files = [
 tests = [
     "tests/supplychain/test_verify_signature.py::test_a_rejected_signature_fails_closed",
     "tests/supplychain/test_checksums.py::test_sha256sum_accepts_the_manifest_and_rejects_a_tampered_file",
+    "tests/supplychain/test_bundle.py::test_the_bundle_checksums_cover_every_element_set_file",
     "tests/compliance/test_stig_role.py::test_every_applied_rule_is_implemented_by_the_role",
 ]
-ci = ["ci.yml#supply-chain"]
-plan = """Run verify_offline.sh on a freshly built bundle in CI on every push (the gap the requirement \
-trace records as VC-DEP-002); apply the STIG role to the hub and scan."""
+ci = ["ci.yml#supply-chain", "ci.yml#airgap-install"]
+plan = """Apply the STIG role to the hub and scan. Push the first release tag and confirm that the \
+release workflow's verify job passes on keyless-signed bundles."""
 milestone = "M4"
 
 [[control.by]]

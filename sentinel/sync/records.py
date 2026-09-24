@@ -13,11 +13,11 @@ Summary fields the sync layer reads:
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Any, Protocol
 
 
 class ReferenceRecords(Protocol):
-    def manifest(self) -> list[dict]: ...
+    def manifest(self) -> list[dict[str, Any]]: ...
 
     def get(self, sha16: str) -> tuple[bytes, dict[str, str]] | None:
         """Raw record bytes plus headers (Sentinel-Event-Id, -Data-Class, -Sha256)."""
@@ -25,8 +25,8 @@ class ReferenceRecords(Protocol):
 
     def has(self, sha16: str) -> bool: ...
 
-    def put_summaries(self, summaries: list[dict], origin: str) -> None: ...
+    def put_summaries(self, summaries: list[dict[str, Any]], origin: str) -> None: ...
 
-    async def ingest(self, raw: bytes, source: str, data_class: str, item_id: str | None) -> dict:
+    async def ingest(self, raw: bytes, source: str, data_class: str, item_id: str | None) -> dict[str, Any]:
         """Admit a fetched record. Returns {status, sha256, verification}."""
         ...

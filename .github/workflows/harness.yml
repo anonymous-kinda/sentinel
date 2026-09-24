@@ -28,7 +28,7 @@ jobs:
         with:
           python-version: "3.12"
           activate-environment: true
-      - run: uv pip install -e ".[dev]"
+      - run: uv sync --locked --extra dev
       - name: Pinned tools (sha256-verified)
         run: uv run python scripts/fetch_tools.py nats-server toxiproxy
       - name: Run ${{ matrix.scenario }}

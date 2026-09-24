@@ -20,10 +20,16 @@ is dropped. A dot one side has never seen survives.
 from __future__ import annotations
 
 import dataclasses
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, TypedDict
 
 from . import codec
-from .dots import Dot, DotContext
+from .dots import Dot, DotContext, WireContext
+
+
+class WireRegister(TypedDict):
+    store: list[list[Any]]  # [[wire dot, value], ...]
+    ctx: WireContext
 
 
 @dataclasses.dataclass
@@ -31,14 +37,14 @@ class Register:
     store: dict[Dot, Any] = dataclasses.field(default_factory=dict)
     ctx: DotContext = dataclasses.field(default_factory=DotContext)
 
-    def to_wire(self) -> dict:
+    def to_wire(self) -> WireRegister:
         return {
             "store": [[d.to_wire(), v] for d, v in sorted(self.store.items())],
             "ctx": self.ctx.to_wire(),
         }
 
     @classmethod
-    def from_wire(cls, value: dict) -> Register:
+    def from_wire(cls, value: Mapping[str, Any]) -> Register:
         return cls(
             {Dot.from_wire(d): v for d, v in value["store"]},
             DotContext.from_wire(value["ctx"]),

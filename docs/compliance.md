@@ -284,10 +284,12 @@ The POA&M lists everything; these matter most:
    self-test with the real cosign, and the Ansible signature gate. But signing,
    SLSA provenance and SBOM attestation happen only in `release.yml`, which runs
    on a tag. It has been checked statically, and no release has been signed yet.
-   The full offline install is proven only on a developer machine. No scan runs
-   on a schedule. The container's base layer is in no SBOM. No CI job has run
-   on GitHub yet, because the repository has not been pushed: every CI citation
-   describes configuration, and each step was run locally.
+   The `airgap-install` CI job runs the full offline install on every push, but
+   in key mode with a throwaway key, not against a keyless release signature.
+   No scan runs on a schedule. The container's base layer is in no SBOM. No CI
+   job has run on GitHub yet, because the repository has not been pushed: every
+   CI citation describes configuration, and each step was run locally, except
+   the aarch64 leg of `airgap-install`, which needs an arm64 host.
    `docs/supply-chain.md` has the control map.
 6. **Organizational responsibilities** (review cadences, approval authority,
    remediation timelines) are listed against a `program` component as planned,

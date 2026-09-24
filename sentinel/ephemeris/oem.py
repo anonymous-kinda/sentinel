@@ -125,7 +125,7 @@ def _state(line: str, lineno: int) -> OemState:
         )
     where = f"line {lineno}"
     numbers = [_number(token, where) for token in tokens[1:]]
-    vectors = [tuple(numbers[i:i + 3]) for i in range(0, len(numbers), 3)]
+    vectors: list[Vector] = [(numbers[i], numbers[i + 1], numbers[i + 2]) for i in range(0, len(numbers), 3)]
     return OemState(_time(tokens[0], where), *vectors)
 
 
@@ -254,11 +254,12 @@ def _catalog_number(object_id: str, norad_id: int | None) -> int:
     designator). A numeric OBJECT_ID is taken as the catalog number; a caller's
     number must agree with it; otherwise the caller must supply one."""
     stated = int(object_id) if _INTEGER.match(object_id.strip()) else None
-    if norad_id is None and stated is None:
+    resolved = norad_id if norad_id is not None else stated
+    if resolved is None:
         raise EphemerisRejected("NORAD_ID_UNKNOWN", f"OBJECT_ID = {object_id!r}; supply the catalog number")
-    if norad_id is not None and stated is not None and norad_id != stated:
+    if stated is not None and resolved != stated:
         raise EphemerisRejected("NORAD_ID_MISMATCH", f"OBJECT_ID = {object_id!r} but caller says {norad_id}")
-    return norad_id if norad_id is not None else stated
+    return resolved
 
 
 def _completeness(message: OemMessage) -> tuple[EphemerisWarning, ...]:

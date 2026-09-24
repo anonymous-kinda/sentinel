@@ -175,7 +175,7 @@ A classified or disconnected site has to trust a bundle without reaching the int
 - **Offline verification.** Every install path verifies the signature against a pinned Sigstore trust root (or a site key) before unpacking anything, with no network. `make airgap-verify` and the Ansible role run the same gate, `deploy/bundle/verify_signature.sh`; the bundle's `install.sh` then checks every file against its `SHA256SUMS`.
 - **Local proofs.**
   - `make airgap-selftest` shows that a tampered, unsigned, wrong-key or wrong-identity bundle is refused.
-  - `make airgap-local` builds a bundle, signs it with a throwaway key, and installs it inside a network namespace with only loopback. There it reproduces the NASA validation.
+  - `make airgap-local` builds a bundle, signs it with a throwaway key, and installs it inside a network namespace with only loopback. There it reproduces the NASA validation and, as a hub, loads its bundled element sets. The `airgap-install` CI job is configured to repeat this for each architecture.
 - **Vulnerability gate.** Scans fail on any finding without a reviewed VEX statement. The one current finding (GO-2026-5932, against the `openpgp` package of a Go module `nats-server` depends on) is shown not to be linked into the binary, and that check re-runs on every scan.
 
 ## Traceability, generated
@@ -184,7 +184,7 @@ A classified or disconnected site has to trust a bundle without reaching the int
 - the part that satisfies it;
 - the evidence that verifies it: a test, a harness scenario, an import contract or a CI step.
 
-CI regenerates `docs/traceability.md`, and fails on any reference to evidence that does not exist. Work not built yet is marked *planned* and reported as unverified, never as verified. The current trace has 54 requirements: 53 verified, 1 unverified (planned), 0 broken references. A real SysML v2 grammar (sysml2py, the pilot implementation's grammar) parses the model in CI. That check covers syntax, not semantics, and the docs say so.
+CI regenerates `docs/traceability.md`, and fails on any reference to evidence that does not exist. Work not built yet is marked *planned* and reported as unverified, never as verified. The current trace has 54 requirements: 54 verified, 0 unverified, 0 broken references. A real SysML v2 grammar (sysml2py, the pilot implementation's grammar) parses the model in CI. That check covers syntax, not semantics, and the docs say so.
 
 ---
 
@@ -240,7 +240,7 @@ The NASA files are vendored **unmodified** under `fixtures/cara/`, with NOSA 1.3
 ## Running it
 
 ```bash
-uv venv && uv pip install -e ".[dev]"
+uv sync --locked --python 3.12 --extra dev   # exactly uv.lock, as CI does
 uv run pytest -q                      # full ladder, network disabled, 0 skipped
 uv run pytest -q -m tier3             # NASA CARA published cases
 uv run sentinel assess fixtures/cara/PcTestCaseCDMs/000025994_conj_000037558_20210324_151047_20210323_154356.cdm
