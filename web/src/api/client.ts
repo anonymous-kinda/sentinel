@@ -1,27 +1,59 @@
 import { useEffect, useRef, useState } from "react";
 
+/** A non-2xx reply: the status code and whatever body the server sent. */
+export class HttpError extends Error {
+  constructor(
+    readonly path: string,
+    readonly status: number,
+    readonly payload: unknown,
+  ) {
+    super(`${path}: HTTP ${status}`);
+  }
+}
+
+/** The server's own reason for an error - FastAPI's `detail`, as a string or
+ *  a validation list - or the error itself when there is none. */
+export function apiErrorMessage(error: unknown): string {
+  if (!(error instanceof HttpError)) return String(error);
+  const detail = (error.payload as { detail?: unknown } | null)?.detail;
+  if (typeof detail === "string" && detail) return detail;
+  if (Array.isArray(detail) && detail.length > 0) {
+    return detail.map((d) => (d as { msg?: unknown })?.msg ?? JSON.stringify(d)).join("; ");
+  }
+  return error.message;
+}
+
 export async function getJSON<T>(path: string, signal?: AbortSignal): Promise<T> {
   const response = await fetch(path, { signal, headers: { Accept: "application/json" } });
-  if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
+  if (!response.ok) throw new HttpError(path, response.status, await response.json().catch(() => null));
   return (await response.json()) as T;
 }
 
-export async function postJSON<T>(path: string, body: unknown): Promise<T> {
+async function sendJSON<T>(method: "POST" | "PUT" | "DELETE", path: string, body?: unknown): Promise<T> {
   const response = await fetch(path, {
-    method: "POST",
+    method,
     headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(body),
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw Object.assign(new Error(`${path}: HTTP ${response.status}`), { payload });
+  if (!response.ok) throw new HttpError(path, response.status, payload);
   return payload as T;
 }
 
+export const postJSON = <T,>(path: string, body: unknown) => sendJSON<T>("POST", path, body);
+export const putJSON = <T,>(path: string, body: unknown) => sendJSON<T>("PUT", path, body);
+export const deleteJSON = <T = unknown,>(path: string) => sendJSON<T>("DELETE", path);
+
 /** Fetch `path` and refetch whenever `version` changes. Keeps the last good
- *  value while refetching so the console never blanks on an update. */
-export function useResource<T>(path: string | null, version = 0): { data: T | null; error: string | null } {
+ *  value while refetching so the console never blanks on an update. `status`
+ *  is the HTTP status of the last failed fetch, null after a success. */
+export function useResource<T>(
+  path: string | null,
+  version = 0,
+): { data: T | null; error: string | null; status: number | null } {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<number | null>(null);
   useEffect(() => {
     if (!path) {
       setData(null);
@@ -32,13 +64,16 @@ export function useResource<T>(path: string | null, version = 0): { data: T | nu
       .then((value) => {
         setData(value);
         setError(null);
+        setStatus(null);
       })
       .catch((e: unknown) => {
-        if (!controller.signal.aborted) setError(String(e));
+        if (controller.signal.aborted) return;
+        setError(String(e));
+        setStatus(e instanceof HttpError ? e.status : null);
       });
     return () => controller.abort();
   }, [path, version]);
-  return { data, error };
+  return { data, error, status };
 }
 
 export interface StreamEvent {
