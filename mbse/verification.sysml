@@ -455,8 +455,7 @@ package SentinelVerification {
     verification <'VC-SC-003'> vcOscalPackage : SentinelVerification {
         objective { verify oscalPackage; }
         @VerificationMethod { kind = VerificationMethodKind::inspect; }
-        @Planned { milestone = "M4"; reason = "no OSCAL content yet"; }
-        @Evidence { kind = EvidenceKind::ci; locator = "OSCAL validates"; }
+        @Evidence { kind = EvidenceKind::ci; locator = "Test evidence, assessment results and POA&M, trestle validate"; }
     }
 
     verification <'VC-SC-004'> vcReferenceDataUnmodified : SentinelVerification {
