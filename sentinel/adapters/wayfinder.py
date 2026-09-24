@@ -76,7 +76,8 @@ def _time(text: Any, where: str) -> dt.datetime:
 def _position(row: Any, index: int) -> tuple[float, float, float]:
     if not (isinstance(row, list) and len(row) == 3 and all(_is_number(v) for v in row)):
         raise _mismatch(f"positions_km[{index}] is not three numbers")
-    return tuple(float(v) for v in row)
+    x, y, z = row
+    return float(x), float(y), float(z)
 
 
 def parse_ephemeris(payload: Mapping[str, Any]) -> StateTable:
