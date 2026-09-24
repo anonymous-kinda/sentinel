@@ -87,3 +87,32 @@ forbidden_modules =
     sentinel.sync
     sentinel.api
     sentinel.ai
+
+# --- M3 tabulated-ephemeris provider: ephemeris and adapters (append-only block) ---
+[importlinter:contract:ephemeris-and-adapters-are-independent]
+name = Ephemeris codecs and source adapters know nothing about risk, CDM services, conjunction, sync, the API or AI
+type = forbidden
+source_modules =
+    sentinel.ephemeris
+    sentinel.adapters
+forbidden_modules =
+    sentinel.risk
+    sentinel.cdm
+    sentinel.conjunction
+    sentinel.sync
+    sentinel.api
+    sentinel.ai
+# The one permitted edge into sentinel.cdm: the CCSDS 301.0 time-code parser,
+# which every CCSDS message shares (CDM and OEM alike).
+ignore_imports =
+    sentinel.ephemeris.oem -> sentinel.cdm.timefmt
+
+[importlinter:contract:ephemeris-is-below-passes]
+name = Ephemeris tables sit below the pass module and the adapters that feed them
+type = forbidden
+source_modules =
+    sentinel.ephemeris
+forbidden_modules =
+    sentinel.passes
+    sentinel.adapters
+# --- end M3 tabulated-ephemeris block ---
