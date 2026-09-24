@@ -6,6 +6,8 @@ drives the link and the operators, and returns measured assertions.
                   measured against a FIFO baseline over the same link
     INTERMITTENT  repeated short drops while both sides write
     DEGRADED      high latency, 32 kB/s
+    RECOVERY      DENIED straight to LIMITED: the leaf handshake over a thin link
+    OPSEC         a unit set and its passes computed at the edge never reach the hub
 
 Durations are wall-clock and stated in the results. The properties proven -
 no loss, convergence, ordering, availability - do not depend on how long a
@@ -16,6 +18,7 @@ longer denial to show that.
 from __future__ import annotations
 
 import datetime as dt
+import json
 import statistics
 import sys
 import time
@@ -26,6 +29,13 @@ sys.path.insert(0, str(ROOT))
 
 from sentinel.conjunction.exercise import generate  # noqa: E402
 
+# The conjunction scenarios keep measuring conjunction sync alone. A hub also
+# serves public element sets by default (M3); each is one more request/reply
+# on the link, and OPSEC is the scenario that exercises them.
+CONJUNCTION_ONLY = (
+    "The hub serves conjunction CDMs only (hub_elements=False): this scenario measures conjunction sync. "
+    "Element-set sync between real processes is exercised by OPSEC."
+)
 OPERATOR_EDGE = {"X-Sentinel-Operator": "maj.ortiz@edge-alpha"}
 OPERATOR_HUB = {"X-Sentinel-Operator": "capt.lee@hub"}
 
@@ -119,11 +129,12 @@ def kendall_tau(sequence: list[float]) -> float:
 # --------------------------------------------------------------------- DENIED
 def denied(denial_s: float = 20.0) -> Result:
     r = Result("DENIED")
+    r.notes.append(CONJUNCTION_ONLY)
     r.metrics["denial_wall_s"] = denial_s
     epoch = dt.datetime.now(dt.UTC)
     initial, later = scenario_cdms(epoch)
     second_batch, _ = scenario_cdms(epoch + dt.timedelta(hours=3))
-    with Cluster(hub_exercise=False, sync_interval_s=1.0) as c:
+    with Cluster(hub_exercise=False, sync_interval_s=1.0, hub_elements=False) as c:
         for item in initial:
             post_cdm(c.hub, item.kvn)
         wait_until(lambda: converged(c), 60, what="initial convergence")
@@ -209,7 +220,7 @@ def denied(denial_s: float = 20.0) -> Result:
 def _limited_run(mode: str) -> dict:
     epoch = dt.datetime.now(dt.UTC)
     initial, _ = scenario_cdms(epoch)
-    with Cluster(sync_mode=mode, hub_exercise=False, sync_interval_s=0.5) as c:
+    with Cluster(sync_mode=mode, hub_exercise=False, sync_interval_s=0.5, hub_elements=False) as c:
         wait_until(c.leaf_connected, 20, what="leaf")
         c.link("LIMITED")
         time.sleep(2)
@@ -253,6 +264,7 @@ def _limited_run(mode: str) -> dict:
 def limited() -> Result:
     r = Result("LIMITED")
     r.notes.append("Toxiproxy bandwidth 1 kB/s each way plus 600 ms latency; NATS leafnode s2_auto compression on.")
+    r.notes.append(CONJUNCTION_ONLY)
     edf = _limited_run("edf")
     fifo = _limited_run("fifo")
     r.metrics["edf"] = edf
@@ -273,12 +285,13 @@ def limited() -> Result:
 # ---------------------------------------------------------------- INTERMITTENT
 def intermittent(flaps: int = 8, down_s: float = 3.0, up_s: float = 3.0) -> Result:
     r = Result("INTERMITTENT")
+    r.notes.append(CONJUNCTION_ONLY)
     r.metrics.update({"flaps": flaps, "down_s": down_s, "up_s": up_s})
     epoch = dt.datetime.now(dt.UTC)
     initial, later = scenario_cdms(epoch)
     extra, _ = scenario_cdms(epoch + dt.timedelta(hours=5))
     feed = later + extra
-    with Cluster(hub_exercise=False, sync_interval_s=0.5) as c:
+    with Cluster(hub_exercise=False, sync_interval_s=0.5, hub_elements=False) as c:
         for item in initial:
             post_cdm(c.hub, item.kvn)
         wait_until(lambda: converged(c), 60, what="initial convergence")
@@ -313,9 +326,10 @@ def intermittent(flaps: int = 8, down_s: float = 3.0, up_s: float = 3.0) -> Resu
 def degraded() -> Result:
     r = Result("DEGRADED")
     r.notes.append("Toxiproxy latency 600 +/- 200 ms each way, bandwidth 32 kB/s.")
+    r.notes.append(CONJUNCTION_ONLY)
     epoch = dt.datetime.now(dt.UTC)
     initial, _ = scenario_cdms(epoch)
-    with Cluster(hub_exercise=False, sync_interval_s=1.0) as c:
+    with Cluster(hub_exercise=False, sync_interval_s=1.0, hub_elements=False) as c:
         wait_until(c.leaf_connected, 20, what="leaf")
         c.link("DEGRADED")
         time.sleep(2)
@@ -342,9 +356,10 @@ def recovery() -> Result:
     timeout) and the edge reconnects forever - found by the live demo.
     """
     r = Result("RECOVERY")
+    r.notes.append(CONJUNCTION_ONLY)
     epoch = dt.datetime.now(dt.UTC)
     initial, _ = scenario_cdms(epoch)
-    with Cluster(hub_exercise=False, sync_interval_s=1.0) as c:
+    with Cluster(hub_exercise=False, sync_interval_s=1.0, hub_elements=False) as c:
         for item in initial:
             post_cdm(c.hub, item.kvn)
         wait_until(lambda: converged(c), 60, what="initial convergence")
@@ -365,10 +380,136 @@ def recovery() -> Result:
     return r
 
 
+# ---------------------------------------------------------------------- OPSEC
+# The vendored snapshot's day, so element sets are fresh and the run is
+# reproducible whatever day it runs on (a stale set's sync deadline has passed).
+OPSEC_CLOCK = "sim:2026-09-24T06:00:00+00:00,1"
+# An exercise position (ORIGINATOR=SENTINEL-EXERCISE), never a real unit.
+OPSEC_UNIT = {"unit_id": "EX-OPSEC-UNIT-7", "lat_deg": 35.26417, "lon_deg": -116.68273, "alt_m": 701.0, "reaction_time_min": 30.0}
+OPSEC_SETTLE_S = 8.0          # many sync cycles: time for anything that would leak to cross
+
+
+def status_of(method: str, url: str, body: dict | None = None) -> int:
+    import urllib.error
+
+    try:
+        http(method, url, body)
+        return 200
+    except urllib.error.HTTPError as exc:
+        return exc.code
+
+
+def _capture_summary(messages) -> str:
+    return f"{len(messages)} messages, {sum(len(m.data) for m in messages):,} bytes"
+
+
+def _subject_families(messages) -> str:
+    """What the hub saw, by subject family: its own node events, sync and
+    operator-data requests, replies to edge inboxes, the control canary."""
+    families: dict[str, int] = {}
+    for m in messages:
+        tokens = m.subject.split(".")
+        family = ".".join(tokens[:1] if tokens[0].startswith("_") else tokens[:3] if tokens[0] == "node" else tokens[:2])
+        families[family] = families.get(family, 0) + 1
+    return ", ".join(f"{family} {count}" for family, count in sorted(families.items(), key=lambda kv: -kv[1]))
+
+
+def opsec() -> Result:
+    """The unit's position never leaves the edge (ADR-010).
+
+    Real hub and edge processes. The edge gets element sets from the hub by
+    sync, is given a unit, and computes passes, while a subscriber to `>`
+    on the hub's nats-server records everything the hub receives. Its
+    interest reaches the edge over the leaf, so the edge forwards anything
+    its leaf permissions allow: the adversarial case, not a sample.
+    """
+    from .opsec import Capture, find_leaks, leak_patterns, publish, scan_tree
+
+    r = Result("OPSEC")
+    r.notes.append(
+        "NIST SP 800-53 AC-4 (information flow enforcement). The ground unit's position and the pass "
+        "windows computed from it stay on the edge node: the application publishes only a coordinate-free "
+        "node-scoped event, and the edge's leafnode permissions deny exporting unit.>, passes.> and node.>. "
+        "Evidence: a subscriber to > on the hub's nats-server during a real edge computation, a deliberate "
+        "canary publish of the unit at the edge, and a byte scan of every hub file."
+    )
+    patterns = leak_patterns(OPSEC_UNIT)
+    nonce = f"opsec-control-{time.time_ns()}".encode()
+    with Cluster(clock=OPSEC_CLOCK, hub_exercise=True, sync_interval_s=0.5) as c:
+        hub_url, edge_url = (f"nats://127.0.0.1:{c.ports[p]}" for p in ("hub_client", "edge_client"))
+        wait_until(c.leaf_connected, 20, what="leaf")
+        with Capture(hub_url) as hub_wire, Capture(edge_url) as edge_wire:
+            t0 = time.monotonic()
+            wait_until(lambda: len(http("GET", f"{c.edge}/api/passes/catalog")["imagers"]) == 38, 120,
+                       what="element sets at the edge through sync")
+            r.metrics["element_sync_s"] = round(time.monotonic() - t0, 1)
+            unit_put = status_of("PUT", f"{c.edge}/api/passes/unit", OPSEC_UNIT)
+            answer = http("GET", f"{c.edge}/api/passes?hours=24")
+            http("GET", f"{c.edge}/api/passes?hours=72")
+            unit = json.dumps(OPSEC_UNIT).encode()
+            publish(edge_url, [
+                ("opsec.control", nonce),
+                ("unit.edge-alpha.position", unit),
+                ("passes.edge-alpha.windows", unit),
+                ("node.edge-alpha.passes.updated", unit),
+            ])
+            time.sleep(OPSEC_SETTLE_S)
+        hub_unit = status_of("GET", f"{c.hub}/api/passes/unit")
+        hub_files = scan_tree(c.dir / "hub", patterns)
+        hub_file_count = sum(1 for p in (c.dir / "hub").rglob("*") if p.is_file())
+        hub_logs = {name: find_leaks((c.dir / name).read_bytes(), patterns) for name in ("hub.log", "nats-hub.log")}
+        edge_files = scan_tree(c.dir / "edge-alpha", patterns)
+        unit_file = c.dir / "edge-alpha" / "var" / "unit.json"
+        unit_mode = oct(unit_file.stat().st_mode & 0o777) if unit_file.exists() else None
+        edge_log_leaks = find_leaks((c.dir / "edge.log").read_bytes(), patterns)
+        processes_alive = alive(c)
+
+    hub_leaks = {m.subject: leaks for m in hub_wire.messages if (leaks := find_leaks(m.blob(), patterns))}
+    pass_subjects = sorted({m.subject for m in hub_wire.messages if {"unit", "passes"} & set(m.subject.split("."))})
+    element_sets_crossed = sum(m.headers.get("Sentinel-Event-Id", "").startswith("omm:") for m in hub_wire.messages)
+    edge_updates = [m for m in edge_wire.messages if m.subject == "node.edge-alpha.passes.updated" and m.data != unit]
+    control_crossed = any(m.subject == "opsec.control" and m.data == nonce for m in hub_wire.messages)
+
+    r.metrics.update({
+        "hub_messages_captured": len(hub_wire.messages),
+        "hub_bytes_captured": sum(len(m.data) for m in hub_wire.messages),
+        "hub_subjects": _subject_families(hub_wire.messages),
+        "element_sets_crossed": element_sets_crossed,
+        "leak_patterns_checked": len(patterns),
+        "edge_windows_24h": len(answer["windows"]),
+        "edge_gaps_24h": len(answer["gaps"]),
+        "edge_passes_updated_events": len(edge_updates),
+    })
+    r.check("element sets reached the edge through sync (the edge loads none itself)",
+            answer["catalog"]["imagers"] == 38 and element_sets_crossed >= 38,
+            f"{element_sets_crossed} element sets crossed in {r.metrics['element_sync_s']} s; edge assessed {answer['catalog']['imagers']} imagers")
+    r.check("the edge accepted the unit and computed its passes locally",
+            unit_put == 200 and bool(answer["windows"]) and bool(answer["gaps"]),
+            f"{len(answer['windows'])} windows, {len(answer['gaps'])} gaps over 24 h")
+    r.check("control: the hub's capture sees what the edge exports (a harmless canary crossed)", control_crossed,
+            f"hub capture: {_capture_summary(hub_wire.messages)}")
+    r.check("control: the edge did publish passes.updated on its own bus", bool(edge_updates),
+            f"{len(edge_updates)} events on node.edge-alpha.passes.updated")
+    r.check("nothing on the hub's wire carries the unit id or its coordinates, in any serialization",
+            not hub_leaks, f"{len(patterns)} patterns over {_capture_summary(hub_wire.messages)}" if not hub_leaks else str(hub_leaks))
+    r.check("no pass or unit subject reached the hub, not even a deliberate canary on unit.>, passes.> or node.>",
+            not pass_subjects, "none" if not pass_subjects else ", ".join(pass_subjects))
+    r.check("the hub has no unit (GET /api/passes/unit is 404)", hub_unit == 404, f"HTTP {hub_unit}")
+    r.check("no file on the hub holds the unit (var, database, NATS config, logs)",
+            not hub_files and not any(hub_logs.values()),
+            f"{hub_file_count + len(hub_logs)} files scanned" if not hub_files else str(hub_files))
+    r.check("control: on the edge the unit rests only in var/unit.json, mode 0600",
+            list(edge_files) == ["var/unit.json"] and unit_mode == "0o600" and not edge_log_leaks,
+            f"files holding the unit: {sorted(edge_files)}; mode {unit_mode}")
+    r.check("no process restarted", processes_alive)
+    return r
+
+
 SCENARIOS = {
     "denied": denied,
     "limited": limited,
     "intermittent": intermittent,
     "degraded": degraded,
     "recovery": recovery,
+    "opsec": opsec,
 }

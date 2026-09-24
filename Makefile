@@ -74,3 +74,10 @@ screen:  ## demonstration mode: approaches to PRIMARY from the public snapshot (
 bench-passes:  ## time the pass engine: whole imaging catalog, 24 h, exercise unit
 	$(UV) run python scripts/bench_passes.py
 # --- end M3 pass engine -------------------------------------------------------
+
+# --- M3 pass service: OPSEC evidence (NIST AC-4) -------------------------------
+.PHONY: opsec
+opsec: tools  ## OPSEC scenario on real processes: a unit set at the edge never reaches the hub; then docs/ddil-results.md
+	$(UV) run python -m harness.run opsec
+	$(UV) run python -m harness.report
+# --- end M3 pass service ------------------------------------------------------
