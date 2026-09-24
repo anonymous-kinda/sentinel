@@ -7,17 +7,19 @@ the dictionary order some implementation happened to use.
 from __future__ import annotations
 
 import hashlib
+from typing import Any
 
 import cbor2
 
 
-def encode(value) -> bytes:
+def encode(value: object) -> bytes:
     return cbor2.dumps(value, canonical=True)
 
 
-def decode(data: bytes):
+def decode(data: bytes) -> Any:
+    """Whatever the bytes hold. Wire data: the caller states the shape it expects."""
     return cbor2.loads(data)
 
 
-def digest(value) -> str:
+def digest(value: object) -> str:
     return hashlib.sha256(encode(value)).hexdigest()

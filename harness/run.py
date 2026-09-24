@@ -19,6 +19,12 @@ from .scenarios import SCENARIOS, Result
 RESULTS = pathlib.Path(__file__).resolve().parent / "results"
 
 
+def print_result(result: Result) -> None:
+    for a in result.assertions:
+        print(f"  [{'PASS' if a['passed'] else 'FAIL'}] {a['name']}" + (f" - {a['detail']}" if a["detail"] else ""))
+    print(f"  metrics: {json.dumps(result.metrics, default=str)[:600]}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("scenarios", nargs="+", choices=[*SCENARIOS, "all"])
@@ -35,9 +41,7 @@ def main() -> int:
             result = Result(name.upper())
             result.check("scenario ran to completion", False, f"{type(exc).__name__}: {exc}")
             traceback.print_exc()
-        for a in result.assertions:
-            print(f"  [{'PASS' if a['passed'] else 'FAIL'}] {a['name']}" + (f" - {a['detail']}" if a["detail"] else ""))
-        print(f"  metrics: {json.dumps(result.metrics, default=str)[:600]}")
+        print_result(result)
         (RESULTS / f"{name}.json").write_text(json.dumps(result.to_dict(), indent=1, default=str))
         failed |= not result.passed
     return 1 if failed else 0

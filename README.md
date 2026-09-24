@@ -89,8 +89,18 @@ Claim two, built and measured. Each node runs its own `nats-server` and serves i
 
 ```bash
 make demo-local      # hub :8000, edge :8001 - the edge's LINK chip shapes the real link
+make compose-up      # the same hub and edge in containers; only Docker needed (docs/compose.md)
 make ddil            # every scenario on real processes -> docs/ddil-results.md
 ```
+
+**In containers.** `make compose-up` runs the same topology with only Docker needed.
+- Each node's `nats-server` and console share a network namespace.
+- The edge reaches the hub only through Toxiproxy.
+- The NATS configs are rendered from the same templates by the harness's own code, so the leaf permissions and DDIL fixes are identical.
+
+`make compose-link PRESET=DENIED` shapes the link. `make compose-smoke` checks that the edge syncs and verifies the hub's events, keeps answering while DENIED, reconverges, and never lets a unit reach the hub.
+
+The containers themselves have not run yet: the `compose-smoke` CI job is their first real run. The smoke test has passed against the process harness. See `docs/compose.md`.
 
 **Denied: the edge keeps working.** The console stays up (2.8 ms p95 while cut off). Operators triage events and record signed decisions locally, and the link state is *measured*, not configured.
 
@@ -165,7 +175,7 @@ A classified or disconnected site has to trust a bundle without reaching the int
 - **Offline verification.** Every install path verifies the signature against a pinned Sigstore trust root (or a site key) before unpacking anything, with no network. `make airgap-verify` and the Ansible role run the same gate, `deploy/bundle/verify_signature.sh`; the bundle's `install.sh` then checks every file against its `SHA256SUMS`.
 - **Local proofs.**
   - `make airgap-selftest` shows that a tampered, unsigned, wrong-key or wrong-identity bundle is refused.
-  - `make airgap-local` builds a bundle, signs it with a throwaway key, and installs it inside a network namespace with only loopback. There it reproduces the NASA validation.
+  - `make airgap-local` builds a bundle, signs it with a throwaway key, and installs it inside a network namespace with only loopback. There it reproduces the NASA validation and, as a hub, loads its bundled element sets. The `airgap-install` CI job is configured to repeat this for each architecture.
 - **Vulnerability gate.** Scans fail on any finding without a reviewed VEX statement. The one current finding (GO-2026-5932, against the `openpgp` package of a Go module `nats-server` depends on) is shown not to be linked into the binary, and that check re-runs on every scan.
 
 ## Traceability, generated
@@ -174,7 +184,7 @@ A classified or disconnected site has to trust a bundle without reaching the int
 - the part that satisfies it;
 - the evidence that verifies it: a test, a harness scenario, an import contract or a CI step.
 
-CI regenerates `docs/traceability.md`, and fails on any reference to evidence that does not exist. Work not built yet is marked *planned* and reported as unverified, never as verified. The current trace has 54 requirements: 53 verified, 1 unverified (planned), 0 broken references. A real SysML v2 grammar (sysml2py, the pilot implementation's grammar) parses the model in CI. That check covers syntax, not semantics, and the docs say so.
+CI regenerates `docs/traceability.md`, and fails on any reference to evidence that does not exist. Work not built yet is marked *planned* and reported as unverified, never as verified. The current trace has 54 requirements: 54 verified, 0 unverified, 0 broken references. A real SysML v2 grammar (sysml2py, the pilot implementation's grammar) parses the model in CI. That check covers syntax, not semantics, and the docs say so.
 
 ---
 
@@ -230,7 +240,7 @@ The NASA files are vendored **unmodified** under `fixtures/cara/`, with NOSA 1.3
 ## Running it
 
 ```bash
-uv venv && uv pip install -e ".[dev]"
+uv sync --locked --python 3.12 --extra dev   # exactly uv.lock, as CI does
 uv run pytest -q                      # full ladder, network disabled, 0 skipped
 uv run pytest -q -m tier3             # NASA CARA published cases
 uv run sentinel assess fixtures/cara/PcTestCaseCDMs/000025994_conj_000037558_20210324_151047_20210323_154356.cdm

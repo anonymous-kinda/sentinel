@@ -37,7 +37,9 @@ V_PRIMARY_KM_S = np.array([0.0, 7.5, 0.0])
 V_SECONDARY_KM_S = np.array([0.0, -7.5, 0.0])
 
 
-def make_conjunction(miss_m, sigma_m, radius_m=5.0, sigma_secondary_m=None):
+def make_conjunction(
+    miss_m: float, sigma_m: float, radius_m: float = 5.0, sigma_secondary_m: float | None = None
+) -> Conjunction:
     """Build a conjunction whose projected 2D covariance is isotropic.
 
     miss_m   : miss distance in metres, laid along ECI x (radial)

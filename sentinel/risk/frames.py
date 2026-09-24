@@ -53,4 +53,5 @@ def rotate_covariance_rtn_to_eci(
     """Express an RTN-frame position covariance in ECI."""
     m = rtn_to_eci_matrix(position, velocity)
     cov = np.asarray(covariance_rtn, dtype=float)
-    return m @ cov @ m.T
+    rotated: np.ndarray = m @ cov @ m.T
+    return rotated

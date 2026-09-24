@@ -87,6 +87,6 @@ def configure_logging(fmt: str | None = None, level: str | None = None) -> None:
         root.removeHandler(handler)
     handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(JsonFormatter() if fmt == "json" else TextFormatter())
-    handler._sentinel = True  # type: ignore[attr-defined]
+    handler._sentinel = True  # type: ignore[attr-defined]  # our marker, so a reconfigure replaces only our handler
     root.addHandler(handler)
     root.setLevel(log_level(level))

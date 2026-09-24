@@ -15,6 +15,7 @@ import argparse
 import json
 import pathlib
 import sys
+from typing import Any
 
 from . import __version__
 from .cdm import CdmParseError, CdmRejected, emit, parse_bytes, to_conjunction
@@ -35,7 +36,7 @@ def _cmd_assess(args: argparse.Namespace) -> int:
     conversion = to_conjunction(message, hbr_override_m=args.hbr)
     result = assess(conversion.conjunction)
 
-    payload = {
+    payload: dict[str, Any] = {
         "message_id": message.message_id,
         "tca": message.tca.isoformat(),
         "objects": [message.object_name(0), message.object_name(1)],
@@ -53,6 +54,7 @@ def _cmd_assess(args: argparse.Namespace) -> int:
     print(f"  {payload['objects'][0]}  vs  {payload['objects'][1]}")
     print(f"  miss {a.miss_distance_m:,.1f} m   relative speed {a.relative_speed_m_s:,.1f} m/s")
     if a.method is Method.REFUSED:
+        assert a.refusal_reason is not None  # assess() never refuses without a reason
         print(f"  REFUSED  {a.refusal_reason.value}")
         for key, value in a.diagnostics.items():
             print(f"    {key}: {value}")
