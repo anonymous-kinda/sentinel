@@ -143,6 +143,27 @@ make ai-eval                                                               # sco
 
 ---
 
+## Supply chain: signed, attested, verifiable offline
+
+A classified or disconnected site has to trust a bundle without reaching the internet to check it.
+
+- **Signing.** Releases are signed keyless with Sigstore from GitHub Actions. They carry SLSA **Build L2** provenance and SBOM attestations in SPDX and CycloneDX. Build L2 is the honest level; `docs/supply-chain.md` explains why this is not L3.
+- **Offline verification.** Every installer verifies the signature against a pinned Sigstore trust root before unpacking anything, with no network: `install.sh`, `make airgap-verify` and the Ansible role all use the same policy.
+- **Local proofs.**
+  - `make airgap-selftest` shows that a tampered, unsigned, wrong-key or wrong-identity bundle is refused.
+  - `make airgap-local` builds a bundle, signs it with a throwaway key, and installs it inside a network namespace with only loopback. There it reproduces the NASA validation.
+- **Vulnerability gate.** Scans fail on any finding without a reviewed VEX statement. The one current finding (GO-2026-5932, in a Go module vendored by `nats-server`) is shown not to be linked into the binary, and that check re-runs on every scan.
+
+## Traceability, generated
+
+`mbse/` is a SysML v2 textual model of Sentinel: requirements, parts, ports, and the link-state and AI-tier state machines. Every requirement traces to:
+- the part that satisfies it;
+- the evidence that verifies it: a test, a harness scenario, an import contract or a CI step.
+
+CI regenerates `docs/traceability.md`, and fails on any reference to evidence that does not exist. Work not built yet is marked *planned* and reported as unverified, never as verified. A real SysML v2 grammar (sysml2py, the pilot implementation's grammar) parses the model in CI. That check covers syntax, not semantics, and the docs say so.
+
+---
+
 ## What is deliberately *not* here
 
 **No probability of collision without covariance.** Element sets alone do not
@@ -152,6 +173,15 @@ assessment - kilometre-scale theory error is too large for maneuver planning,
 and no covariance is available to compute a probability from. Screening on
 element sets and printing a Pc anyway is the most common way to get this
 wrong.
+
+What Sentinel does with element sets instead is *demonstration mode*.
+`sentinel screen --primary 40115 --hours 24` screens a satellite against the
+bundled public CelesTrak snapshot and lists every close approach: object,
+time of closest approach, miss distance and relative speed. Every line says
+*Pc: refused - element sets have no covariance*. With `--out DIR` it writes
+each approach as a DERIVED CCSDS CDM. Fed back in, the risk engine refuses it
+with `NO_COVARIANCE`, the same gate any covariance-less CDM meets. There is
+no special case in the engine (ADR-002).
 
 **No number where the model does not apply.** Low relative velocity breaks
 the rectilinear encounter assumption - the geostationary and similar-orbit
@@ -225,14 +255,21 @@ sentinel/triage/       class / deadline / consequence - the only thing sync know
 sentinel/linkstate/    measured link state; Toxiproxy control for demos and the harness
 sentinel/ai/           assistant: tier policy, Jev and local routers, tools, narrators, grounding guard, eval
 sentinel/audit/        hash-chained JSON Lines audit log
-sentinel/api/          the node: FastAPI, SSE, strict CSP, static console
+sentinel/passes/       Army overhead-pass module: imaging catalog, element sets, providers, gaps
+sentinel/ephemeris/    CCSDS OEM codec and Earth-fixed state tables
+sentinel/adapters/     source adapters (Wayfinder, on an assumed schema - see docs/adapters/)
+sentinel/screening/    demonstration mode: element-set close approaches, geometry only (ADR-002)
+sentinel/api/          the node: FastAPI, SSE, strict CSP, static console; composes module records for sync
 sentinel/obs.py        structured logging: stable messages, values as fields
 web/                   React + TypeScript + CesiumJS console (offline imagery, no ion, no CDN)
 harness/               real two-node DDIL scenarios (nats-server + Toxiproxy, no containers)
 deploy/                bundle builder, offline installer, systemd, NATS configs, AWS Terraform, Ansible
 fixtures/cara/         NASA CARA data, unmodified, with licence, provenance and checksums
+fixtures/omm/          public CelesTrak element-set snapshot, with provenance and checksums
+supplychain/           build-side tooling: SBOMs, Trivy + VEX, bundle manifests (not shipped)
+mbse/                  SysML v2 model and the trace generator -> docs/traceability.md
 evals/                 labelled operator requests for the routing eval
-docs/                  ADRs, risk-engine design, generated validation and DDIL reports
+docs/                  ADRs, ICDs, supply chain, generated validation / DDIL / AI-eval / trace reports
 ```
 
 ---

@@ -13,6 +13,11 @@ uv run ruff check . && uv run lint-imports
 uv run python scripts/validation_report.py   # regenerates docs/validation-report.md
 uv run sentinel --help                  # CLI
 make help                               # all make targets
+make trace && make sysml-check          # requirement trace (docs/traceability.md) and SysML v2 syntax
+make screen PRIMARY=40115               # demonstration mode: element-set geometry, no Pc
+make sbom scan airgap-selftest          # SBOMs, vulnerability gate, offline signature proofs
+make airgap-local                       # build, sign (throwaway key), verify and install with no network
+make ai-eval bench-passes               # score the AI routers; time the pass engine
 ```
 
 ## Non-negotiable rules
@@ -25,10 +30,16 @@ make help                               # all make targets
 - **The test ladder comes first**: write the rung, watch it fail, then write the code.
 - **CARA fixtures are transcribed by hand** from NASA's published files, with provenance. Never generate expected values by running this code.
 - **Tests never touch the network** (`pytest-socket`). Skyfield loads bundled ephemerides only.
-- `docs/validation-report.md`, `docs/ddil-results.md` and `docs/ai-eval.md` are **generated files**. Regenerate them; never hand-edit.
+- **Generated files; regenerate them and never hand-edit:** `docs/validation-report.md`, `docs/ddil-results.md`, `docs/ai-eval.md`, `docs/traceability.md` and `deploy/vex/sentinel.openvex.json`.
 - **AI never computes.** The assistant (`sentinel/ai/`) routes to tools and phrases their facts; `.importlinter` forbids it the maths. Hosted AI (Jev, Claude) needs an UNCLASSIFIED marking, operator opt-in and a usable measured link, and every AI answer passes the number-grounding guard. Never publish a Jev number that did not come from a real run.
 - **Module boundaries are enforced by `.importlinter`**: `bus`, `sync`, `crdt` and `triage` may not import mission modules (`risk`, `cdm`, `passes`).
 - **Data class on everything**: REAL, DERIVED or EXERCISE. Exercise data carries `ORIGINATOR=SENTINEL-EXERCISE`.
+- **Requirement-to-evidence mapping lives in `mbse/verification.sysml`**, not in pytest markers. Unbuilt work is marked `@Planned` and must show as unverified, never verified.
+- **Passes: a gap is "not observed by catalogued imagers", never "safe".** A provider asked about an imager it has no data for raises `ImagerNotCovered`; silently skipping one makes gaps look longer than they are. The unit's position never leaves the edge node: not a sync record, never logged, never published.
+- **Supply chain:**
+  - Never commit keys.
+  - Every third-party binary is pinned in `deploy/tools.lock` with a locally computed sha256, and workflow actions are pinned by commit SHA.
+  - A VEX statement is written only for a finding a raw scan produced, with justification and checkable evidence.
 - **Nothing from `../prep/` ever enters this repo.** Privateer products are mentioned only as integration targets, with the disclaimer in `docs/adapters/wayfinder.md`.
 
 ## Engineering rules (the maintainer's global rules)

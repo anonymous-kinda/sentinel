@@ -72,6 +72,16 @@ Building the limitation into the architecture inverts this. The constraint becom
 
 **Rejected.** Single-mode operation with caveats in the README. Caveats in a README do not appear next to the number on the screen.
 
+**Implemented (2026-09-24).** `sentinel/screening` and `sentinel screen` screen one primary against public OMM element sets:
+- SGP4 through Skyfield;
+- an apogee/perigee pre-filter;
+- range sampled every 60 s, with a bound that cannot drop an approach;
+- each minimum refined with Brent's method.
+
+Against brute-force sampling, the measured agreement is under a millisecond in TCA and under a centimetre in miss distance. One primary against the 166-object snapshot for 24 h takes about 0.1 s.
+
+Each approach can be written as a DERIVED CDM with no covariance. When it is ingested, the engine's existing `NO_COVARIANCE` gate refuses the Pc. The refusal therefore holds by construction, and the engine has no screening code path. `.importlinter` forbids `sentinel.screening` from importing the engine.
+
 ---
 
 ### ADR-003 — Reimplement Foster-Estes 2D Pc in Python; NASA CARA's published cases as the oracle
@@ -272,6 +282,63 @@ The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and t
 
 ---
 
+### ADR-011 — Two pass providers behind one contract, held to one conformance suite
+
+**Status:** Accepted (2026-09-24).
+
+**Decision.** The pass module computes overhead windows through a `PassProvider` protocol (`sentinel/passes/model.py`). There are two independent implementations:
+- `skyfield-local`: SGP4 from public element sets;
+- `tabulated-ephemeris`: interpolation of an Earth-fixed state table from a CCSDS 502.0-B-3 OEM or a source adapter. Wayfinder is one such adapter, on an *assumed* schema; see `docs/adapters/wayfinder.md`.
+
+`tests/conformance/` holds both to the same contract:
+- the overlap convention;
+- sorted, signed windows;
+- a brute-force Skyfield oracle: rise and set within 2 s, maximum elevation within 0.1°.
+
+Adding a provider is one factory and one line.
+
+**Coverage rule.** A provider asked about an imager its data does not cover raises `ImagerNotCovered`. It never skips the imager. Callers pair the catalog with the data first and report what they skipped.
+
+**Rationale.** Two implementations agree only if the contract is what they share, not the code. The conformance suite makes the MOSA claim testable, and it paid for itself on its first run. It found that one provider skipped an uncovered imager with a warning while the other raised. Skipping makes every gap look longer than it is, which is the dangerous direction for an OPSEC product, so the stricter behaviour became the contract.
+
+**Admission.**
+- An ephemeris is admitted only in an Earth-fixed frame and UTC.
+- Non-increasing epochs, malformed numbers or a step over 300 s raise with a stable code.
+- A missing velocity degrades with a recorded warning.
+- Tables are never extrapolated.
+
+**Rejected.**
+- Converting inertial frames on ingest: it needs Earth-orientation data and adds a silent error source.
+- Trusting Skyfield's event finder as-is: the 1 s oracle showed rises up to 0.5 s late, so the local provider now refines rise and set to 1 ms.
+- A bespoke ephemeris format: OEM is the standard seam.
+
+---
+
+### ADR-012 — Keyless signing, verified offline against a pinned trust root
+
+**Status:** Accepted (2026-09-24).
+
+**Decision.** Releases are built and signed in GitHub Actions (`.github/workflows/release.yml`):
+- cosign keyless signing;
+- SLSA build provenance and SBOM attestations;
+- every action pinned by commit SHA.
+
+Each air-gap bundle carries its Sigstore bundle. The installer verifies it **before unpacking**, against a Sigstore trust root pinned by sha256 in `deploy/tools.lock`. It does this with no network, the same way in `install.sh`, `make airgap-verify` and the Ansible role (NIST SI-7, CM-14). SBOMs are produced in SPDX and CycloneDX. A Trivy gate fails on any finding without a reviewed VEX statement, and every statement's evidence is re-checked on each scan.
+
+**Stated honestly: SLSA Build L2, not L3.** The build is hosted and the provenance is signed. But the provenance is generated inside the repository's own workflow rather than an isolated reusable one.
+
+**Measured locally** (`make airgap-selftest`, `make airgap-local`):
+- A tampered bundle is refused before unpacking, even with regenerated checksums. So are an unsigned one, one with the wrong key, and one with the wrong identity.
+- An authentic bundle installs inside `unshare -rn` and reproduces the NASA validation offline.
+- The single scanner finding is GO-2026-5932, in `nats-server`'s vendored `golang.org/x/crypto/openpgp`. It carries a VEX statement backed by a check that neither binary contains openpgp code.
+
+**Rejected.**
+- A long-lived release key: custody and rotation are the risk. Site keys stay supported for enclave countersignature.
+- Verifying online at install time: that fails the premise of an air gap.
+- "Empty but valid" VEX: the OpenVEX schema requires at least one statement, so with no findings the document is simply omitted.
+
+---
+
 ## 4. Core Pipeline
 
 ```
@@ -357,7 +424,7 @@ The recorded output of the Denied scenario is the single most persuasive artifac
 | This design | Research report | Self, technical reviewers |
 | Technical guide | This design | Engineers reading the repo |
 | White paper | Technical guide | Acquisition, operational, executive |
-| SysML v2 model | This design | MBSE demonstration |
+| SysML v2 model (`mbse/`) | This design | MBSE demonstration; `docs/traceability.md` is generated from it in CI |
 | OSCAL draft SSP | Implementation | Security/ATO reviewers |
 
 Written once, derived three times. The white paper is not a separate research effort; it is this document retargeted at a reader who cares about mission outcome and risk rather than about NATS.
