@@ -50,6 +50,10 @@ def _utc_jd(when: dt.datetime) -> tuple[float, float]:
     return _UNIX_EPOCH_JD + since.days, (since.seconds + since.microseconds / 1e6) / DAY_S
 
 
+def _sgp4_error(code: int) -> str:
+    return f"SGP4 error {code}: {SGP4_ERRORS.get(code, 'unknown')}"
+
+
 class Orbit:
     """One object's element set, propagated by SGP4."""
 
@@ -65,7 +69,7 @@ class Orbit:
         except (KeyError, TypeError, ValueError) as exc:
             raise OrbitUnusable("UNUSABLE_ELEMENTS", f"{type(exc).__name__}: {exc}", norad_id) from exc
         if satellite.model.error:
-            raise OrbitUnusable("UNUSABLE_ELEMENTS", SGP4_ERRORS[satellite.model.error], norad_id)
+            raise OrbitUnusable("UNUSABLE_ELEMENTS", _sgp4_error(satellite.model.error), norad_id)
         return cls(fields, satellite)
 
     @property
@@ -95,8 +99,7 @@ class Orbit:
         )
         failed = np.flatnonzero(errors)
         if failed.size:
-            code = int(errors[failed[0]])
-            raise OrbitUnusable("PROPAGATION_FAILED", f"SGP4 error {code}: {SGP4_ERRORS[code]}", self.norad_id)
+            raise OrbitUnusable("PROPAGATION_FAILED", _sgp4_error(int(errors[failed[0]])), self.norad_id)
         return position, velocity
 
     def gcrf_state_km(self, when: dt.datetime) -> tuple[np.ndarray, np.ndarray]:

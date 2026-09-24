@@ -9,6 +9,10 @@ The perigee and apogee come from mean elements. SGP4's short-period terms
 carry the actual radius past them - by up to about 11 km on the snapshot
 in fixtures/omm, measured in tests/screening/test_prefilter.py - so each
 band is widened by PAD_KM on both sides before the comparison.
+
+That measurement covers LEO (and one GEO object) over days. Highly
+eccentric orbits and objects close to re-entry move further from their
+mean-element band; re-measure the pad before screening such a catalogue.
 """
 
 from __future__ import annotations
