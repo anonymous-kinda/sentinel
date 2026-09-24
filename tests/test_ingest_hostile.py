@@ -1,0 +1,183 @@
+"""Hostile KVN at the ingest seam: nothing raises, nothing poisons the store.
+
+Ingest either admits a CDM or quarantines it with a named reason. What it
+admits, every view must then be able to show: a CDM stored and then found
+unshowable breaks the event list for every CDM on the node, and on a hub
+it breaks the manifest every edge syncs from.
+"""
+
+import asyncio
+import contextlib
+import datetime as dt
+import json
+import signal
+
+import pytest
+from fastapi.testclient import TestClient
+
+from sentinel.api import create_app
+from sentinel.api.settings import Settings
+from sentinel.bus import InProcessBus
+from sentinel.cdm import CdmRejected, parse, to_conjunction
+from sentinel.clock import FixedClock
+from sentinel.conjunction.service import ConjunctionService
+from sentinel.conjunction.store import ConjunctionStore
+from sentinel.conjunction.trajectory import TrajectoryUnavailable
+
+from .test_cdm_codec import OPERATIONAL, _replace
+
+NOW = dt.datetime(2026, 9, 23, 12, tzinfo=dt.UTC)
+BASE = OPERATIONAL.read_text()
+VIEW_BUDGET_S = 10
+
+
+def _drop(text: str, key: str) -> str:
+    return "\n".join(line for line in text.splitlines() if line.split("=")[0].strip() != key) + "\n"
+
+
+def _mutate(key: str, value: str, occurrence: int = 1, text: str = BASE) -> str:
+    unit = {"X": " [km]", "Y": " [km]", "Z": " [km]", "X_DOT": " [km/s]", "CR_R": " [m**2]"}.get(key, "")
+    return _replace(text, key, f"{key} = {value}{unit}", occurrence)
+
+
+# Without the header miss distance, only the state checks stand between an
+# absurd state and the engine.
+NO_HEADER_MISS = _drop(BASE, "MISS_DISTANCE")
+
+HOSTILE = {
+    "originator-pc-not-a-number": _mutate("COLLISION_PROBABILITY", "abc"),
+    "originator-pc-nan": _mutate("COLLISION_PROBABILITY", "NaN"),
+    "originator-pc-infinite": _mutate("COLLISION_PROBABILITY", "inf"),
+    "tca-in-year-1": _mutate("TCA", "0001-01-01T00:00:00.000"),
+    "tca-day-of-year-past-9999": _mutate("TCA", "9999-366T00:00:00"),
+    "creation-day-of-year-past-9999": _mutate("CREATION_DATE", "9999-366T00:00:00"),
+    "tca-at-the-end-of-9999": _mutate("TCA", "9999-12-31T23:59:59.999"),
+    "position-1e305-km": _mutate("X", "1e305", text=NO_HEADER_MISS),
+    "position-1e305-km-with-header-miss": _mutate("X", "1e305"),
+    "position-at-earth-centre": _mutate("Z", "0.001", text=_mutate("Y", "0.001", text=_mutate("X", "0.001", text=NO_HEADER_MISS))),
+    "velocity-1e305-km-s": _mutate("X_DOT", "1e305", text=NO_HEADER_MISS),
+    "covariance-1e308": _mutate("CR_R", "1e308"),
+    "covariance-minus-1e308": _mutate("CR_R", "-1e308"),
+    "falling-through-the-earth": _mutate("Z_DOT", "-1000", text=_mutate("Y_DOT", "0", text=_mutate("X_DOT", "0", text=NO_HEADER_MISS))),
+    "radial-through-the-centre": _mutate("Z_DOT", "-100", text=_mutate("Y_DOT", "0", text=_mutate("X_DOT", "0", text=(
+        _mutate("Z", "7000", text=_mutate("Y", "0", text=_mutate("X", "0", text=NO_HEADER_MISS))))))),
+}
+
+
+class ViewTooSlow(Exception):
+    pass
+
+
+@contextlib.contextmanager
+def time_limit(seconds: int):
+    """A view that never returns must fail the test, not hang the suite."""
+
+    def expire(_signum, _frame):
+        raise ViewTooSlow(f"no answer within {seconds} s")
+
+    previous = signal.signal(signal.SIGALRM, expire)
+    signal.alarm(seconds)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous)
+
+
+def _service() -> ConjunctionService:
+    return ConjunctionService(ConjunctionStore(":memory:"), InProcessBus(), FixedClock(NOW))
+
+
+def _ingest(service: ConjunctionService, text: str):
+    return asyncio.run(service.ingest(text.encode(), "hostile", "REAL"))
+
+
+def _served(view) -> None:
+    """The API serialises with allow_nan=False: a NaN or an infinity in a
+    view is a 500, not a number."""
+    json.dumps(view, allow_nan=False, default=str)
+
+
+def _show_everything(service: ConjunctionService) -> None:
+    for scope in ("active", "past", "all"):
+        _served(service.list_events(scope))
+    _served(service.manifest())
+    for event in service.store.events():
+        _served(service.event_detail(event.event_id))
+        _served(service.encounter(event.event_id))
+        _served(service.dilution_curve(event.event_id))
+        with contextlib.suppress(TrajectoryUnavailable):
+            _served(service.trajectory(event.event_id))
+        _served(service.current_ref(event.event_id))
+
+
+@pytest.mark.parametrize("text", HOSTILE.values(), ids=HOSTILE.keys())
+def test_hostile_kvn_is_admitted_or_quarantined_and_never_poisons_a_view(text):
+    service = _service()
+    result = _ingest(service, text)
+    assert result.status in {"accepted", "rejected"}
+    if result.status == "rejected":
+        assert service.quarantined()[-1]["code"] == result.code
+    with time_limit(VIEW_BUDGET_S):
+        _show_everything(service)
+
+
+def test_one_poisoned_cdm_leaves_the_rest_of_the_node_working():
+    service = _service()
+    good = _ingest(service, (OPERATIONAL.parent / "000020580_conj_000022015_20210315_212955_20210313_065123.cdm").read_text())
+    _ingest(service, HOSTILE["originator-pc-not-a-number"])
+    assert [e["event_id"] for e in service.list_events("all")] == [good.event_id]
+
+
+@pytest.mark.parametrize("key,value,code", [
+    ("COLLISION_PROBABILITY", "abc", "UNREADABLE"),
+    ("COLLISION_PROBABILITY", "NaN", "BAD_COLLISION_PROBABILITY"),
+    ("COLLISION_PROBABILITY", "1.5", "BAD_COLLISION_PROBABILITY"),
+    ("COLLISION_PROBABILITY", "-1e-9", "BAD_COLLISION_PROBABILITY"),
+    ("CR_R", "1e308", "IMPLAUSIBLE_COVARIANCE"),
+    ("MISS_DISTANCE", "abc", "UNREADABLE"),
+    ("TCA", "0001-01-01T00:00:00.000", "BAD_TCA"),
+    ("TCA", "1957-10-03T23:59:59.999", "BAD_TCA"),
+    ("TCA", "9999-366T00:00:00", "BAD_TCA"),
+    ("CREATION_DATE", "9999-366T00:00:00", "BAD_CREATION_DATE"),
+])
+def test_unreadable_or_impossible_header_values_are_quarantined_with_a_reason(key, value, code):
+    service = _service()
+    result = _ingest(service, _mutate(key, value))
+    assert (result.status, result.code) == ("rejected", code)
+
+
+@pytest.mark.parametrize("key,value", [
+    ("X", "1e305"),          # beyond Earth's sphere of influence
+    ("X", "1.6e6"),          # just beyond it
+    ("X", "0.001"),          # with Y, Z below: inside the Earth
+    ("X_DOT", "1e6"),        # faster than light
+])
+def test_a_state_no_earth_orbiting_object_can_have_is_quarantined(key, value):
+    text = _mutate(key, value, text=NO_HEADER_MISS)
+    if key == "X" and value == "0.001":
+        text = _mutate("Z", "0.001", text=_mutate("Y", "0.001", text=text))
+    with pytest.raises(CdmRejected) as excinfo:
+        to_conjunction(parse(text))
+    assert excinfo.value.code == "IMPLAUSIBLE_STATE"
+
+
+def test_a_repeated_keyword_is_ambiguous_and_quarantined():
+    """Two values for one keyword: which one the sender meant is a guess,
+    and a reader that takes the last would compute a different answer."""
+    lines = BASE.splitlines()
+    first_x = next(i for i, line in enumerate(lines) if line.split("=")[0].strip() == "X")
+    lines.insert(first_x + 1, "X = 31.5 [km]")
+    with pytest.raises(CdmRejected) as excinfo:
+        to_conjunction(parse("\n".join(lines) + "\n"))
+    assert excinfo.value.code == "DUPLICATE_KEY"
+
+
+def test_an_event_whose_arcs_cannot_be_drawn_answers_422_not_500(tmp_path):
+    settings = Settings(exercise=False, library=False, web_dist=None, var_dir=str(tmp_path))
+    with TestClient(create_app(settings, clock=FixedClock(NOW)), raise_server_exceptions=False) as client:
+        accepted = client.post("/api/ingest/cdm", content=HOSTILE["radial-through-the-centre"].encode())
+        assert accepted.status_code == 201, accepted.text
+        r = client.get(f"/api/events/{accepted.json()['event_id']}/trajectory")
+    assert r.status_code == 422
+    assert r.json()["detail"] == "the two-body arcs cannot be drawn for this event"

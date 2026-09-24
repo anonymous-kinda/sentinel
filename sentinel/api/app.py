@@ -25,6 +25,7 @@ from ..conjunction.exercise import generate
 from ..conjunction.service import ConjunctionService
 from ..conjunction.store import ConjunctionStore
 from ..conjunction.sync_adapter import ConjunctionRecords
+from ..conjunction.trajectory import TrajectoryUnavailable
 from ..linkstate import LinkMonitor
 from ..obs import get_logger
 from ..ops import DECISIONS, OpsService, load_identity
@@ -303,7 +304,10 @@ def create_app(
 
     @app.get("/api/events/{event_id}/trajectory")
     def trajectory(event_id: str) -> dict:
-        data = node.conjunctions.trajectory(event_id)
+        try:
+            data = node.conjunctions.trajectory(event_id)
+        except TrajectoryUnavailable as exc:
+            raise HTTPException(422, "the two-body arcs cannot be drawn for this event") from exc
         if data is None:
             raise HTTPException(404, "no such event")
         return data
