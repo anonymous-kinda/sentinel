@@ -512,7 +512,7 @@ uv run python scripts/fetch_tools.py nats-server toxiproxy     # GitHub download
 uv run python -m harness.demo                                  # what demo-local runs
 ```
 
-On the edge's console, the LINK chip applies Toxiproxy presets to the real leaf connection. The suggested sequence (CONNECTED, DENIED, LIMITED, CONNECTED) is in the docstring of `harness/demo.py`.
+On the edge's console, the LINK chip applies Toxiproxy presets to the real leaf connection. `docs/demo-script.md` is a shot-by-shot walk-through; the short sequence (CONNECTED, DENIED, LIMITED, CONNECTED) is in the docstring of `harness/demo.py`.
 
 ### The DDIL harness
 
@@ -557,7 +557,7 @@ tar -xzf sentinel-<version>-x86_64.tar.gz && cd sentinel-<version>-x86_64
 PREFIX=$HOME/sentinel SYSTEMD=0 ./install.sh
 ```
 
-`install.sh` checks `SHA256SUMS` first, installs every dependency from `wheels/` with `--no-index --require-hashes`, and writes `<prefix>/sentinel.env` if absent. Verify the signature before unpacking, with `make airgap-verify VERIFY_KEY=<public key>` or, for a release, `CERT_IDENTITY=<signing workflow>` (`docs/supply-chain.md`).
+`install.sh` checks `SHA256SUMS` first, installs every dependency from `wheels/` with `--no-index --require-hashes`, and writes `<prefix>/sentinel.env` if absent. Verify the signature before unpacking, with `make airgap-verify VERIFY_KEY=<public key>` or, for a release, `CERT_IDENTITY=<signing workflow>` (`docs/supply-chain.md`). For an operator at a disconnected site, `docs/install-guide.md` is the one-page procedure.
 
 ### The cloud hub
 
@@ -608,7 +608,7 @@ Expected values come from closed forms or from files NASA published, transcribed
 | `tests/supplychain/` | The tools lock, checksums, SBOMs, Trivy and VEX handling, bundle manifests, and `verify_signature.sh`'s policy against a stub cosign |
 | `tests/compliance/` | The OSCAL generator, its sources and citations, the STIG role, deployment-config conformance, and that the committed OSCAL documents are what the sources generate |
 | `tests/mbse/` | The SysML reader, the evidence indexes, the trace generator, and that `docs/traceability.md` is current with no broken reference |
-| `tests/docs/` | Every interface control document against the code, both ways: the OpenAPI export is current and every route documented; the AsyncAPI document matches the subjects, headers and leaf policy, and every message real nodes send validates against it; the CDM profile matches the codec's codes, frames and units; the sync envelope matches `sentinel/sync`, `sentinel/triage` and the adapters. Also this guide, `docs/index.md` and `CONTRIBUTING.md`: variables, `make` targets, CLI subcommands, import contracts, paths and the document list |
+| `tests/docs/` | Every interface control document against the code, both ways: the OpenAPI export is current and every route documented; the AsyncAPI document matches the subjects, headers and leaf policy, and every message real nodes send validates against it; the CDM profile matches the codec's codes, frames and units; the sync envelope matches `sentinel/sync`, `sentinel/triage` and the adapters. The program documents: every white-paper proof-point number is registered against a generated report, and the SVG quad chart gets the Markdown drift guards. Also this guide, `docs/index.md` and `CONTRIBUTING.md`: variables, `make` targets, CLI subcommands, import contracts, paths and the document list |
 | `tests/test_docs.py`, `tests/doclint.py`, `tests/doc_claims.toml` | The drift guard for `README.md`, `CLAUDE.md`, `SECURITY.md` and `docs/`: every path, `make` target and `sentinel` subcommand exists, every package has a docstring, and every registered headline number matches its generated source at the precision stated |
 | `web/src/__tests__/` | The console: `PcValue`'s contract, formatting, the API client, the assistant panel and the passes views |
 

@@ -46,6 +46,15 @@ Audiences: **new engineer** (has just cloned the repository), **reviewer** (judg
 | AI reliability diagram | `docs/img/ai-reliability.svg` | reviewer | generated with the AI routing eval | `make ai-eval` |
 | [Requirements traceability](traceability.md) | `docs/traceability.md` | reviewer, security | generated from the SysML v2 model in `mbse/` and the evidence it names | `make trace` |
 
+## Program documents
+
+| Document | Path | Audience | Authored or generated | Regenerate with |
+|---|---|---|---|---|
+| [White paper](white-paper.md) | `docs/white-paper.md` | acquisition | authored; every proof-point number is registered in `tests/doc_claims.toml` against a generated report (`tests/docs/test_program_docs.py`) | |
+| [Quad chart](quad-chart.md) | `docs/quad-chart.md`, `docs/quad-chart.svg` | acquisition | authored; the SVG gets the same drift guards as Markdown, and states no number the repository did not generate (`tests/docs/test_quad_chart.py`) | |
+| [Demo script](demo-script.md) | `docs/demo-script.md` | operator, reviewer | authored: a three-minute walk-through on `make demo-local` | |
+| [Install guide](install-guide.md) | `docs/install-guide.md` | operator | authored: installing a node at a disconnected or classified site, matching `deploy/bundle/` | |
+
 ## Deployment, supply chain and compliance
 
 | Document | Path | Audience | Authored or generated | Regenerate with |
@@ -88,12 +97,8 @@ Audiences: **new engineer** (has just cloned the repository), **reviewer** (judg
 
 ## Being added (not yet on this branch)
 
-Other agents are finishing these documents now. They are named here as plain text, not linked or quoted as paths, because they do not exist on this branch yet. When one lands, move it into the right group above, with a link.
+Other work is finishing this document now. It is named here as plain text, not linked or quoted as a path, because it does not exist on this branch yet. When it lands, move it into the right group above, with a link.
 
 | Document | Planned path | Audience |
 |---|---|---|
-| White paper | docs/white-paper.md | acquisition |
-| Quad chart | docs/quad-chart.* | acquisition |
-| Demonstration script | docs/demo-script.md | operator, reviewer |
-| Installation guide | docs/install-guide.md | operator |
 | Container compose guide | docs/compose.md | operator |
