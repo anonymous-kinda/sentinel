@@ -113,7 +113,6 @@ export function useStream(onEvent: (e: StreamEvent) => void): { connected: boole
       "link.state",
       "link.emulation",
       "passes.updated",
-      "ai.audit",
     ];
     const emit = (kind: string, data: unknown) => handler.current({ kind, data, at: Date.now() });
     let source: EventSource;
