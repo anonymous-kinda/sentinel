@@ -1,0 +1,8 @@
+[
+  {
+    "name": "leaf",
+    "listen": "0.0.0.0:17422",
+    "upstream": "hub-nats:7422",
+    "enabled": true
+  }
+]
