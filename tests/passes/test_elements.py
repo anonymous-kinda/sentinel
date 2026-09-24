@@ -3,7 +3,6 @@
 import datetime as dt
 import json
 import logging
-import pathlib
 
 import pytest
 
@@ -17,13 +16,6 @@ from sentinel.passes.elements import (
     mean_altitude_km,
 )
 from sentinel.passes.model import Imager
-
-SNAPSHOT = pathlib.Path(__file__).resolve().parents[2] / "fixtures" / "omm" / "celestrak-resource-20260924.json"
-
-
-@pytest.fixture(scope="module")
-def snapshot():
-    return load_omm(SNAPSHOT)
 
 
 def imager(norad_id, name, sensor="EO"):
