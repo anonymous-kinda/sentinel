@@ -504,10 +504,10 @@ Two nodes on one machine, each with its own `nats-server`, joined by a leafnode 
 make demo-local              # hub http://127.0.0.1:8000, edge http://127.0.0.1:8001; Ctrl-C stops both
 ```
 
-`make demo-local` depends on `make tools`, which downloads every binary pinned in `deploy/tools.lock` for the host architecture from GitHub, sha256-verified, into `.tools/`. The demo needs only two of them:
+`make demo-local` depends on `make tools`, which downloads the two binaries the demo and the harness run, `nats-server` and `toxiproxy`, as pinned in `deploy/tools.lock` for the host architecture, from GitHub, sha256-verified, into `.tools/`. The supply-chain tools have their own target, `make supply-tools`. By hand:
 
 ```bash
-uv run python scripts/fetch_tools.py nats-server toxiproxy     # GitHub download
+uv run python scripts/fetch_tools.py nats-server toxiproxy     # what make tools runs; GitHub download
 uv run python -m harness.demo                                  # what demo-local runs
 ```
 
@@ -779,7 +779,7 @@ The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and t
 | A test fails with `SocketBlockedError` | The test tried to use the network | Use a fixture or a mock transport; `enable_socket` is only for loopback |
 | `make trace` exits 1 | A verification case names evidence that does not exist | The "Problems" section the regenerated `docs/traceability.md` gains after its summary |
 | `uv run lint-imports` reports a broken contract | An import crosses a module boundary | The contract named in the output; the table under [Architecture](#modules-and-their-allowed-dependencies) |
-| `harness/cluster.py` exits with `missing: run make tools` | `nats-server` or `toxiproxy` not in `.tools/<arch>/` | `uv run python scripts/fetch_tools.py nats-server toxiproxy` |
+| `harness/cluster.py` exits with `missing: run make tools` | `nats-server` or `toxiproxy` not in `.tools/<arch>/` | `make tools` |
 | `python -m harness.report` prints `not writing ddil-results.md: no result for ...` | A scenario has no result in `harness/results/`, so the report would drop it | `make ddil` |
 | The Passes tab lists every imager as skipped, or `GET /api/passes/catalog` is empty on an edge | Element sets have not arrived: the hub holds none (its log says `Element snapshot missing`) or lacks those imagers, or sync has not run yet | `GET /api/sync` on the edge; `SENTINEL_ELEMENTS` and `SENTINEL_SYNC_ELEMENTS` on the hub |
 | `GET /api/passes` returns 409 or 503 | 409: no unit is set. 503: an element set for a catalogued imager cannot be propagated | `PUT /api/passes/unit`; the node log `Pass computation refused` |

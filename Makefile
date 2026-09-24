@@ -49,8 +49,8 @@ airgap-verify: supply-tools  ## no network: verify signature, install, run (VERI
 	SENTINEL_CERT_IDENTITY=$(CERT_IDENTITY) \
 	deploy/bundle/verify_offline.sh dist/sentinel-$$($(UV) run python -c 'import sentinel;print(sentinel.__version__)')-$(ARCH).tar.gz
 
-tools:  ## fetch pinned nats-server, toxiproxy, uv into .tools/ (sha256-verified)
-	$(UV) run python scripts/fetch_tools.py
+tools:  ## fetch the pinned nats-server and toxiproxy the harness runs into .tools/<arch>/ (sha256-verified)
+	$(UV) run python scripts/fetch_tools.py nats-server toxiproxy
 
 demo-local: web tools  ## hub on :8000 and edge on :8001 over an emulated link (Ctrl-C to stop)
 	$(UV) run python -m harness.demo

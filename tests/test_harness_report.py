@@ -8,13 +8,12 @@ what is missing; `make opsec` runs its scenario and leaves the report be.
 
 import json
 import pathlib
-import subprocess
 
 import pytest
 
 from harness import report
+from tests.makefile import dry_run
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
 COMMITTED = "# DDIL test results\n\nevery scenario, from a complete run\n"
 
 
@@ -76,15 +75,8 @@ def test_every_result_present_writes_every_scenario(harness_dirs):
     assert [f"## {name.upper()}" in text for name in report.ORDER] == [True] * len(report.ORDER)
 
 
-def recipe(target: str) -> list[str]:
-    """What `make <target>` would run, without running it."""
-    done = subprocess.run(["make", "-n", "--no-print-directory", target], cwd=ROOT,
-                          capture_output=True, text=True, check=True)
-    return done.stdout.splitlines()
-
-
 def report_lines(target: str) -> list[str]:
-    return [line for line in recipe(target) if "harness.report" in line]
+    return [line for line in dry_run(target) if "harness.report" in line]
 
 
 def test_make_opsec_rewrites_the_report_only_from_a_complete_set():
