@@ -1,0 +1,43 @@
+# Check what is in effect, not what was written: a drop-in or a package
+# default that wins over this role fails the play here.
+- name: Effective sshd configuration
+  ansible.builtin.command: /usr/sbin/sshd -T
+  register: stig_sshd
+  changed_when: false
+
+- name: sshd settings are in effect (UBTU-24-100820, UBTU-24-100830, UBTU-24-100840, UBTU-24-300022, UBTU-24-300023, UBTU-24-300031, UBTU-24-200640 banner file; UBTU-24-600000 and UBTU-24-600010 from the baseline role)
+  ansible.builtin.assert:
+    that:
+      - (item.key | lower) ~ ' ' ~ item.value in stig_sshd.stdout_lines
+    fail_msg: "sshd -T does not report '{{ item.key | lower }} {{ item.value }}': a drop-in overrides it"
+    quiet: true
+  loop: "{{ stig_sshd_settings | dict2items + [{'key': 'ClientAliveCountMax', 'value': '1'}, {'key': 'PermitRootLogin', 'value': 'no'}] }}"
+
+- name: SSH sessions end after at most 10 idle minutes (UBTU-24-600010)
+  ansible.builtin.assert:
+    that:
+      # Jinja unescapes string literals: '\\1' reaches the regex as the backreference \1.
+      - stig_sshd.stdout | regex_search('(?m)^clientaliveinterval (\\d+)$', '\\1') | first | int <= 600
+    quiet: true
+
+- name: Address space layout randomisation (UBTU-24-700310)
+  ansible.builtin.command: sysctl -n kernel.randomize_va_space
+  register: stig_aslr
+  changed_when: false
+
+- name: ASLR is full, and no saved setting weakens it (UBTU-24-700310)
+  ansible.builtin.command: >-
+    grep -rhE '^\s*kernel\.randomize_va_space\s*=\s*[^2[:space:]]' /etc/sysctl.conf /etc/sysctl.d/
+  register: stig_aslr_saved
+  changed_when: false
+  # grep exits 1 when nothing matches, which is the compliant case.
+  failed_when: >-
+    stig_aslr_saved.rc not in [0, 1]
+    or stig_aslr_saved.stdout | length > 0
+    or stig_aslr.stdout | trim != "2"
+
+- name: No account has an empty password (UBTU-24-300027; verified, the role never sets passwords)
+  ansible.builtin.command: awk -F ':' '!$2 {print $1}' /etc/shadow
+  register: stig_blank
+  changed_when: false
+  failed_when: stig_blank.stdout | length > 0

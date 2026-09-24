@@ -1,0 +1,54 @@
+# DISA Canonical Ubuntu 24.04 LTS STIG V1R6: a documented subset for a
+# single-purpose node. Task names carry the STIG ids they implement.
+# Decisions and deviations: compliance/sources/stig.toml.
+- name: This role targets Ubuntu 24.04 LTS (UBTU-24-700400 vendor-supported release)
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Ubuntu"
+      - ansible_facts.distribution_version == "24.04"
+    fail_msg: "The DISA Ubuntu 24.04 STIG does not apply to {{ ansible_facts.distribution }} {{ ansible_facts.distribution_version }}"
+
+- name: Packages
+  ansible.builtin.import_tasks: packages.yml
+  tags: [stig, stig-packages]
+
+- name: SSH daemon
+  ansible.builtin.import_tasks: ssh.yml
+  tags: [stig, stig-ssh]
+
+- name: Accounts and authentication
+  ansible.builtin.import_tasks: accounts.yml
+  tags: [stig, stig-accounts]
+
+- name: Audit
+  ansible.builtin.import_tasks: audit.yml
+  tags: [stig, stig-audit]
+
+- name: Kernel and system settings
+  ansible.builtin.import_tasks: kernel.yml
+  tags: [stig, stig-kernel]
+
+- name: Time
+  ansible.builtin.import_tasks: time.yml
+  tags: [stig, stig-time]
+
+- name: File integrity
+  ansible.builtin.import_tasks: integrity.yml
+  tags: [stig, stig-integrity]
+
+- name: Firewall
+  ansible.builtin.import_tasks: firewall.yml
+  when: stig_manage_firewall | bool
+  tags: [stig, stig-firewall]
+
+- name: Apply pending changes before verifying
+  ansible.builtin.meta: flush_handlers
+
+- name: Verify the effective configuration
+  ansible.builtin.import_tasks: verify.yml
+  tags: [stig, stig-verify]
+
+- name: Scan and checklist
+  ansible.builtin.import_tasks: scan.yml
+  when: stig_scan | bool
+  tags: [stig, stig-scan]

@@ -1,0 +1,31 @@
+# chrony is installed by the baseline role and by packages.yml (UBTU-24-100700).
+- name: Only the configured time sources, polled at least daily (UBTU-24-600160)
+  ansible.builtin.template:
+    src: stig.sources.j2
+    dest: /etc/chrony/sources.d/stig.sources
+    mode: "0644"
+  notify: Restart chrony (stig)
+
+- name: Ubuntu's default pools are not authoritative sources (UBTU-24-600160)
+  ansible.builtin.replace:
+    path: /etc/chrony/chrony.conf
+    regexp: '^(pool\s.*)$'
+    replace: '# \1  # disabled by the STIG role (UBTU-24-600160)'
+  notify: Restart chrony (stig)
+
+- name: Step the clock when it is more than a second out (UBTU-24-600180)
+  ansible.builtin.lineinfile:
+    path: /etc/chrony/chrony.conf
+    regexp: '^\s*makestep\s'
+    line: makestep 1 -1
+  notify: Restart chrony (stig)
+
+- name: Current time zone
+  ansible.builtin.command: timedatectl show --property=Timezone --value
+  register: stig_timezone
+  changed_when: false
+
+- name: Time stamps in UTC (UBTU-24-901220)
+  ansible.builtin.command: timedatectl set-timezone UTC
+  when: stig_timezone.stdout | trim not in ["UTC", "Etc/UTC"]
+  changed_when: true

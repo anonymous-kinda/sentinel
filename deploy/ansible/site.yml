@@ -16,7 +16,17 @@
     sentinel_role: hub
     sentinel_read_only: true        # the public node never accepts uploads
     sentinel_marking: "UNCLASSIFIED // EXERCISE"
+    # >>> stig (M4) >>>
+    # DISA Ubuntu 24.04 STIG V1R6 subset (roles/stig; decisions in
+    # compliance/sources/stig.toml). Off by default; stig_scan runs OpenSCAP.
+    stig_enabled: false
+    # <<< stig (M4) <<<
   roles:
     - baseline
     - sentinel
     - caddy
+    # >>> stig (M4) >>>
+    # Last, so the AIDE baseline it records includes the installed node.
+    - role: stig
+      when: stig_enabled | bool
+    # <<< stig (M4) <<<

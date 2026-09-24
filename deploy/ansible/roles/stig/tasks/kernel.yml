@@ -1,0 +1,39 @@
+- name: Kernel settings (UBTU-24-600140 dmesg restricted, UBTU-24-600190 TCP syncookies)
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/99-stig.conf
+    content: |
+      # Managed by Ansible (deploy/ansible/roles/stig). DISA Ubuntu 24.04 STIG V1R6.
+      # UBTU-24-600140
+      kernel.dmesg_restrict = 1
+      # UBTU-24-600190
+      net.ipv4.tcp_syncookies = 1
+      # UBTU-24-700310 (ASLR) is deliberately absent: its check fails on any
+      # saved value, so the kernel default (2) is verified instead.
+    mode: "0644"
+  notify: Reload sysctl (stig)
+
+- name: Ctrl-Alt-Delete does not reboot the node (UBTU-24-300026)
+  ansible.builtin.systemd_service:
+    name: ctrl-alt-del.target
+    masked: true
+    daemon_reload: true
+
+- name: Installed services
+  ansible.builtin.service_facts:
+
+- name: Kernel crash dumps are disabled (UBTU-24-600070)
+  ansible.builtin.systemd_service:
+    name: kdump-tools.service
+    enabled: false
+    masked: true
+  when: "'kdump-tools.service' in ansible_facts.services"
+
+- name: USB mass storage cannot be loaded (UBTU-24-300039)
+  ansible.builtin.copy:
+    dest: /etc/modprobe.d/DISASTIG.conf
+    content: |
+      # Managed by Ansible (deploy/ansible/roles/stig). UBTU-24-300039.
+      install usb-storage /bin/false
+      blacklist usb-storage
+    mode: "0644"
+  when: stig_disable_usb_storage | bool

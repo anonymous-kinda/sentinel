@@ -1,0 +1,5 @@
+# Managed by Ansible (deploy/ansible/roles/stig): runtime state that changes by
+# design, excluded from the daily integrity check (stig_aide_exclude).
+{% for path in stig_aide_exclude %}
+!{{ path }}
+{% endfor %}

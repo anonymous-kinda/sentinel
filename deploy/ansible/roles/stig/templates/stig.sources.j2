@@ -1,0 +1,5 @@
+# Managed by Ansible (deploy/ansible/roles/stig). UBTU-24-600160: compare with
+# the authoritative time source at least every 24 hours (maxpoll 16 = 2^16 s).
+{% for server in stig_time_servers %}
+server {{ server }} iburst maxpoll 16
+{% endfor %}

@@ -1,0 +1,35 @@
+# ufw is installed by packages.yml (UBTU-24-100300). The SSH rule is added
+# before the firewall is enabled, so enabling it cannot cut off this session.
+# On the AWS hub the security group is the outer boundary; this is the host's.
+- name: Current firewall state
+  ansible.builtin.command: ufw status verbose
+  register: stig_ufw
+  changed_when: false
+
+- name: Deny inbound by default
+  ansible.builtin.command: ufw default deny incoming
+  when: "'deny (incoming)' not in stig_ufw.stdout"
+  changed_when: true
+
+- name: Rate-limit SSH (UBTU-24-600200; the other listeners are a documented deviation)
+  ansible.builtin.command: "ufw limit {{ item.port }}/{{ item.proto }}"
+  loop: "{{ stig_limited_ports }}"
+  register: stig_ufw_limit
+  changed_when: "'Skipping' not in stig_ufw_limit.stdout"
+
+- name: Allow the console and ACME
+  ansible.builtin.command: "ufw allow {{ item.port }}/{{ item.proto }}"
+  loop: "{{ stig_allowed_ports }}"
+  register: stig_ufw_allow
+  changed_when: "'Skipping' not in stig_ufw_allow.stdout"
+
+- name: Allow the NATS leafnode port from allow-listed edges only
+  ansible.builtin.command: "ufw allow proto tcp from {{ item }} to any port {{ stig_leaf_port }}"
+  loop: "{{ stig_leaf_allowed_cidrs }}"
+  register: stig_ufw_leaf
+  changed_when: "'Skipping' not in stig_ufw_leaf.stdout"
+
+- name: Firewall enabled (UBTU-24-100310)
+  ansible.builtin.command: ufw --force enable
+  when: "'Status: active' not in stig_ufw.stdout"
+  changed_when: true

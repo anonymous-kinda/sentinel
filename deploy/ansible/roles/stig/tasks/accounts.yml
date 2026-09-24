@@ -1,0 +1,31 @@
+- name: Root cannot log in directly (UBTU-24-400110)
+  ansible.builtin.user:
+    name: root
+    password_lock: true
+
+- name: Accounts are disabled 35 days after password expiry (UBTU-24-200260)
+  ansible.builtin.lineinfile:
+    path: /etc/default/useradd
+    regexp: '^#?\s*INACTIVE='
+    line: INACTIVE=35
+
+- name: New files are private to their owner (UBTU-24-300030)
+  ansible.builtin.lineinfile:
+    path: /etc/login.defs
+    regexp: '^\s*UMASK\s'
+    line: "UMASK\t\t077"
+
+- name: At most 10 concurrent sessions per account (UBTU-24-200000)
+  ansible.builtin.copy:
+    dest: /etc/security/limits.d/maxlogins.conf
+    content: |
+      # Managed by Ansible (deploy/ansible/roles/stig). UBTU-24-200000.
+      * hard maxlogins 10
+    mode: "0644"
+
+- name: PAM never accepts an empty password (UBTU-24-300028)
+  ansible.builtin.replace:
+    path: "/etc/pam.d/{{ item }}"
+    regexp: '\s+nullok\b'
+    replace: ""
+  loop: [common-auth, common-password]
