@@ -53,13 +53,15 @@ def render(results: dict[str, dict]) -> str:
         "joined by a leafnode connection, with Toxiproxy shaping that TCP link, and",
         "two Sentinel nodes (hub and edge) on top. Nothing is simulated in-process.",
         "",
-        "| scenario | result | assertions | ran |",
-        "|---|---|---|---|",
+        "| scenario | result | assertions | load (1 min, start → end) | ran |",
+        "|---|---|---|---|---|",
     ]
     for r in results.values():
         passed = sum(a["passed"] for a in r["assertions"])
+        load = r["load_1min"]
         lines.append(
-            f"| {r['scenario']} | {'PASS' if r['passed'] else '**FAIL**'} | {passed}/{len(r['assertions'])} | {r['ran_at'][:16]}Z |"
+            f"| {r['scenario']} | {'PASS' if r['passed'] else '**FAIL**'} | {passed}/{len(r['assertions'])} "
+            f"| {load['start']} → {load['end']} | {r['ran_at'][:16]}Z |"
         )
     lines.append("")
     for name, r in results.items():

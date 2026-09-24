@@ -58,6 +58,7 @@ class Result:
         self.metrics: dict = {}
         self.notes: list[str] = []
         self.started = time.time()
+        self.load_start = load_1min()
 
     def check(self, name: str, passed: bool, detail: str = "") -> bool:
         self.assertions.append({"name": name, "passed": bool(passed), "detail": detail})
@@ -76,7 +77,13 @@ class Result:
             "notes": self.notes,
             "duration_s": round(time.time() - self.started, 1),
             "ran_at": dt.datetime.now(dt.UTC).isoformat(),
+            "load_1min": {"start": self.load_start, "end": load_1min()},
         }
+
+
+def load_1min() -> float:
+    """The machine's 1-minute load average: latency results move with CPU contention."""
+    return round(os.getloadavg()[0], 2)
 
 
 # --------------------------------------------------------------------- helpers
@@ -237,8 +244,10 @@ def denied(denial_s: float = 20.0) -> Result:
 
 # -------------------------------------------------------------------- LIMITED
 LIMITED_RUNS = 5              # runs per mode for `make ddil`; CI runs 3 (harness.yml)
-# NATS s2_auto compresses at s2_best once a side measures a round trip over
-# 100 ms. The leaf connects over the shaped link, so both sides measure it.
+# NATS s2_auto picks each side's compression from the round trip that side
+# measured. The leaf connects over the shaped link (about 1.2 s round trip),
+# so both sides measure it and pick s2_best. A leaf that connected before
+# shaping can keep s2_uncompressed on the hub's side for a whole run.
 LIMITED_COMPRESSION = {"hub": "s2_best", "edge": "s2_best"}
 
 
@@ -267,7 +276,7 @@ def _limited_run(mode: str) -> dict:
     picks its compression from a round trip measured on it. Times run from
     the moment the leaf connection is up."""
     initial, _ = scenario_cdms(SNAPSHOT_EPOCH)
-    load_start = os.getloadavg()[0]
+    load_start = load_1min()
     with Cluster(sync_mode=mode, clock=SNAPSHOT_CLOCK, hub_exercise=False, sync_interval_s=0.5,
                  initial_link="DENIED") as c:
         for item in initial:
@@ -302,7 +311,7 @@ def _limited_run(mode: str) -> dict:
         ledger.record(sync)
         return {
             "mode": mode,
-            "load_1min": {"start": round(load_start, 2), "end": round(os.getloadavg()[0], 2)},
+            "load_1min": {"start": load_start, "end": load_1min()},
             "link_up_s": round(t0 - t_shaped, 1),
             "times_s": times,
             "most_urgent_event": urgent["event_id"],

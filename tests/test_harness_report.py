@@ -41,7 +41,7 @@ def result(name: str) -> dict:
     return {
         "scenario": name.upper(), "passed": True, "notes": [], "metrics": metrics,
         "assertions": [{"name": "it held", "passed": True, "detail": ""}],
-        "ran_at": "2026-09-24T06:00:00+00:00",
+        "ran_at": "2026-09-24T06:00:00+00:00", "load_1min": {"start": 1.0, "end": 1.0},
     }
 
 
@@ -98,6 +98,12 @@ def test_make_opsec_rewrites_the_report_only_from_a_complete_set():
 
 def test_make_ddil_insists_on_a_complete_report():
     assert report_lines("ddil") and not any("--if-complete" in line for line in report_lines("ddil"))
+
+
+def test_the_summary_states_the_load_each_scenario_ran_under():
+    text = report.render({name: {**result(name), "load_1min": {"start": 1.5, "end": 2.25}} for name in report.ORDER})
+    assert "| scenario | result | assertions | load (1 min, start → end) | ran |" in text
+    assert "| DENIED | PASS | 1/1 | 1.5 → 2.25 | 2026-09-24T06:00Z |" in text
 
 
 # ------------------------------------------------------------ the LIMITED section
