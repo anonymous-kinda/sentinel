@@ -53,10 +53,24 @@ def _resolve_hbr(
     return sum(radii), defaulted
 
 
-def _min_eigenvalue(covariance: np.ndarray) -> float:
+def finite_eigenvalues(covariance: np.ndarray) -> np.ndarray | None:
+    """Eigenvalues of the symmetrised covariance, ascending; None when they
+    cannot be computed as finite numbers (entries near the float limit)."""
     cov = np.asarray(covariance, dtype=float)
-    cov = 0.5 * (cov + cov.T)
-    return float(np.min(np.linalg.eigvalsh(cov)))
+    with np.errstate(over="ignore", invalid="ignore"):
+        cov = 0.5 * (cov + cov.T)
+        if not np.all(np.isfinite(cov)):
+            return None
+        try:
+            values = np.linalg.eigvalsh(cov)
+        except np.linalg.LinAlgError:
+            return None
+    return values if np.all(np.isfinite(values)) else None
+
+
+def _min_eigenvalue(covariance: np.ndarray) -> float | None:
+    values = finite_eigenvalues(covariance)
+    return None if values is None else float(values[0])
 
 
 def _asymmetry(covariance: np.ndarray) -> float:
@@ -119,8 +133,9 @@ def assess(
     # --- gate: supplied covariances are valid ----------------------------
     supplied = ((primary, primary.covariance_rtn_m2), (secondary, secondary.covariance_rtn_m2))
     for state, covariance in supplied:
+        # Fails closed: a covariance that cannot be decomposed (None) is invalid.
         smallest = _min_eigenvalue(covariance)
-        if smallest <= 0.0:
+        if smallest is None or smallest <= 0.0:
             return refuse(
                 RefusalReason.INVALID_COVARIANCE,
                 min_eigenvalue=smallest,
@@ -152,11 +167,11 @@ def assess(
     cov_2d = plane.cov_2d_m2
     mu = plane.mu_m
 
-    eigenvalues = np.linalg.eigvalsh(cov_2d)
-    if np.any(eigenvalues <= 0.0):
+    eigenvalues = finite_eigenvalues(cov_2d)
+    if eigenvalues is None or eigenvalues[0] <= 0.0:
         return refuse(
             RefusalReason.INVALID_COVARIANCE,
-            min_eigenvalue=float(np.min(eigenvalues)),
+            min_eigenvalue=None if eigenvalues is None else float(eigenvalues[0]),
             stage="projected_covariance",
         )
 

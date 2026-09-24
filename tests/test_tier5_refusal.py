@@ -7,6 +7,8 @@ tripped and at what value.
 Rungs 19-23 of the ladder.
 """
 
+import json
+
 import numpy as np
 import pytest
 
@@ -219,3 +221,22 @@ def test_curvilinear_threshold_is_configurable():
         assess(conj, AssessmentConfig(max_curvilinear_ratio=1e-9)).refusal_reason
         is RefusalReason.CURVILINEAR_UNCERTAINTY
     )
+
+
+# --- rung 23b: a covariance beyond the arithmetic ---------------------------
+@pytest.mark.parametrize("scale", [1e305, 1e308])
+@pytest.mark.parametrize("where", ["whole", "radial", "along_track"])
+def test_a_covariance_too_large_to_decompose_is_refused_never_raised(scale, where):
+    """assess() never raises on bad data, and what it records serialises as
+    JSON: a NaN or an infinity in a diagnostic takes the API down."""
+    conj = make_conjunction(miss_m=100.0, sigma_m=50.0)
+    cov = conj.secondary.covariance_rtn_m2.copy()
+    if where == "whole":
+        cov = cov * scale
+    else:
+        index = {"radial": 0, "along_track": 1}[where]
+        cov[index, index] = scale
+    result = assess(conj.replace(secondary=conj.secondary.replace(covariance_rtn_m2=cov)))
+
+    assert result.method is Method.REFUSED and result.pc is None
+    json.dumps(result.to_dict(), allow_nan=False)
