@@ -45,6 +45,6 @@ rationale = "Signatures protect decisions."
 component = "node"
 status = "planned"
 statement = "FIPS-validated cryptography."
-planned_evidence = ["docs/supply-chain.md"]
+planned_evidence = ["docs/fips-provider.md"]
 plan = "Adopt a FIPS-validated provider."
 milestone = "M4"

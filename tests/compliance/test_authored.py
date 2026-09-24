@@ -89,7 +89,7 @@ def test_a_contribution_short_of_implemented_carries_its_plan(sources):
     assert props(au9, "evidence-harness") == ["denied"]
     assert props(au9, "milestone") == ["M5"]
     assert au9["remarks"] == "Plan: Anchor the chain head off-node so tail truncation is detectable."
-    assert props(by_control["sc-13"], "planned-evidence") == ["docs/supply-chain.md"]
+    assert props(by_control["sc-13"], "planned-evidence") == ["docs/fips-provider.md"]
 
 
 # ------------------------------------------------------------------------ SSP

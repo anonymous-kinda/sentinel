@@ -317,11 +317,17 @@ rationale = "Evidence is regenerated on every change, not collected once for an 
 component = "pipeline"
 status = "implemented"
 statement = """Every push and pull request runs the full test ladder with the network disabled, lint, \
-the module-boundary contracts, reproducibility checks of the generated reports, Terraform and \
-Ansible validation, and secret scanning over the full history. The DDIL harness runs on changes to \
-the layers it exercises and nightly with a 15-minute denial. Every CI run regenerates this \
+the module-boundary contracts, reproducibility checks of the generated reports and the requirement \
+trace, Terraform and Ansible validation, secret scanning over the full history, lint of the \
+workflows, the container file and the deploy scripts, and the supply-chain checks: SBOMs with a \
+completeness gate, a vulnerability scan that fails on any finding no reviewed VEX statement \
+answers, and offline signature verification with the real cosign. The DDIL harness runs on changes \
+to the layers it exercises and nightly with a 15-minute denial. Every CI run regenerates this \
 package's assessment results and POA&M from its own test evidence."""
-ci = ["ci.yml#python", "ci.yml#infra", "ci.yml#secrets", "ci.yml#compliance", "harness.yml#scenario"]
+ci = [
+    "ci.yml#python", "ci.yml#infra", "ci.yml#secrets", "ci.yml#compliance", "ci.yml#supply-chain",
+    "ci.yml#release-lint", "ci.yml#mbse", "harness.yml#scenario",
+]
 
 [[control.by]]
 component = "program"
@@ -435,13 +441,35 @@ rationale = "An air-gapped enclave must know exactly what it installed."
 [[control.by]]
 component = "pipeline"
 status = "partial"
-statement = """Software components are inventoried with versions and hashes: uv.lock for Python, \
-web/package-lock.json for the console, deploy/tools.lock for the uv, nats-server and toxiproxy \
-binaries; each bundle carries SHA256SUMS for every file it contains. There is no SBOM in a \
-standard format yet."""
-files = ["uv.lock", "web/package-lock.json", "deploy/tools.lock", "scripts/build_bundle.py"]
-planned_evidence = ["docs/supply-chain.md"]
-plan = "Generate an SBOM (CycloneDX or SPDX) for each release artifact in the release pipeline (docs/supply-chain.md)."
+statement = """Software components are inventoried with versions and hashes. On every push the \
+supply-chain CI job writes SPDX 2.3 and CycloneDX SBOMs with the pinned syft for what a bundle \
+ships from source: the Python runtime (the hash-locked runtime set and the sentinel wheel, \
+installed for the bundle's CPython 3.12 target) and the web console (the production closure of \
+web/package-lock.json). The step fails if an SBOM is empty or lacks a component known to ship \
+(scripts/sbom.py, step "SBOMs (fails if empty or missing a shipped component)"). The bundle \
+builder writes BUNDLE.json, which lists every wheel with its digest and every bundled binary with \
+its version, upstream URL and SHA-256, and refuses a binary with no pin for the target \
+architecture; deploy/tools.lock pins every third-party binary for both architectures. Two gaps \
+remain. The container image's base layer (Chainguard's CPython image) is in no SBOM that Sentinel \
+produces. In CI, bundles are built, and SBOMs published with a release and attested to it, only by \
+.github/workflows/release.yml, which runs on a tag on GitHub, has been checked only statically \
+(actionlint) and has not run yet."""
+tests = [
+    "tests/supplychain/test_sbom.py::test_a_missing_component_raises_and_names_it",
+    "tests/supplychain/test_sbom.py::test_an_empty_sbom_raises_even_with_nothing_required",
+    "tests/supplychain/test_sbom.py::test_syft_writes_both_formats_from_one_catalog_pass",
+    "tests/supplychain/test_bundle.py::test_manifest_records_identity_shipped_tools_for_this_arch_and_every_wheel",
+    "tests/supplychain/test_bundle.py::test_manifest_refuses_a_shipped_tool_with_no_pin_for_the_arch",
+    "tests/supplychain/test_toolslock.py::test_the_committed_lock_parses_and_pins_both_architectures_for_every_tool",
+]
+ci = ["ci.yml#supply-chain"]
+files = [
+    "scripts/sbom.py", "supplychain/sbom.py", "supplychain/bundle.py", "deploy/tools.lock", "uv.lock",
+    "web/package-lock.json", "docs/supply-chain.md",
+]
+plan = """Catalogue each container image archive with syft in the release workflow and gate it like the \
+bundle SBOMs. Push the first release tag, then check that the published SBOMs and their \
+attestations match the bundles (gh attestation verify --predicate-type https://spdx.dev/Document/v2.3)."""
 milestone = "M4"
 
 [[control]]
@@ -450,14 +478,42 @@ rationale = "A node must refuse to install software it cannot attribute to its p
 
 [[control.by]]
 component = "pipeline"
-status = "planned"
-statement = """Release bundles are to be signed with cosign and the signature verified before install \
-(docs/supply-chain.md). Today the bundle is checked only against its published SHA-256 digest, \
-which proves the bytes match the digest, not who published them \
-(deploy/ansible/roles/sentinel/tasks/main.yml)."""
-files = ["deploy/ansible/roles/sentinel/tasks/main.yml"]
-planned_evidence = ["docs/supply-chain.md"]
-plan = "Sign release bundles with cosign in the release pipeline and verify the signature in the sentinel role before unpacking."
+status = "partial"
+statement = """Installation refuses a bundle whose signature does not verify against the approved \
+signer. One verifier, deploy/bundle/verify_signature.sh, holds the policy for every install path. \
+It accepts exactly one policy: the release workflow's keyless identity, checked offline against \
+the Sigstore trusted root (whose SHA-256 is pinned), or a site public key. No policy, two \
+policies, a missing signature bundle, or a trusted root that does not match its pin is refused \
+before cosign runs, and a rejected signature fails closed. On every push the supply-chain CI job \
+runs the verifier with the pinned cosign in a namespace with no network: a good signature \
+verifies; a tampered artifact, another key's signature and a wrong identity are rejected; a real \
+Sigstore public-good signature verifies offline (deploy/bundle/selftest_signature.sh). The same \
+job runs the Ansible role's gate on localhost (deploy/ansible/tests/test_verify.sh): a tampered \
+bundle with a regenerated digest, a missing policy and another signer's identity are refused. \
+Not yet proven: releases are signed keyless only by the sign job of .github/workflows/release.yml, \
+which runs on a tag on GitHub, has been checked only statically (actionlint) and has not run yet, \
+so no Sentinel release signature exists. The full offline install behind the gate \
+(make airgap-local) is proven only on a developer machine. Unpacking a bundle by hand and running \
+install.sh skips the gate by construction: a script inside a bundle cannot vouch for that bundle."""
+tests = [
+    "tests/supplychain/test_verify_signature.py::test_keyless_verifies_against_the_bundle_trust_root_identity_and_issuer",
+    "tests/supplychain/test_verify_signature.py::test_keyless_never_skips_the_transparency_log",
+    "tests/supplychain/test_verify_signature.py::test_a_rejected_signature_fails_closed",
+    "tests/supplychain/test_verify_signature.py::test_no_policy_is_refused_before_cosign_runs",
+    "tests/supplychain/test_verify_signature.py::test_two_policies_at_once_are_refused",
+    "tests/supplychain/test_verify_signature.py::test_keyless_without_an_identity_is_refused",
+    "tests/supplychain/test_verify_signature.py::test_a_missing_signature_bundle_is_refused",
+    "tests/supplychain/test_verify_signature.py::test_a_pinned_trusted_root_digest_is_checked_before_use",
+]
+ci = ["ci.yml#supply-chain"]
+files = [
+    "deploy/bundle/verify_signature.sh", "deploy/bundle/selftest_signature.sh",
+    "deploy/ansible/roles/sentinel/tasks/verify.yml", "deploy/ansible/roles/sentinel/defaults/main.yml",
+    "deploy/ansible/tests/test_verify.sh", ".github/workflows/release.yml", "docs/supply-chain.md",
+]
+plan = """Push the first release tag and confirm that the sign job's offline verification and the verify \
+job (signature, install and run under unshare -rn) pass on both architectures. Then run the full \
+offline install (deploy/bundle/verify_offline.sh) in CI on every push, not only in a release."""
 milestone = "M4"
 
 [[control.by]]
@@ -525,16 +581,39 @@ rationale = "Dependencies and host configuration drift; both must be scanned, an
 [[control.by]]
 component = "pipeline"
 status = "partial"
-statement = """Secret scanning (gitleaks) runs over the full history on every push. Dependency and image \
-vulnerability scanning with Trivy, with VEX statements for triaged findings, is planned in the \
-release pipeline (docs/supply-chain.md). Host compliance scanning with OpenSCAP against the DISA \
-STIG benchmark is defined in the STIG role and has not yet been run; when it is, its failing rules \
-become POA&M items automatically."""
-tests = ["tests/compliance/test_assessment.py::test_scan_results_are_triaged_against_the_stig_decisions"]
-ci = ["ci.yml#secrets"]
-files = ["deploy/ansible/roles/stig/tasks/scan.yml"]
-planned_evidence = ["docs/supply-chain.md"]
-plan = "Trivy with VEX on every release and on a schedule; run the STIG scan on the hub."
+statement = """On every push the supply-chain CI job scans with the pinned Trivy against its current \
+vulnerability database, which is not pinned. It scans uv.lock (every locked package, dev tools and \
+optional extras included), the console's runtime dependencies in web/package-lock.json, and the \
+nats-server and uv binaries the bundle ships, for both architectures. Every reviewed VEX statement \
+must answer a finding the raw scan reported and pass its evidence check against the shipped \
+binaries, and a not_affected statement must carry an OpenVEX justification and a written impact \
+statement. Then any finding left, at any severity, \
+fails the job, with an exit code distinct from Trivy's own errors (scripts/scan.py, step \
+"Vulnerability gate (raw scan, reviewed VEX and its evidence checked, SARIF)"). Secret scanning \
+(gitleaks) runs over the full history on every push. Not yet covered: no scan runs on a schedule, \
+so a new advisory against unchanged code is found only on the next push; the container image is \
+scanned only in release.yml, which has not run yet, and its findings are reported, not gated; the \
+npm build toolchain (devDependencies) is not scanned; and host compliance scanning with OpenSCAP \
+against the DISA STIG benchmark is defined in the STIG role but has not been run. When it is, its \
+failing rules become POA&M items automatically."""
+tests = [
+    "tests/supplychain/test_trivy.py::test_a_raw_scan_neither_applies_vex_nor_gates",
+    "tests/supplychain/test_trivy.py::test_a_gating_scan_applies_vex_and_fails_on_any_remaining_finding",
+    "tests/supplychain/test_trivy.py::test_findings_exit_differs_from_trivys_own_error_exit",
+    "tests/supplychain/test_vex.py::test_a_statement_for_a_finding_no_scan_produced_is_stale",
+    "tests/supplychain/test_vex.py::test_not_affected_without_a_justification_is_refused",
+    "tests/supplychain/test_vex.py::test_build_refuses_when_the_evidence_no_longer_holds",
+    "tests/supplychain/test_evidence.py::test_fails_when_the_control_is_missing_because_absence_then_proves_nothing",
+    "tests/compliance/test_assessment.py::test_scan_results_are_triaged_against_the_stig_decisions",
+]
+ci = ["ci.yml#supply-chain", "ci.yml#secrets"]
+files = [
+    "scripts/scan.py", "supplychain/trivy.py", "supplychain/vex.py", "supplychain/evidence.py",
+    "deploy/vex/statements.toml", "deploy/vex/sentinel.openvex.json", "deploy/ansible/roles/stig/tasks/scan.yml",
+    "docs/supply-chain.md",
+]
+plan = """Run the vulnerability gate daily as well as on every push; gate the container image scan once \
+base-image findings have a VEX process; run the STIG scan on the hub."""
 milestone = "M4"
 
 [[control.by]]
@@ -552,15 +631,25 @@ rationale = "The evidence is only as good as the control over the code and data 
 component = "pipeline"
 status = "implemented"
 statement = """Every change is a git commit; dependencies and tools are pinned by hash; generated \
-artifacts are regenerated and compared in CI; vendored upstream data (NASA CARA, CelesTrak, NIST, \
+artifacts (the validation and AI eval reports, the requirement trace, this package's authored OSCAL \
+documents) are regenerated and compared in CI; vendored upstream data (NASA CARA, CelesTrak, NIST, \
 DISA) carries provenance and checksums that the tests verify; module boundaries are contracts \
-checked in CI."""
+checked in CI. The bundle writer is deterministic: the same tree and SOURCE_DATE_EPOCH give \
+identical bytes whatever the file times, the gzip header carries the epoch rather than the build \
+time, and a build from uncommitted changes records a dirty tree, so it cannot pass as its commit. \
+The workflows (with shellcheck on every run block), the container file and the deploy scripts are \
+linted in CI with actionlint, shellcheck and hadolint, each pinned by SHA-256."""
 tests = [
     "tests/test_tier3_cara_validation.py::test_vendored_nasa_files_are_unmodified",
     "tests/compliance/test_package_integrity.py::test_vendored_upstream_files_are_unmodified",
     "tests/compliance/test_package_integrity.py::test_committed_documents_are_what_the_sources_generate",
+    "tests/supplychain/test_bundle.py::test_same_tree_and_epoch_give_identical_bytes_regardless_of_file_mtimes",
+    "tests/supplychain/test_bundle.py::test_the_gzip_header_carries_the_epoch_not_the_build_time",
+    "tests/supplychain/test_bundle.py::test_a_build_from_uncommitted_changes_says_so",
+    "tests/mbse/test_real_model.py::test_the_committed_trace_is_current",
 ]
-ci = ["ci.yml#python"]
+ci = ["ci.yml#python", "ci.yml#release-lint", "ci.yml#mbse"]
+files = ["supplychain/bundle.py", "scripts/build_bundle.py"]
 
 [[control]]
 id = "sa-11"
@@ -575,7 +664,11 @@ CARA's published values for 53 operational conjunctions and its benchmark cases,
 dilution, every refusal gate, and the output contract. CRDT convergence is property-tested \
 (Hypothesis); the DDIL harness runs real processes over a shaped link; the assistant's routing is \
 scored on a labelled set. Every CI run turns its JUnit evidence into assessment results and a \
-POA&M (this package)."""
+POA&M (this package). The tests are traced to the requirements they verify: the SysML v2 model \
+(mbse/) links each requirement to the tests, harness scenarios, import contracts and CI steps that \
+verify it, and its generated trace (docs/traceability.md) fails CI when a reference names evidence \
+that does not exist. Work not yet built is marked planned and shown as unverified, never as \
+verified."""
 tests = [
     "tests/test_tier3_cara_validation.py::test_pc2d_matches_published_cara_value",
     "tests/test_tier3_cara_validation.py::test_gate_refuses_every_event_cara_says_2d_cannot_handle",
@@ -583,9 +676,13 @@ tests = [
     "tests/test_tier4_dilution.py::test_dilution_boundary_sits_at_sigma_equals_miss_over_root_two",
     "tests/property/test_crdt.py::TestDDILNetwork",
     "tests/ai/test_evaluation.py::test_the_summary_separates_routing_accuracy_coverage_and_calibration",
+    "tests/mbse/test_real_model.py::test_the_model_has_no_broken_references",
+    "tests/mbse/test_real_model.py::test_every_requirement_is_satisfied_by_a_part_and_has_a_verification_case",
+    "tests/mbse/test_real_model.py::test_unverified_means_planned_never_forgotten",
 ]
 harness = ["denied", "limited", "intermittent", "degraded", "recovery"]
-ci = ["ci.yml#python", "harness.yml#scenario", "ci.yml#compliance"]
+ci = ["ci.yml#python", "harness.yml#scenario", "ci.yml#compliance", "ci.yml#mbse"]
+files = ["mbse/verification.sysml", "docs/traceability.md"]
 
 [[control]]
 id = "sa-15"
@@ -595,11 +692,21 @@ rationale = "The process that produces the code is part of the evidence."
 component = "pipeline"
 status = "implemented"
 statement = """The development process is written down and enforced by tools: test-first development \
-and architecture decision records (docs/system-design.md), ruff and import-linter in CI, a test that \
-forbids interpolated log messages, pre-commit hooks for ruff and gitleaks, and pinned tool versions."""
-tests = ["tests/test_logging_policy.py::test_log_messages_are_constants_with_values_as_fields"]
-ci = ["ci.yml#python"]
-files = ["docs/system-design.md", ".pre-commit-config.yaml", ".importlinter", "pyproject.toml"]
+and architecture decision records (docs/system-design.md); requirements modelled in SysML v2 \
+(mbse/), parsed with the SysML v2 pilot grammar and traced to their verification evidence in CI; \
+ruff and import-linter in CI; a test that forbids interpolated log messages; pre-commit hooks for \
+ruff and gitleaks; and pinned tool versions, with the workflow, container and shell linters \
+fetched against SHA-256 pins."""
+tests = [
+    "tests/test_logging_policy.py::test_log_messages_are_constants_with_values_as_fields",
+    "tests/mbse/test_real_model.py::test_the_committed_trace_is_current",
+    "tests/mbse/test_syntax_check.py::test_a_validator_that_accepts_a_known_bad_model_is_not_trusted",
+]
+ci = ["ci.yml#python", "ci.yml#mbse", "ci.yml#release-lint"]
+files = [
+    "docs/system-design.md", ".pre-commit-config.yaml", ".importlinter", "pyproject.toml",
+    "mbse/requirements.sysml", "mbse/verification.sysml", "docs/traceability.md",
+]
 
 # ======================================== SYSTEM AND COMMUNICATIONS PROTECTION
 [[control]]
@@ -744,11 +851,15 @@ rationale = "Flaws found by tests, scans and updates must be tracked to closure.
 component = "pipeline"
 status = "partial"
 statement = """Every failing test becomes a POA&M item, linked to the controls that cite it, on every CI \
-run (this package); dependency updates go through the lockfile and the full test ladder. \
-Vulnerability-driven updates wait on dependency scanning (RA-5)."""
-tests = ["tests/compliance/test_assessment.py::test_every_failing_test_is_an_open_item_linked_to_its_controls"]
-ci = ["ci.yml#compliance"]
-planned_evidence = ["docs/supply-chain.md"]
+run (this package); dependency updates go through the lockfile and the full test ladder. On every \
+push the vulnerability gate fails the build on any finding in a dependency or a shipped binary \
+that no reviewed VEX statement answers (RA-5), so a known flaw cannot pass unnoticed. Those \
+findings reach the job's SARIF output, not yet this package's POA&M."""
+tests = [
+    "tests/compliance/test_assessment.py::test_every_failing_test_is_an_open_item_linked_to_its_controls",
+    "tests/supplychain/test_trivy.py::test_a_gating_scan_applies_vex_and_fails_on_any_remaining_finding",
+]
+ci = ["ci.yml#compliance", "ci.yml#supply-chain"]
 plan = "Feed Trivy findings, with VEX, into the POA&M alongside test failures."
 milestone = "M4"
 
@@ -814,20 +925,51 @@ tests = [
 [[control.by]]
 component = "host"
 status = "partial"
-statement = """Installation verifies before it unpacks: Ansible checks the bundle against its published \
-SHA-256 digest, and install.sh checks every file against SHA256SUMS and installs dependencies \
-offline with --require-hashes. AIDE checks file integrity daily (STIG role). A digest shipped next \
-to the bundle proves the bytes match it, not who published them."""
-files = ["deploy/ansible/roles/sentinel/tasks/main.yml", "deploy/bundle/install.sh", "deploy/bundle/verify_offline.sh"]
-tests = ["tests/compliance/test_stig_role.py::test_every_applied_rule_is_implemented_by_the_role"]
-plan = "Verify the bundle's cosign signature before the digest (docs/supply-chain.md); run make airgap-verify in CI."
+statement = """Installation verifies before it unpacks, and each check fails closed. The sentinel Ansible \
+role first verifies the bundle's signature on the target (verify.yml: the pinned cosign, itself \
+checked against deploy/tools.lock on the host, runs verify_signature.sh), then the tarball's \
+SHA-256; install.sh then checks every file against the bundle's SHA256SUMS and installs \
+dependencies offline with --require-hashes. CI exercises the signature gate on every push: on \
+localhost, a tampered bundle is refused even when its .sha256 is regenerated to match \
+(deploy/ansible/tests/test_verify.sh, in the supply-chain job). The complete offline path \
+(deploy/bundle/verify_offline.sh: signature, digest, SHA256SUMS, install and run inside \
+unshare -rn) is proven only on a developer machine (make airgap-local) and in the release \
+workflow, which has not run yet. AIDE checks file integrity daily (STIG role), and the STIG role \
+has not been applied to a host."""
+files = [
+    "deploy/ansible/roles/sentinel/tasks/main.yml", "deploy/ansible/roles/sentinel/tasks/verify.yml",
+    "deploy/ansible/tests/test_verify.sh", "deploy/bundle/install.sh", "deploy/bundle/verify_offline.sh",
+    "deploy/ansible/roles/stig/tasks/integrity.yml",
+]
+tests = [
+    "tests/supplychain/test_verify_signature.py::test_a_rejected_signature_fails_closed",
+    "tests/supplychain/test_checksums.py::test_sha256sum_accepts_the_manifest_and_rejects_a_tampered_file",
+    "tests/compliance/test_stig_role.py::test_every_applied_rule_is_implemented_by_the_role",
+]
+ci = ["ci.yml#supply-chain"]
+plan = """Run verify_offline.sh on a freshly built bundle in CI on every push (the gap the requirement \
+trace records as VC-DEP-002); apply the STIG role to the hub and scan."""
+milestone = "M4"
 
 [[control.by]]
 component = "pipeline"
-status = "planned"
-statement = "Release artifacts are to be signed with cosign and carry SLSA build provenance (docs/supply-chain.md)."
-planned_evidence = ["docs/supply-chain.md"]
-plan = "Sign and attest release artifacts in the release pipeline."
+status = "partial"
+statement = """The release workflow (.github/workflows/release.yml, sign job) signs every release \
+artifact keyless: both bundles, both container image archives, and SHA256SUMS, which covers the \
+SBOMs, the VEX document and the trusted root. Before anything is uploaded it verifies every \
+signature offline under unshare -rn against the pinned trusted root and the exact workflow \
+identity, and it attests SLSA build provenance. That workflow runs only on a tag on GitHub. It has \
+been checked statically (actionlint with shellcheck, in the release-lint CI job) and has not run \
+yet, so no release has been signed. The verifier it calls is exercised on every push with the real \
+cosign and no network (deploy/bundle/selftest_signature.sh, in the supply-chain CI job)."""
+tests = [
+    "tests/supplychain/test_verify_signature.py::test_keyless_verifies_against_the_bundle_trust_root_identity_and_issuer",
+    "tests/supplychain/test_verify_signature.py::test_a_pinned_trusted_root_digest_is_checked_before_use",
+]
+ci = ["ci.yml#supply-chain", "ci.yml#release-lint"]
+files = [".github/workflows/release.yml", "deploy/bundle/verify_signature.sh", "deploy/bundle/selftest_signature.sh", "docs/supply-chain.md"]
+plan = """Push the first release tag; confirm the sign job's offline verification passes, then verify \
+the published release offline as docs/supply-chain.md describes."""
 milestone = "M4"
 
 [[control]]
@@ -929,19 +1071,30 @@ rationale = "The same bundle installs in an air-gapped enclave; everything in it
 [[control.by]]
 component = "pipeline"
 status = "partial"
-statement = """Third-party binaries are pinned by version and SHA-256 (deploy/tools.lock), and a mismatch \
-aborts the download (scripts/fetch_tools.py, run in the harness workflow). Python dependencies are \
-hash-locked and installed offline with --require-hashes. Upstream data (NASA CARA, CelesTrak, NIST, \
-DISA) is vendored unmodified with provenance and checksums that the tests verify. SBOMs, signing, \
-build provenance and vulnerability scanning are planned in the release pipeline."""
+statement = """The supply-chain controls are documented in docs/supply-chain.md, and the supply-chain CI \
+job runs them on every push: SBOMs with a completeness gate (CM-8), a Trivy scan that fails on any \
+finding no reviewed VEX statement answers (RA-5), and offline signature verification with the real \
+cosign (CM-14, SI-7). Third-party binaries and trust material are pinned by version and SHA-256 \
+(deploy/tools.lock); a mismatch writes nothing (scripts/fetch_tools.py, used by every job that \
+fetches a tool). Python dependencies are hash-locked and installed offline with --require-hashes. \
+Upstream data (NASA CARA, CelesTrak, NIST, DISA) is vendored unmodified with provenance and \
+checksums that the tests verify. Not yet done: actions are pinned by commit SHA in release.yml and \
+in the supply-chain, release-lint and compliance CI jobs, but the other CI jobs (python, web, \
+infra, secrets, mbse) and the harness workflow still pin actions by tag. Signing, SLSA provenance \
+and SBOM attestation of releases exist only in release.yml, which has not run yet."""
 tests = [
+    "tests/supplychain/test_toolslock.py::test_fetch_refuses_a_digest_mismatch_and_writes_nothing",
+    "tests/supplychain/test_toolslock.py::test_the_committed_lock_parses_and_pins_both_architectures_for_every_tool",
     "tests/test_tier3_cara_validation.py::test_vendored_nasa_files_are_unmodified",
     "tests/compliance/test_package_integrity.py::test_vendored_upstream_files_are_unmodified",
 ]
-ci = ["harness.yml#scenario"]
-files = ["deploy/tools.lock", "scripts/fetch_tools.py", "deploy/bundle/install.sh"]
-planned_evidence = ["docs/supply-chain.md"]
-plan = "SBOM, cosign signatures, SLSA provenance and Trivy with VEX in the release pipeline (docs/supply-chain.md)."
+ci = ["ci.yml#supply-chain", "harness.yml#scenario"]
+files = [
+    "docs/supply-chain.md", "deploy/tools.lock", "scripts/fetch_tools.py", "supplychain/toolslock.py",
+    "deploy/bundle/install.sh", ".github/workflows/release.yml",
+]
+plan = """Pin every action in ci.yml and harness.yml by commit SHA, as release.yml already does; push the \
+first release tag so that signing, provenance and SBOM attestation run."""
 milestone = "M4"
 
 [[control]]
@@ -953,12 +1106,30 @@ component = "pipeline"
 status = "partial"
 statement = """Provenance is recorded for vendored upstream data (fixtures/cara/PROVENANCE.md, \
 fixtures/omm/PROVENANCE.md, compliance/vendor/nist/PROVENANCE.md, compliance/vendor/disa/PROVENANCE.md) \
-and each NASA CARA test case documents its source and tolerance. Each bundle records its version and \
-per-file hashes. There is no build provenance for release artifacts yet."""
-tests = ["tests/test_tier3_cara_validation.py::test_every_case_documents_provenance_and_tolerance"]
-files = ["fixtures/cara/PROVENANCE.md", "fixtures/omm/PROVENANCE.md", "compliance/vendor/nist/PROVENANCE.md", "compliance/vendor/disa/PROVENANCE.md"]
-planned_evidence = ["docs/supply-chain.md"]
-plan = "SLSA build provenance for every release artifact (docs/supply-chain.md)."
+and each NASA CARA test case documents its source and tolerance. Each bundle's BUNDLE.json records \
+the commit it was built from, whether that tree was clean or dirty, its SOURCE_DATE_EPOCH, and the \
+upstream URL and SHA-256 of every bundled binary; a build from uncommitted changes cannot pass as \
+its commit. deploy/tools.lock records the upstream URL and SHA-256 of every third-party binary. \
+SLSA v1 build provenance (Build L2) and SBOM attestations for every tarball and image archive are \
+generated by the sign job of .github/workflows/release.yml and shipped as files, so they verify \
+offline. That workflow runs only on a tag on GitHub, has been checked only statically (actionlint) \
+and has not run yet, so no release provenance exists. Build L3 is not claimed: the provenance is \
+generated inside this repository's own workflow (docs/supply-chain.md)."""
+tests = [
+    "tests/test_tier3_cara_validation.py::test_every_case_documents_provenance_and_tolerance",
+    "tests/supplychain/test_bundle.py::test_manifest_records_identity_shipped_tools_for_this_arch_and_every_wheel",
+    "tests/supplychain/test_bundle.py::test_a_build_from_uncommitted_changes_says_so",
+]
+ci = ["ci.yml#release-lint"]
+files = [
+    "fixtures/cara/PROVENANCE.md", "fixtures/omm/PROVENANCE.md", "compliance/vendor/nist/PROVENANCE.md",
+    "compliance/vendor/disa/PROVENANCE.md", "supplychain/bundle.py", "deploy/tools.lock",
+    ".github/workflows/release.yml", "docs/supply-chain.md",
+]
+plan = """Push the first release tag; verify the published provenance and SBOM attestations online \
+(gh attestation verify) and offline (cosign verify-blob-attestation against the pinned trusted \
+root), as docs/supply-chain.md describes. Build L3 needs the provenance generated in an isolated, \
+trusted reusable workflow."""
 milestone = "M4"
 
 [[control]]
@@ -968,11 +1139,26 @@ rationale = "Counterfeit or tampered components must be refused before they run.
 [[control.by]]
 component = "pipeline"
 status = "partial"
-statement = """Downloaded tools are accepted only if their SHA-256 matches the pin; the bundle is checked \
-against its digest before install; APT on the host refuses unauthenticated packages (STIG role). \
-Verifying the publisher's signature on Sentinel's own releases (cosign) is planned."""
-ci = ["harness.yml#scenario"]
-files = ["scripts/fetch_tools.py", "deploy/tools.lock", "deploy/ansible/roles/stig/tasks/packages.yml"]
-planned_evidence = ["docs/supply-chain.md"]
-plan = "cosign signature verification before install (docs/supply-chain.md)."
+statement = """A component is refused unless it is what was pinned. Downloaded tools and the Sigstore \
+trusted root are accepted only if their SHA-256 matches deploy/tools.lock, and a mismatch writes \
+nothing (scripts/fetch_tools.py). Sentinel's own bundles are refused unless their cosign signature \
+verifies against the approved signer, and the trusted root is checked against its pin before \
+use; the supply-chain CI job exercises both with the real cosign and no network on every push. \
+The Ansible role re-checks the cosign binary's SHA-256 on the target host before running it. The \
+container base images are pinned by registry digest (deploy/containers/Dockerfile). Not yet done: \
+actions are pinned by commit SHA in release.yml and in the supply-chain, release-lint and \
+compliance CI jobs, but not in the other CI jobs or the harness workflow; and APT on the host \
+refuses unauthenticated packages only once the STIG role, not yet applied, has run."""
+tests = [
+    "tests/supplychain/test_toolslock.py::test_fetch_refuses_a_digest_mismatch_and_writes_nothing",
+    "tests/supplychain/test_verify_signature.py::test_a_pinned_trusted_root_digest_is_checked_before_use",
+    "tests/supplychain/test_verify_signature.py::test_a_rejected_signature_fails_closed",
+]
+ci = ["ci.yml#supply-chain", "harness.yml#scenario"]
+files = [
+    "supplychain/toolslock.py", "scripts/fetch_tools.py", "deploy/tools.lock",
+    "deploy/ansible/roles/sentinel/tasks/verify.yml", "deploy/containers/Dockerfile",
+    "deploy/ansible/roles/stig/tasks/packages.yml",
+]
+plan = "Pin every action in ci.yml and harness.yml by commit SHA; apply the STIG role to the hub and scan."
 milestone = "M4"

@@ -27,7 +27,7 @@ Tailored baseline: **37** controls.
 - A control is usually met by more than one component (the node software, its
   message bus, the host, the AWS hub, the pipeline, the owning organization).
   There are **65** contributions: **16** implemented contributions;
-  **38** partial contributions; **11** planned contributions.
+  **40** partial contributions; **9** planned contributions.
 - DISA Canonical Ubuntu 24.04 LTS STIG V1R6 (194 rules): **55** applied rules;
   **25** deviating rules, grouped into **10** deviations; **8** not applicable rules;
   **106** unassessed rules.
@@ -125,6 +125,9 @@ Each rule is enforced in code and tested:
   the source, not by running it), CI job and harness scenario is checked on
   every run; the generator refuses to write anything if one dangles
   (`tests/compliance/test_citations.py`, `test_package_integrity.py::test_every_citation_resolves`).
+- **Planned evidence is still planned.** A plan that names a path which already
+  exists is refused the same way: once the evidence lands, the statement must
+  cite it, so the POA&M never waits for something that has arrived.
 - **A citation that matched nothing is not a pass.** A cited test that was
   renamed, deleted, skipped or not run makes the control *not satisfied* in the
   assessment results and opens a POA&M item (`test_evidence.py`,
@@ -159,7 +162,7 @@ Sentinel's props use the namespace `urn:sentinel:oscal`:
 |---|---|
 | `implementation-status` | implemented, partial or planned |
 | `evidence-test` / `evidence-harness` / `evidence-ci` / `evidence-file` | Evidence that exists and is checked |
-| `planned-evidence` | Evidence that will exist when the plan is done (for example `docs/supply-chain.md`) |
+| `planned-evidence` | A path that will exist when the plan is done, and must not exist yet |
 | `milestone` | The milestone a plan is scheduled in, where one is set |
 | `tailoring-rationale` | Why the control is in the profile |
 | `result` | An observation's per-citation outcome: passed, failed, missing, not-supplied |
@@ -273,8 +276,16 @@ The POA&M lists everything; these matter most:
    publishes on `unit.>` and `passes.>` at the edge and asserts nothing arrives
    at the hub would close it.
 4. **The host baseline is unverified** until the STIG role and its scan run.
-5. **Supply chain** controls (CM-8, CM-14, SI-7, SR-3, SR-4, SR-11, RA-5) are
-   planned in the M4 release pipeline, documented in `docs/supply-chain.md`.
+5. **The release path has never run** (CM-8, CM-14, SI-7, SR-3, SR-4, SR-11,
+   RA-5). The `supply-chain` CI job runs on every push: the SBOM completeness
+   gate, the vulnerability gate with reviewed VEX, the offline signature
+   self-test with the real cosign, and the Ansible signature gate. But signing,
+   SLSA provenance and SBOM attestation happen only in `release.yml`, which runs
+   on a tag. It has been checked statically, and no release has been signed yet.
+   The full offline install is proven only on a developer machine. No scan runs
+   on a schedule. The container's base layer is in no SBOM. The older CI jobs
+   and the harness workflow still pin actions by tag rather than by commit SHA.
+   `docs/supply-chain.md` has the control map.
 6. **Organizational responsibilities** (review cadences, approval authority,
    remediation timelines) are listed against a `program` component as planned,
    so the SSP says where they are missing.

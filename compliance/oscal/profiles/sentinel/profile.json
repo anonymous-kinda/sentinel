@@ -1,10 +1,10 @@
 {
   "profile": {
-    "uuid": "8fe771e5-8add-579f-ba56-bfe8e1424918",
+    "uuid": "586f43a3-1ba6-5bb2-b4da-8dfc6d92a964",
     "metadata": {
       "title": "Sentinel tailored baseline: NIST SP 800-53 Rev 5",
-      "last-modified": "2026-09-23T00:00:00Z",
-      "version": "0.1.0",
+      "last-modified": "2026-09-24T00:00:00Z",
+      "version": "0.2.0",
       "oscal-version": "1.2.1"
     },
     "imports": [
