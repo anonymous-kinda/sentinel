@@ -162,9 +162,9 @@ compliance-catalog:  ## verify the vendored NIST SP 800-53 Rev 5 catalog, then i
 
 # --- M3 pass service: OPSEC evidence (NIST AC-4) -------------------------------
 .PHONY: opsec
-opsec: tools  ## OPSEC scenario on real processes: a unit set at the edge never reaches the hub; then docs/ddil-results.md
+opsec: tools  ## OPSEC scenario on real processes: a unit set at the edge never reaches the hub; rewrites docs/ddil-results.md only if every scenario has a result
 	$(UV) run python -m harness.run opsec
-	$(UV) run python -m harness.report
+	$(UV) run python -m harness.report --if-complete
 # --- end M3 pass service ------------------------------------------------------
 
 # >>> interface control documents (docs/icd) >>>

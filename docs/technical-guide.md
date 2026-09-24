@@ -522,14 +522,14 @@ On the edge's console, the LINK chip applies Toxiproxy presets to the real leaf 
 uv run python -m harness.run recovery                  # one scenario; needs nats-server and toxiproxy in .tools/
 uv run python -m harness.run denied --denial-s 60      # a longer denial
 make ddil                                              # all six, then rewrites docs/ddil-results.md
-make opsec                                             # the OPSEC scenario, then rewrites docs/ddil-results.md
+make opsec                                             # the OPSEC scenario; rewrites docs/ddil-results.md only if all six have results
 ```
 
 The scenarios are `denied`, `limited`, `intermittent`, `degraded`, `recovery` and `opsec` (`harness/scenarios.py`). Each runs the hub's default configuration: the hub loads the vendored element sets and offers edges the imaging catalog, so conjunction CDMs and element sets share the link.
 
-`python -m harness.report` renders whatever results are in `harness/results/`. After `make opsec` on a fresh clone, that is the OPSEC result alone, and the rewritten `docs/ddil-results.md` loses the other five scenarios. Commit the report only from a complete, passing run of all six (`make ddil`).
+`python -m harness.report` writes `docs/ddil-results.md` from all six results in `harness/results/` or not at all: with any missing, it names them, writes nothing and exits 1. `make opsec` passes `--if-complete`, so after one scenario on a fresh clone it says what is missing, leaves the report alone and succeeds. Commit the report only from a complete, passing run of all six (`make ddil`).
 
-For this guide, `recovery` and `opsec` were run through `python -m harness.run`, which writes only the git-ignored `harness/results/`. `recovery` passed. `opsec` failed one assertion, not from a leak but from a harness race: it counted element sets on the hub-side capture, which subscribes after the leaf connects and so could miss an early fetch. The scenario now counts them from the edge's own sync record (`SyncLedger` in `harness/opsec.py`) and keeps the capture for leak detection only. `make ddil` and `make opsec` were not run, because they rewrite the committed report.
+For this guide, `recovery` and `opsec` were run through `python -m harness.run`, which writes only the git-ignored `harness/results/`. `recovery` passed. `opsec` failed one assertion, not from a leak but from a harness race: it counted element sets on the hub-side capture, which subscribes after the leaf connects and so could miss an early fetch. The scenario now counts them from the edge's own sync record (`SyncLedger` in `harness/opsec.py`) and keeps the capture for leak detection only. `make ddil` was not run, because it rewrites the committed report.
 
 ### The air-gap bundle
 
@@ -734,7 +734,7 @@ Never edit these by hand. Change the input and regenerate.
 |---|---|---|---|
 | `docs/validation-report.md` | closed forms and NASA CARA's published values | `make report` | CI step "Validation report is reproducible" |
 | `docs/ai-eval.md`, `docs/img/ai-reliability.svg` | `evals/routing.jsonl`, the routers | `make ai-eval` | CI step "AI eval report is reproducible (baseline; Jev needs a key CI never has)" |
-| `docs/ddil-results.md` | `harness/results/*.json`, whichever are present | `make ddil` (GitHub download for the tools); `make opsec` renders only the results present | read by the trace as harness evidence; not re-run in CI |
+| `docs/ddil-results.md` | `harness/results/*.json`, one per scenario; the report refuses to write with any missing | `make ddil` (GitHub download for the tools) | read by the trace as harness evidence; not re-run in CI |
 | `docs/traceability.md` | `mbse/*.sysml`, pytest collection, `.importlinter`, `.github/workflows/ci.yml`, `docs/ddil-results.md` | `make trace` | `tests/mbse/test_real_model.py`; the CI `mbse` job |
 | `docs/icd/openapi.json` | the FastAPI app's routes (`scripts/export_openapi.py`) | `make openapi` | `tests/docs/test_openapi_current.py`; CI step "ICDs are current (OpenAPI re-exported; bus, CDM and sync ICDs held to the code)" |
 | `deploy/vex/sentinel.openvex.json` | `deploy/vex/statements.toml` and a raw Trivy scan | `make vex` (GitHub and Trivy's database) | `make scan`; the CI `supply-chain` job |
@@ -744,7 +744,7 @@ Never edit these by hand. Change the input and regenerate.
 | `fixtures/wayfinder/ASSUMED-ephemeris-worldview3.json` and its `SHA256SUMS` | the public WORLDVIEW-3 element set, SGP4 | `make wayfinder-fixture` | `tests/adapters/test_wayfinder.py` re-derives every position |
 | `fixtures/omm/celestrak-resource-20260924.json` | CelesTrak, on the day it was fetched | `uv run python scripts/fetch_omm.py resource` (network; writes a new dated file) | `fixtures/omm/SHA256SUMS`; refresh deliberately, never at test or run time |
 
-For this guide, each command in the table was run and left its committed file unchanged, with these exceptions. `make compliance` and `scripts/oscal_evidence.py` were run on a scratch copy of the worktree, because a new run writes new assessment results by design; the four authored documents came out identical. `make ddil`, `make opsec`, `make vex` and `scripts/fetch_omm.py` were not run, because they rewrite committed files from live measurements or live data.
+For this guide, each command in the table was run and left its committed file unchanged, with these exceptions. `make compliance` and `scripts/oscal_evidence.py` were run on a scratch copy of the worktree, because a new run writes new assessment results by design; the four authored documents came out identical. `make ddil`, `make vex` and `scripts/fetch_omm.py` were not run, because they rewrite committed files from live measurements or live data.
 
 Build output, all git-ignored: `web/dist/` (`make web`), `dist/` (bundles, SBOMs, scan results), `build/compliance/`, `.tools/`, `harness/results/`, and a node's `var/`. The screenshots in `docs/img/*.png` are captured by hand from a running node; no script regenerates them.
 
@@ -781,7 +781,7 @@ The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and t
 | `make trace` exits 1 | A verification case names evidence that does not exist | The "Problems" section the regenerated `docs/traceability.md` gains after its summary |
 | `uv run lint-imports` reports a broken contract | An import crosses a module boundary | The contract named in the output; the table under [Architecture](#modules-and-their-allowed-dependencies) |
 | `harness/cluster.py` exits with `missing: run make tools` | `nats-server` or `toxiproxy` not in `.tools/<arch>/` | `uv run python scripts/fetch_tools.py nats-server toxiproxy` |
-| `docs/ddil-results.md` lost scenarios after `make opsec` | The report renders only what is in `harness/results/` | Restore the file, or run `make ddil` |
+| `python -m harness.report` prints `not writing ddil-results.md: no result for ...` | A scenario has no result in `harness/results/`, so the report would drop it | `make ddil` |
 | The Passes tab lists every imager as skipped, or `GET /api/passes/catalog` is empty on an edge | Element sets have not arrived: the hub holds none (its log says `Element snapshot missing`) or lacks those imagers, or sync has not run yet | `GET /api/sync` on the edge; `SENTINEL_ELEMENTS` and `SENTINEL_SYNC_ELEMENTS` on the hub |
 | `GET /api/passes` returns 409 or 503 | 409: no unit is set. 503: an element set for a catalogued imager cannot be propagated | `PUT /api/passes/unit`; the node log `Pass computation refused` |
 | A node will not start: `SENTINEL_SYNC_ELEMENTS must be one of` | The value is not `catalog` or `all` | the configuration reference above |
