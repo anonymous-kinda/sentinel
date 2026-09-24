@@ -57,11 +57,8 @@ package SentinelVerification {
     verification <'VC-DEP-002'> vcOfflineInstall : SentinelVerification {
         objective { verify offlineInstall; }
         @VerificationMethod { kind = VerificationMethodKind::demo; }
-        @Planned {
-            milestone = "M4";
-            reason = "make airgap-local proves it on a developer machine (build, sign, verify and install under unshare -rn, NASA validation reproduced), but no CI job runs the full install yet";
-        }
-        @Evidence { kind = EvidenceKind::ci; locator = "airgap-verify"; }
+        @Evidence { kind = EvidenceKind::ci; locator = "airgap-install"; }
+        @Evidence { kind = EvidenceKind::ci; locator = "Build, sign, verify, install and run with no network (make airgap-local)"; }
     }
 
     verification <'VC-DEP-003'> vcHubInfrastructureAsCode : SentinelVerification {
