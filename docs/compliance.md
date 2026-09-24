@@ -82,13 +82,15 @@ OpenSCAP XCCDF results      ─┘                          trestle validate -a 
 ```
 
 ```bash
-make compliance                          # tests -> evidence -> all six documents -> trestle validate -a
+make compliance                          # authored documents -> tests -> evidence -> all six documents -> trestle validate -a
 make compliance XCCDF=build/stig/<host>/results.xml   # also triage a STIG scan into the POA&M
 uv run python scripts/oscal_evidence.py  # authored documents only (profile, component definition, SSP, AP)
 ```
 
 `make compliance` verifies the vendored catalog's checksum and imports it,
-runs the whole pytest suite with `--junitxml`, runs the generator (adding
+writes the authored documents (the suite checks them against the sources, so
+an edited source passes on its first run), runs the whole pytest suite with
+`--junitxml`, runs the generator (adding
 `harness/results/` if a DDIL run left results there), and validates the
 workspace. If a test failed, the generator still runs, so the failure is in
 the POA&M, and the target fails afterwards.

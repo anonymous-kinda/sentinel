@@ -1,10 +1,10 @@
 {
   "assessment-plan": {
-    "uuid": "6fd4414b-3c72-5afe-a2b9-11a4ed4230ad",
+    "uuid": "7d907163-9b3e-564d-abb8-04aebcb61fa9",
     "metadata": {
       "title": "Sentinel automated assessment plan",
-      "last-modified": "2026-09-24T00:00:00Z",
-      "version": "0.2.0",
+      "last-modified": "2026-09-24T22:00:00Z",
+      "version": "0.3.0",
       "oscal-version": "1.2.1"
     },
     "import-ssp": {

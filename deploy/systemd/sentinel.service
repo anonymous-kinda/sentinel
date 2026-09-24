@@ -9,8 +9,10 @@ Wants=network-online.target
 Type=simple
 User=sentinel
 Group=sentinel
+# Default log level; SENTINEL_LOG_LEVEL in sentinel.env overrides it (EnvironmentFile wins).
+Environment=SENTINEL_LOG_LEVEL=warning
 EnvironmentFile=@PREFIX@/sentinel.env
-ExecStart=@PREFIX@/venv/bin/sentinel serve --host 127.0.0.1 --port 8000 --log-level warning
+ExecStart=@PREFIX@/venv/bin/sentinel serve --host 127.0.0.1 --port 8000
 Restart=on-failure
 RestartSec=3
 
