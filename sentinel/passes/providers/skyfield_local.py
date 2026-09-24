@@ -38,6 +38,7 @@ from ..elements import (
     skip_reason,
 )
 from ..geometry import min_elevation_deg, sun_elevation_deg
+from ..interval import require_interval
 from ..model import Imager, PassWindow, Unit
 from .skyfield_passes import Pass, find_passes
 
@@ -64,7 +65,7 @@ class SkyfieldProvider:
     def windows(
         self, unit: Unit, imagers: Sequence[Imager], start: dt.datetime, end: dt.datetime
     ) -> list[PassWindow]:
-        _require_interval(start, end)
+        require_interval(start, end)
         found = [w for imager in imagers for w in self._imager_windows(unit, imager, start, end)]
         return sorted(found, key=lambda w: w.rise)
 
@@ -127,13 +128,6 @@ def _sunlit(sensor: str, culmination: dt.datetime, unit: Unit) -> bool | None:
     if sensor != "EO":
         return None
     return sun_elevation_deg(culmination, unit.lat_deg, unit.lon_deg) >= EO_MIN_SUN_ELEVATION_DEG
-
-
-def _require_interval(start: dt.datetime, end: dt.datetime) -> None:
-    if start.tzinfo is None or end.tzinfo is None:
-        raise ValueError("pass interval needs timezone-aware datetimes")
-    if end <= start:
-        raise ValueError("pass interval must end after it starts")
 
 
 def _warn_if_stale(imager: Imager, epoch: dt.datetime, windows: list[PassWindow]) -> None:
