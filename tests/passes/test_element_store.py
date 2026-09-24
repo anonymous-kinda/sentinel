@@ -154,3 +154,9 @@ def test_an_accepted_record_tells_the_node_and_nothing_else_does(store):
     asyncio.run(edge.ingest(raw, "hub", "REAL", f"omm:{WV3}"))  # duplicate
     asyncio.run(edge.ingest(b"{}", "hub", "REAL", "omm:1"))     # rejected
     assert calls == ["changed"]
+
+
+def test_a_hub_can_offer_only_the_element_sets_edges_need(store):
+    """Holding every set is cheap; sending each over a thin link is not."""
+    records = ElementRecords(store, FixedClock(NOW), offered=lambda norad_id: norad_id == WV3)
+    assert [m["e"] for m in records.manifest()] == [f"omm:{WV3}"]

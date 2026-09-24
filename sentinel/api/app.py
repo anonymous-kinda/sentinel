@@ -12,7 +12,7 @@ import contextlib
 import dataclasses
 import json
 import pathlib
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
@@ -28,6 +28,7 @@ from ..conjunction.sync_adapter import ConjunctionRecords
 from ..linkstate import LinkMonitor
 from ..obs import get_logger
 from ..ops import DECISIONS, OpsService, load_identity
+from ..passes.catalog import DEFAULT_CATALOG, load_catalog
 from ..passes.element_store import ElementStore, default_snapshot
 from ..passes.sync_adapter import PREFIX as ELEMENT_PREFIX
 from ..passes.sync_adapter import ElementRecords
@@ -68,6 +69,7 @@ class Node:
     ops: OpsService
     link: LinkMonitor
     elements: ElementStore = dataclasses.field(default_factory=ElementStore)
+    offered_elements: Callable[[int], bool] | None = None
     sync_agent: SyncAgent | None = None
     sync_server: SyncServer | None = None
     toxiproxy: object | None = None
@@ -122,6 +124,20 @@ def _load_elements(settings: Settings) -> ElementStore:
     return store
 
 
+SYNC_ELEMENT_SCOPES = ("catalog", "all")
+
+
+def _offered_elements(settings: Settings) -> Callable[[int], bool] | None:
+    """Which element sets this node offers over sync: by default only the
+    imaging catalog the pass module uses; `all` for every set it holds."""
+    if settings.sync_elements not in SYNC_ELEMENT_SCOPES:
+        raise ValueError(f"SENTINEL_SYNC_ELEMENTS must be one of {SYNC_ELEMENT_SCOPES}")
+    if settings.sync_elements == "all":
+        return None
+    catalog_ids = frozenset(imager.norad_id for imager in load_catalog(DEFAULT_CATALOG))
+    return catalog_ids.__contains__
+
+
 def _sync_records(node: Node) -> CompositeRecords:
     """Every mission module's reference data behind one sync interface:
     conjunction CDMs by default, element sets by their `omm:` prefix."""
@@ -130,7 +146,9 @@ def _sync_records(node: Node) -> CompositeRecords:
         for hook in node.extensions.get("elements_changed", []):
             await hook(node)
 
-    elements = ElementRecords(node.elements, node.clock, on_accepted=elements_changed)
+    elements = ElementRecords(
+        node.elements, node.clock, on_accepted=elements_changed, offered=node.offered_elements
+    )
     return CompositeRecords(ConjunctionRecords(node.conjunctions), {ELEMENT_PREFIX: elements})
 
 
@@ -151,6 +169,7 @@ def build_node(settings: Settings, clock: Clock | None = None, bus: Bus | None =
     node = Node(
         settings, clock, late, store, conjunctions, ValidationView(), ops, LinkMonitor(),
         elements=_load_elements(settings),
+        offered_elements=_offered_elements(settings),
     )
     if settings.toxiproxy_api or settings.demo_controls:
         from ..linkstate.toxiproxy import ToxiproxyControl
