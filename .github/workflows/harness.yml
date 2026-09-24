@@ -35,7 +35,8 @@ jobs:
         run: |
           DENIAL=20
           if [ "${{ github.event_name }}" = "schedule" ]; then DENIAL=900; fi
-          uv run python -m harness.run ${{ matrix.scenario }} --denial-s $DENIAL
+          # LIMITED: 3 runs per mode here (about 15 min); `make ddil` runs 5. The report states which.
+          uv run python -m harness.run ${{ matrix.scenario }} --denial-s $DENIAL --limited-runs 3
       - name: Summary
         if: always()
         run: |

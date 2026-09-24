@@ -12,8 +12,8 @@ import statistics
 from collections.abc import Sequence
 
 MODES = ("edf", "fifo")
-TIMES = ("all_summaries", "most_urgent_full", "all_latest_verified")
-COUNTERS = ("link_up_s", "records_fetched", "sync_payload_bytes")
+TIMES = ("all_summaries", "most_urgent_full", "all_latest_verified", "all_records")
+COUNTERS = ("link_up_s", "records_fetched", "record_bytes", "rate_estimate_bytes_per_s")
 
 
 def spread(values: Sequence[float]) -> dict:
@@ -21,6 +21,16 @@ def spread(values: Sequence[float]) -> dict:
     if not values:
         raise ValueError("no measurements")
     return {"median": statistics.median(values), "min": min(values), "max": max(values), "n": len(values)}
+
+
+def describe(measured: dict, unit: str = "s", digits: int = 1) -> str:
+    """A spread as prose: `median unit (min–max)`, or one value when every run agreed."""
+    def number(value: float) -> str:
+        return f"{value:,.{digits}f}"
+
+    if measured["min"] == measured["max"]:
+        return f"{number(measured['median'])} {unit}"
+    return f"{number(measured['median'])} {unit} ({number(measured['min'])}–{number(measured['max'])})"
 
 
 def summarize(runs: list[dict]) -> dict:
@@ -43,16 +53,17 @@ def run_order(runs_per_mode: int) -> list[str]:
     return order
 
 
-def _canonical(toxics: list[dict]) -> list[str]:
-    return sorted(json.dumps(toxic, sort_keys=True) for toxic in toxics)
+def _canonical(link: dict) -> tuple:
+    return sorted(json.dumps(toxic, sort_keys=True) for toxic in link["toxics"]), link["compression"]
 
 
-def link_mismatches(runs: list[dict], expected: list[dict]) -> list[str]:
-    """Every run, and the point in it, where the link's toxics were not `expected`."""
+def link_mismatches(runs: list[dict], expected: dict) -> list[str]:
+    """Every run, and the point in it, where the link (toxics and leaf
+    compression) was not `expected`."""
     want = _canonical(expected)
     return [
         f"run {number} ({run['mode']}) at {point}"
         for number, run in enumerate(runs, start=1)
         for point in ("start", "end")
-        if _canonical(run["toxics"][point]) != want
+        if _canonical(run["link"][point]) != want
     ]

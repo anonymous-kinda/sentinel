@@ -272,16 +272,27 @@ class Cluster:
         """The toxics on the leaf connection now, as Toxiproxy reports them."""
         return [toxic_spec(toxic) for toxic in http("GET", f"{self.toxi}/proxies/{LEAF_PROXY}")["toxics"]]
 
-    def leafz(self) -> dict:
-        return json.loads(urllib.request.urlopen(f"http://127.0.0.1:{self.ports['edge_monitor']}/leafz", timeout=3).read())
+    def leafz(self, side: str = "edge") -> dict:
+        """The leaf connection as one side's nats-server reports it (`hub` or `edge`)."""
+        url = f"http://127.0.0.1:{self.ports[f'{side}_monitor']}/leafz"
+        return json.loads(urllib.request.urlopen(url, timeout=3).read())
 
     def leaf_connected(self) -> bool:
         return bool(self.leafz().get("leafnodes"))
 
-    def leaf_compression(self) -> str | None:
-        """The leaf connection's current compression mode (s2_auto picks it from the measured round trip)."""
-        leafs = self.leafz().get("leafs") or []
-        return leafs[0].get("compression") if leafs else None
+    def leaf_compression(self) -> dict[str, str | None]:
+        """What each side compresses the leaf's traffic with. s2_auto picks
+        the level from a round trip that side measured, so on one link the
+        two sides can differ, and a level chosen before shaping can persist."""
+        levels = {}
+        for side in ("hub", "edge"):
+            leafs = self.leafz(side).get("leafs") or []
+            levels[side] = leafs[0].get("compression") if leafs else None
+        return levels
+
+    def link_now(self) -> dict:
+        """The link as the harness can check it: Toxiproxy's toxics and the leaf's compression."""
+        return {"toxics": self.toxics(), "compression": self.leaf_compression()}
 
     def stop(self) -> None:
         for proc in self.procs.values():

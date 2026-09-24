@@ -12,19 +12,32 @@ import pathlib
 import pytest
 
 from harness import report
+from harness.stats import speedup, summarize
 from tests.makefile import dry_run
 
 COMMITTED = "# DDIL test results\n\nevery scenario, from a complete run\n"
 
 
+def limited_run(mode: str, urgent: float, load: float) -> dict:
+    """One LIMITED run as harness.scenarios records it."""
+    return {
+        "mode": mode, "load_1min": {"start": load, "end": load + 0.5}, "link_up_s": 11.0,
+        "times_s": {"all_summaries": 6.0, "most_urgent_full": urgent, "all_latest_verified": urgent + 30,
+                    "all_records": 150.0},
+        "records_fetched": 51, "record_bytes": 79_996, "cdms": 13, "cdm_bytes": 64_058, "element_sets": 38,
+        "rate_estimate_bytes_per_s": 1750, "link_state": "LIMITED",
+    }
+
+
+def limited_metrics() -> dict:
+    runs = [limited_run("edf", 9.0, 2.0), limited_run("fifo", 130.0, 2.1), limited_run("fifo", 120.0, 3.4),
+            limited_run("edf", 8.5, 1.9)]
+    edf, fifo = (summarize([run for run in runs if run["mode"] == mode]) for mode in ("edf", "fifo"))
+    return {"runs_per_mode": 2, "edf": edf, "fifo": fifo, "most_urgent_speedup": speedup(edf, fifo), "runs": runs}
+
+
 def result(name: str) -> dict:
-    metrics = {"runs": 1}
-    if name == "limited":
-        run = {
-            "times_s": {"all_summaries": 1.0, "most_urgent_full": 2.0, "all_latest_verified": 3.0},
-            "measured_rate_bytes_per_s": 1000, "records": 10, "record_bytes": 10_000,
-        }
-        metrics = {"edf": run, "fifo": run, "most_urgent_speedup": 1.0}
+    metrics = limited_metrics() if name == "limited" else {"runs": 1}
     return {
         "scenario": name.upper(), "passed": True, "notes": [], "metrics": metrics,
         "assertions": [{"name": "it held", "passed": True, "detail": ""}],
@@ -85,3 +98,31 @@ def test_make_opsec_rewrites_the_report_only_from_a_complete_set():
 
 def test_make_ddil_insists_on_a_complete_report():
     assert report_lines("ddil") and not any("--if-complete" in line for line in report_lines("ddil"))
+
+
+# ------------------------------------------------------------ the LIMITED section
+def limited_section() -> str:
+    return report.render({name: result(name) for name in report.ORDER}).split("## LIMITED")[1].split("## ")[0]
+
+
+def test_limited_states_medians_and_ranges_and_how_many_runs_they_come_from():
+    section = limited_section()
+    assert "median (range) of 2 runs per mode" in section
+    assert "| **most urgent event's full CDM** | **8.8 s (8.5–9.0)** | **125.0 s (120.0–130.0)** |" in section
+    assert "**14.3x sooner**" in section
+
+
+def test_limited_states_the_workload_both_modes_moved():
+    assert "same 51 records (13 CDMs, 64,058 bytes of KVN, and 38 element sets; 79,996 bytes in all)" in limited_section()
+
+
+def test_limited_says_the_rate_estimate_is_not_the_link():
+    section = limited_section()
+    assert "| edge's rate estimate at the end | 1,750 B/s | 1,750 B/s |" in section
+    assert "not the link's capacity" in " ".join(section.split())
+
+
+def test_limited_lists_every_run_in_the_order_run_with_the_load_it_ran_under():
+    rows = [line for line in limited_section().splitlines() if line.startswith("| ") and line.split("|")[1].strip().isdigit()]
+    assert [row.split("|")[2].strip() for row in rows] == ["EDF", "FIFO", "FIFO", "EDF"]
+    assert rows[2].split("|")[3].strip() == "3.4 → 3.9"
