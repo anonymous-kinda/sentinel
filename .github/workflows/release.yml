@@ -33,6 +33,11 @@ defaults:
   run:
     shell: bash
 
+# Every uv command runs against uv.lock exactly; a stale lock fails the job
+# (uv run would otherwise re-lock silently). tests/test_workflows_pinned.py.
+env:
+  UV_LOCKED: "1"
+
 jobs:
   build:
     name: Bundles, SBOMs, vulnerability gate

@@ -5,8 +5,8 @@
 # Bump [document] version and last_modified when you change any source file.
 
 [document]
-version = "0.2.0"
-last_modified = 2026-09-24T00:00:00Z
+version = "0.3.0"
+last_modified = 2026-09-24T22:00:00Z
 
 [system]
 name = "Sentinel"

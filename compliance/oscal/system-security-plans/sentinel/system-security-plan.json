@@ -1,10 +1,10 @@
 {
   "system-security-plan": {
-    "uuid": "0d376c64-d690-5ec9-9154-e5a5ff154355",
+    "uuid": "2bdf4096-838e-5850-b6be-ebd3bde2e360",
     "metadata": {
       "title": "Sentinel system security plan (draft)",
-      "last-modified": "2026-09-24T00:00:00Z",
-      "version": "0.2.0",
+      "last-modified": "2026-09-24T22:00:00Z",
+      "version": "0.3.0",
       "oscal-version": "1.2.1",
       "roles": [
         {
@@ -623,6 +623,11 @@
                   "value": "tests/test_obs.py::test_json_formatter_emits_one_object_per_line"
                 },
                 {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/test_ops_log.py::test_resolving_a_conflict_appends_a_signed_resolution_naming_what_it_superseded"
+                },
+                {
                   "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
                   "value": "sentinel/audit/chain.py"
@@ -636,6 +641,11 @@
                   "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
                   "value": "sentinel/obs.py"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "sentinel/ops/service.py"
                 }
               ],
               "implementation-status": {
@@ -685,7 +695,7 @@
             {
               "component-uuid": "cd16ef70-2e73-501e-9c7f-4caa10a38352",
               "uuid": "f4cbff50-ef1e-5424-a29e-28679d2c9550",
-              "description": "A decision-log entry records its author (the operator identity the proxy asserts; see IA-2), the authoring node and its sequence (the dot), wall time and Lamport time, the kind and body of the decision, the event and CDM message it was made against, the previous entry's hash and an Ed25519 signature. An AI audit record carries its sequence, time, author, the question, the tier, the chosen route, which narrator phrased the answer, the grounding verdict, any fallback, the answer, a hash of the tool facts and the chain hash. Service logs are JSON with time, level, logger, message and fields.",
+              "description": "A decision-log entry records its author (the operator identity the proxy asserts; see IA-2), the authoring node and its sequence (the dot), wall time and Lamport time, the kind and body of the decision, the event and CDM message it was made against, the previous entry's hash and an Ed25519 signature. The entry that resolves a conflict also names the field, the new value and each value it superseded, with that value's author and node. An AI audit record carries its sequence, time, author, the question, the tier, the chosen route, which narrator phrased the answer, the grounding verdict, any fallback, the answer, a hash of the tool facts and the chain hash. Service logs are JSON with time, level, logger, message and fields.",
               "props": [
                 {
                   "name": "evidence-test",
@@ -708,6 +718,11 @@
                   "value": "tests/test_tier6_contract.py::test_result_is_serialisable_for_the_decision_log"
                 },
                 {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/test_ops_log.py::test_resolving_a_conflict_appends_a_signed_resolution_naming_what_it_superseded"
+                },
+                {
                   "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
                   "value": "sentinel/crdt/log.py"
@@ -721,6 +736,11 @@
                   "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
                   "value": "sentinel/obs.py"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "sentinel/ops/service.py"
                 }
               ],
               "implementation-status": {
@@ -949,8 +969,13 @@
             {
               "component-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
               "uuid": "eed961b2-8e47-58ac-9edd-6ffc4464ed7b",
-              "description": "Every push and pull request runs the full test ladder with the network disabled, lint, the module-boundary contracts, reproducibility checks of the generated reports and the requirement trace, Terraform and Ansible validation, secret scanning over the full history, lint of the workflows, the container file and the deploy scripts, and the supply-chain checks: SBOMs with a completeness gate, a vulnerability scan that fails on any finding no reviewed VEX statement answers, and offline signature verification with the real cosign. The DDIL harness runs on changes to the layers it exercises and nightly with a 15-minute denial. Every CI run regenerates this package's assessment results and POA&M from its own test evidence.",
+              "description": "Every push and pull request runs the full test ladder with the network disabled, lint, the module-boundary contracts, the type check, reproducibility checks of the generated reports, the interface control documents and the requirement trace, Terraform and Ansible validation, secret scanning over the full history, lint of the workflows, the container file and the deploy scripts, and the supply-chain checks: SBOMs with a completeness gate, a vulnerability scan that fails on any finding no reviewed VEX statement answers, and offline signature verification with the real cosign. The DDIL harness runs on changes to the layers it exercises and nightly with a 15-minute denial. Every CI run regenerates this package's assessment results and POA&M from its own test evidence.",
               "props": [
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/test_typecheck.py::test_ci_runs_the_type_check"
+                },
                 {
                   "name": "evidence-ci",
                   "ns": "urn:sentinel:oscal",
@@ -1022,17 +1047,42 @@
             {
               "component-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
               "uuid": "22c5bbfb-578c-55e9-b81b-46feaa595f0a",
-              "description": "The baseline is code under version control: hash-locked Python dependencies (uv.lock), third-party binaries pinned by version and SHA-256 (deploy/tools.lock), the bundle build (scripts/build_bundle.py), the Ansible roles, the Terraform and the NATS configuration templates. CI checks the Terraform (fmt, validate) and the playbook's syntax on every push.",
+              "description": "The baseline is code under version control: hash-locked Python dependencies (uv.lock), third-party binaries pinned by version and SHA-256 (deploy/tools.lock), the bundle build (scripts/build_bundle.py), the Ansible roles, the Terraform and the NATS configuration templates. The Python baseline that CI tests is the declared one: the jobs that test, lint, type-check and assess install exactly uv.lock with uv sync --locked, which refuses a lock that no longer matches pyproject.toml, and a test fails any workflow that installs with pip or uv pip instead, since those resolve afresh. make install uses the same command. CI checks the Terraform (fmt, validate) and the playbook's syntax on every push.",
               "props": [
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/test_workflows_pinned.py::test_python_dependencies_install_from_the_lock"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/test_workflows_pinned.py::test_the_lock_check_catches_a_fresh_resolve"
+                },
                 {
                   "name": "evidence-ci",
                   "ns": "urn:sentinel:oscal",
                   "value": "ci.yml#infra"
                 },
                 {
+                  "name": "evidence-ci",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "ci.yml#python"
+                },
+                {
                   "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
                   "value": "uv.lock"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "pyproject.toml"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "Makefile"
                 },
                 {
                   "name": "evidence-file",
@@ -1081,12 +1131,17 @@
             {
               "component-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
               "uuid": "39e68572-e484-5482-bf52-88292fba5fc3",
-              "description": "Every change is a git commit, and every push and pull request runs the checks listed under CA-7. Generated documents (the validation report, the AI eval report, this package's authored OSCAL documents) are regenerated and compared in CI, so a change cannot alter them silently. Branch protection and required review are GitHub settings and are not evidenced in the repository.",
+              "description": "Every change is a git commit, and every push and pull request runs the checks listed under CA-7. Generated documents (the validation report, the AI eval report, the OpenAPI interface control document, this package's authored OSCAL documents) are regenerated and compared in CI, so a change cannot alter them silently. Branch protection and required review are GitHub settings and are not evidenced in the repository.",
               "props": [
                 {
                   "name": "evidence-test",
                   "ns": "urn:sentinel:oscal",
                   "value": "tests/compliance/test_package_integrity.py::test_committed_documents_are_what_the_sources_generate"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/docs/test_openapi_current.py::test_the_committed_openapi_matches_a_fresh_export"
                 },
                 {
                   "name": "evidence-ci",
@@ -1807,7 +1862,7 @@
             {
               "component-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
               "uuid": "2a4d09ce-25e6-5f19-824f-35589794644e",
-              "description": "Every change is a git commit; dependencies and tools are pinned by hash; generated artifacts (the validation and AI eval reports, the requirement trace, this package's authored OSCAL documents) are regenerated and compared in CI; vendored upstream data (NASA CARA, CelesTrak, NIST, DISA) carries provenance and checksums that the tests verify; module boundaries are contracts checked in CI. The bundle writer is deterministic: the same tree and SOURCE_DATE_EPOCH give identical bytes whatever the file times, the gzip header carries the epoch rather than the build time, and a build from uncommitted changes records a dirty tree, so it cannot pass as its commit. The workflows (with shellcheck on every run block), the container file and the deploy scripts are linted in CI with actionlint, shellcheck and hadolint, each pinned by SHA-256.",
+              "description": "Every change is a git commit; dependencies and tools are pinned by hash, and the CI jobs that test and assess install the Python dependencies exactly as uv.lock pins them (uv sync --locked), so a new release of a dependency cannot change what they test without a change here; generated artifacts (the validation and AI eval reports, the requirement trace, the OpenAPI interface control document, this package's authored OSCAL documents) are regenerated and compared in CI. Three more interface control documents in docs/icd (the AsyncAPI bus contract, the CDM admission profile and the sync envelope) are design specifications held to the code: tests read the facts from the code and fail on any difference, and each check is shown to catch a stale copy of its document. Vendored upstream data (NASA CARA, CelesTrak, NIST, DISA) carries provenance and checksums that the tests verify; module boundaries are contracts checked in CI. The bundle writer is deterministic: the same tree and SOURCE_DATE_EPOCH give identical bytes whatever the file times, the gzip header carries the epoch rather than the build time, and a build from uncommitted changes records a dirty tree, so it cannot pass as its commit. The workflows (with shellcheck on every run block), the container file and the deploy scripts are linted in CI with actionlint, shellcheck and hadolint, each pinned by SHA-256.",
               "props": [
                 {
                   "name": "evidence-test",
@@ -1845,6 +1900,56 @@
                   "value": "tests/mbse/test_real_model.py::test_the_committed_trace_is_current"
                 },
                 {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/test_workflows_pinned.py::test_python_dependencies_install_from_the_lock"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/docs/test_openapi_current.py::test_the_committed_openapi_matches_a_fresh_export"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/docs/test_openapi_current.py::test_drift_names_what_a_stale_document_is_missing"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/docs/test_asyncapi.py::test_the_document_matches_the_subjects_headers_and_leaf_policy_in_the_code"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/docs/test_asyncapi.py::test_a_stale_document_is_caught"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/docs/test_cdm_profile.py::test_the_profile_matches_the_code"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/docs/test_cdm_profile.py::test_a_stale_profile_is_caught"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/docs/test_sync_envelope.py::test_the_envelope_matches_the_code"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/docs/test_sync_envelope.py::test_a_stale_envelope_is_caught"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/docs/test_icd_index.py::test_the_index_lists_every_icd_and_its_checks_exist"
+                },
+                {
                   "name": "evidence-ci",
                   "ns": "urn:sentinel:oscal",
                   "value": "ci.yml#python"
@@ -1868,6 +1973,16 @@
                   "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
                   "value": "scripts/build_bundle.py"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "uv.lock"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "docs/icd/README.md"
                 }
               ],
               "implementation-status": {
@@ -1891,7 +2006,7 @@
             {
               "component-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
               "uuid": "4ce83ed7-3e8d-5c50-9f37-fb2818eaf8ab",
-              "description": "Developer testing is a ladder of pytest markers run in CI with the network disabled: geometry, integration against closed forms and an independent quadrature, agreement with NASA CARA's published values for 53 operational conjunctions and its benchmark cases, maximum Pc and dilution, every refusal gate, and the output contract. CRDT convergence is property-tested (Hypothesis); the DDIL harness runs real processes over a shaped link; the assistant's routing is scored on a labelled set. Every CI run turns its JUnit evidence into assessment results and a POA&M (this package). The tests are traced to the requirements they verify: the SysML v2 model (mbse/) links each requirement to the tests, harness scenarios, import contracts and CI steps that verify it, and its generated trace (docs/traceability.md) fails CI when a reference names evidence that does not exist. Work not yet built is marked planned and shown as unverified, never as verified.",
+              "description": "Developer testing is a ladder of pytest markers run in CI with the network disabled: geometry, integration against closed forms and an independent quadrature, agreement with NASA CARA's published values for 53 operational conjunctions and its benchmark cases, maximum Pc and dilution, every refusal gate, and the output contract. CRDT convergence is property-tested (Hypothesis); the DDIL harness runs real processes over a shaped link; the assistant's routing is scored on a labelled set. Static analysis runs in the same CI job as the tests, on each Python in its matrix: mypy over sentinel/ (make typecheck), with every check mypy --strict enables on the core (bus, crdt, sync, triage) and the risk engine, and mypy's standard checks on the rest, where nine modules are still exempt, listed in pyproject.toml as work to do. A test reads back the options mypy derives from pyproject.toml, module by module, so a strict flag dropped from the list or an exemption on a strict module fails it. Every CI run turns its JUnit evidence into assessment results and a POA&M (this package). The tests are traced to the requirements they verify: the SysML v2 model (mbse/) links each requirement to the tests, harness scenarios, import contracts and CI steps that verify it, and its generated trace (docs/traceability.md) fails CI when a reference names evidence that does not exist. Work not yet built is marked planned and shown as unverified, never as verified.",
               "props": [
                 {
                   "name": "evidence-test",
@@ -1937,6 +2052,21 @@
                   "name": "evidence-test",
                   "ns": "urn:sentinel:oscal",
                   "value": "tests/mbse/test_real_model.py::test_unverified_means_planned_never_forgotten"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/test_typecheck.py::test_the_core_and_the_risk_engine_get_every_strict_check"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/test_typecheck.py::test_the_check_catches_a_dropped_flag"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/test_typecheck.py::test_ci_runs_the_type_check"
                 },
                 {
                   "name": "evidence-harness",
@@ -1992,6 +2122,11 @@
                   "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
                   "value": "docs/traceability.md"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "pyproject.toml"
                 }
               ],
               "implementation-status": {
@@ -2015,7 +2150,7 @@
             {
               "component-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
               "uuid": "6d0d673e-5e95-5c30-a3ef-17698c05d60a",
-              "description": "The development process is written down and enforced by tools: test-first development and architecture decision records (docs/system-design.md); requirements modelled in SysML v2 (mbse/), parsed with the SysML v2 pilot grammar and traced to their verification evidence in CI; ruff and import-linter in CI; a test that forbids interpolated log messages; pre-commit hooks for ruff and gitleaks; and pinned tool versions, with the workflow, container and shell linters fetched against SHA-256 pins.",
+              "description": "The development process is written down and enforced by tools: test-first development and architecture decision records (docs/system-design.md); requirements modelled in SysML v2 (mbse/), parsed with the SysML v2 pilot grammar and traced to their verification evidence in CI; ruff, import-linter and mypy in CI, with mypy's options set in pyproject.toml and read back by a test, module by module (SA-11); a test that forbids interpolated log messages; documentation checked against the repository, so every path, make target and sentinel subcommand the docs name must exist and every headline number registered in tests/doc_claims.toml must match the generated report it comes from, at the precision the prose states (tests/test_docs.py), and interfaces documented where they are checked (docs/icd, SA-10); pre-commit hooks for ruff and gitleaks; and pinned tools. The Python development tools (pytest, ruff, import-linter, mypy) are hash-locked in uv.lock, which a test requires every workflow to install from, and the workflow, container and shell linters are fetched against SHA-256 pins.",
               "props": [
                 {
                   "name": "evidence-test",
@@ -2031,6 +2166,41 @@
                   "name": "evidence-test",
                   "ns": "urn:sentinel:oscal",
                   "value": "tests/mbse/test_syntax_check.py::test_a_validator_that_accepts_a_known_bad_model_is_not_trusted"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/test_typecheck.py::test_the_core_and_the_risk_engine_get_every_strict_check"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/test_typecheck.py::test_the_rest_of_sentinel_gets_the_standard_checks"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/test_docs.py::test_every_path_a_doc_names_exists"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/test_docs.py::test_every_make_target_a_doc_names_exists"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/test_docs.py::test_every_cli_subcommand_a_doc_names_exists"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/test_docs.py::test_every_quoted_number_matches_its_source"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/test_workflows_pinned.py::test_python_dependencies_install_from_the_lock"
                 },
                 {
                   "name": "evidence-ci",
@@ -2081,6 +2251,16 @@
                   "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
                   "value": "docs/traceability.md"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/doc_claims.toml"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "uv.lock"
                 }
               ],
               "implementation-status": {
@@ -2424,7 +2604,7 @@
             {
               "component-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
               "uuid": "0688fe9d-77ff-5b1e-98c1-34c2c32164ed",
-              "description": "Every failing test becomes a POA&M item, linked to the controls that cite it, on every CI run (this package); dependency updates go through the lockfile and the full test ladder. On every push the vulnerability gate fails the build on any finding in a dependency or a shipped binary that no reviewed VEX statement answers (RA-5), so a known flaw cannot pass unnoticed. Those findings reach the job's SARIF output, not yet this package's POA&M.",
+              "description": "Every failing test becomes a POA&M item, linked to the controls that cite it, on every CI run (this package). A dependency update reaches CI only as a change to uv.lock, because the jobs that test install exactly the lock (uv sync --locked, which a test requires), so the full test ladder runs on the update itself. On every push the vulnerability gate fails the build on any finding in a dependency or a shipped binary that no reviewed VEX statement answers (RA-5), so a known flaw cannot pass unnoticed. Those findings reach the job's SARIF output, not yet this package's POA&M.",
               "props": [
                 {
                   "name": "evidence-test",
@@ -2437,6 +2617,11 @@
                   "value": "tests/supplychain/test_trivy.py::test_a_gating_scan_applies_vex_and_fails_on_any_remaining_finding"
                 },
                 {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/test_workflows_pinned.py::test_python_dependencies_install_from_the_lock"
+                },
+                {
                   "name": "evidence-ci",
                   "ns": "urn:sentinel:oscal",
                   "value": "ci.yml#compliance"
@@ -2445,6 +2630,11 @@
                   "name": "evidence-ci",
                   "ns": "urn:sentinel:oscal",
                   "value": "ci.yml#supply-chain"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "uv.lock"
                 },
                 {
                   "name": "milestone",
@@ -2993,7 +3183,7 @@
             {
               "component-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
               "uuid": "f21909e9-e767-5eeb-ba41-9234bb858013",
-              "description": "The supply-chain controls are documented in docs/supply-chain.md, and the supply-chain CI job runs them on every push: SBOMs with a completeness gate (CM-8), a Trivy scan that fails on any finding no reviewed VEX statement answers (RA-5), and offline signature verification with the real cosign (CM-14, SI-7). Third-party binaries and trust material are pinned by version and SHA-256 (deploy/tools.lock); a mismatch writes nothing (scripts/fetch_tools.py, used by every job that fetches a tool). Python dependencies are hash-locked and installed offline with --require-hashes. Upstream data (NASA CARA, CelesTrak, NIST, DISA) is vendored unmodified with provenance and checksums that the tests verify. Every action in every workflow is pinned by commit SHA, which a test enforces (tests/test_workflows_pinned.py). Not yet done: signing, SLSA provenance and SBOM attestation of releases exist only in release.yml, which has not run yet.",
+              "description": "The supply-chain controls are documented in docs/supply-chain.md, and the supply-chain CI job runs them on every push: SBOMs with a completeness gate (CM-8), a Trivy scan that fails on any finding no reviewed VEX statement answers (RA-5), and offline signature verification with the real cosign (CM-14, SI-7). Third-party binaries and trust material are pinned by version and SHA-256 (deploy/tools.lock); a mismatch writes nothing (scripts/fetch_tools.py, used by every job that fetches a tool). Python dependencies are hash-locked in uv.lock. The CI jobs that test and assess install exactly the lock with uv sync --locked, which refuses a stale lock, and a test fails any workflow that installs with pip or uv pip instead, since those resolve afresh; a bundle installs them offline with --require-hashes. Upstream data (NASA CARA, CelesTrak, NIST, DISA) is vendored unmodified with provenance and checksums that the tests verify. Every action in every workflow is pinned by commit SHA, which a test enforces (tests/test_workflows_pinned.py). Not yet done: signing, SLSA provenance and SBOM attestation of releases exist only in release.yml, which has not run yet.",
               "props": [
                 {
                   "name": "evidence-test",
@@ -3019,6 +3209,16 @@
                   "name": "evidence-test",
                   "ns": "urn:sentinel:oscal",
                   "value": "tests/test_workflows_pinned.py::test_every_action_is_pinned_by_commit_sha"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/test_workflows_pinned.py::test_python_dependencies_install_from_the_lock"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/test_workflows_pinned.py::test_the_lock_check_catches_a_fresh_resolve"
                 },
                 {
                   "name": "evidence-ci",
@@ -3049,6 +3249,11 @@
                   "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
                   "value": "supplychain/toolslock.py"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "uv.lock"
                 },
                 {
                   "name": "evidence-file",
@@ -3088,7 +3293,7 @@
             {
               "component-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
               "uuid": "2648dd97-f328-57d5-96a4-3f896e21e5b7",
-              "description": "Provenance is recorded for vendored upstream data (fixtures/cara/PROVENANCE.md, fixtures/omm/PROVENANCE.md, compliance/vendor/nist/PROVENANCE.md, compliance/vendor/disa/PROVENANCE.md) and each NASA CARA test case documents its source and tolerance. Each bundle's BUNDLE.json records the commit it was built from, whether that tree was clean or dirty, its SOURCE_DATE_EPOCH, and the upstream URL and SHA-256 of every bundled binary; a build from uncommitted changes cannot pass as its commit. deploy/tools.lock records the upstream URL and SHA-256 of every third-party binary. SLSA v1 build provenance (Build L2) and SBOM attestations for every tarball and image archive are generated by the sign job of .github/workflows/release.yml and shipped as files, so they verify offline. That workflow runs only on a tag on GitHub, has been checked only statically (actionlint) and has not run yet, so no release provenance exists. Build L3 is not claimed: the provenance is generated inside this repository's own workflow (docs/supply-chain.md).",
+              "description": "Provenance is recorded for vendored upstream data (fixtures/cara/PROVENANCE.md, fixtures/omm/PROVENANCE.md, compliance/vendor/nist/PROVENANCE.md, compliance/vendor/disa/PROVENANCE.md) and each NASA CARA test case documents its source and tolerance. Each bundle's BUNDLE.json records the commit it was built from, whether that tree was clean or dirty, its SOURCE_DATE_EPOCH, and the upstream URL and SHA-256 of every bundled binary; a build from uncommitted changes cannot pass as its commit. deploy/tools.lock records the upstream URL and SHA-256 of every third-party binary, and uv.lock the registry, file URL and SHA-256 of every third-party Python distribution; the CI jobs that test and assess install exactly what uv.lock records (uv sync --locked), which a test requires. SLSA v1 build provenance (Build L2) and SBOM attestations for every tarball and image archive are generated by the sign job of .github/workflows/release.yml and shipped as files, so they verify offline. That workflow runs only on a tag on GitHub, has been checked only statically (actionlint) and has not run yet, so no release provenance exists. Build L3 is not claimed: the provenance is generated inside this repository's own workflow (docs/supply-chain.md).",
               "props": [
                 {
                   "name": "evidence-test",
@@ -3104,6 +3309,11 @@
                   "name": "evidence-test",
                   "ns": "urn:sentinel:oscal",
                   "value": "tests/supplychain/test_bundle.py::test_a_build_from_uncommitted_changes_says_so"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/test_workflows_pinned.py::test_python_dependencies_install_from_the_lock"
                 },
                 {
                   "name": "evidence-ci",
@@ -3139,6 +3349,11 @@
                   "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
                   "value": "deploy/tools.lock"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "uv.lock"
                 },
                 {
                   "name": "evidence-file",
