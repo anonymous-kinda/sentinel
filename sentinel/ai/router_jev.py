@@ -35,8 +35,14 @@ from typesafe_sdk import (
     TypeSafeRateLimitError,
 )
 
+from ..obs import get_logger
 from .catalog import BANDS, DECISIONS, TOOLS
 from .router import Route, RouterUnavailable, RoutingContext, window_hours
+
+log = get_logger(__name__)
+
+# What reading an answer that is not the shape the questions declared raises.
+_MALFORMED = (KeyError, TypeError, ValueError, AttributeError)
 
 __all__ = ["JEV_MODEL", "NO_RETRY", "JevRouter", "RouterUnavailable"]
 
@@ -100,6 +106,13 @@ def _reason(exc: Exception) -> str:
     return "error"
 
 
+def _chosen(answers, question: str, options) -> str:
+    choice = answers[question].choice
+    if choice not in options:
+        raise ValueError(f"{question}: the answer is not one of the options asked")
+    return choice
+
+
 class JevRouter:
     name = "jev"
 
@@ -121,12 +134,20 @@ class JevRouter:
         except TypeSafeError as exc:
             raise RouterUnavailable(_reason(exc)) from exc
         latency_ms = (time.monotonic() - started) * 1000
-        return self._to_route(text, response, latency_ms)
+        try:
+            return self._to_route(text, response, latency_ms, context)
+        except _MALFORMED as exc:
+            # Jev can only choose among the options it was given; an answer
+            # outside them is a fault, and the local router takes over.
+            log.warning("Jev answer malformed", error=type(exc).__name__)
+            raise RouterUnavailable("malformed") from exc
 
-    def _to_route(self, text, response, latency_ms) -> Route:
+    def _to_route(self, text, response, latency_ms, context: RoutingContext) -> Route:
         answers = response.answers
-        tool = answers["tool"].choice
-        event = answers["event"].choice
+        tool = _chosen(answers, "tool", TOOLS)
+        event = _chosen(answers, "event", {e["event_id"] for e in context.events} | {"none"})
+        _chosen(answers, "band", {*BANDS, "any"})
+        _chosen(answers, "decision", {*DECISIONS, "none"})
         args: dict = {}
         if TOOLS[tool].needs_event and event != "none":
             args["event_id"] = event

@@ -26,6 +26,9 @@ _NUMBER = re.compile(
 )
 
 
+_DIGITS = re.compile(r"\d+")
+
+
 @dataclasses.dataclass(frozen=True)
 class GroundingResult:
     ok: bool
@@ -34,6 +37,13 @@ class GroundingResult:
 
 def numbers_in_text(text: str) -> list[str]:
     return [m.group(0) for m in _NUMBER.finditer(text)]
+
+
+def _unread_digits(text: str) -> list[str]:
+    """Digits no number token covers: ".9", or the "9" of "0,9". The number
+    pattern does not read them, so they would otherwise go unchecked."""
+    spans = [m.span() for m in _NUMBER.finditer(text)]
+    return [m.group(0) for m in _DIGITS.finditer(text) if not any(a <= m.start() and m.end() <= b for a, b in spans)]
 
 
 def _parse(token: str) -> tuple[float, int]:
@@ -84,7 +94,7 @@ def _evidence_numbers(evidence: Any) -> Iterable[float]:
 
 def check_grounding(text: str, evidence: Any, question: str = "") -> GroundingResult:
     pool = list(_evidence_numbers(evidence)) + list(_evidence_numbers(question))
-    unsupported = []
+    unsupported = _unread_digits(text)
     for token in numbers_in_text(text):
         stated, sig = _parse(token)
         if not math.isfinite(stated):
