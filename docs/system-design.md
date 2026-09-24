@@ -472,7 +472,7 @@ The recorded results of the latest run are generated into `docs/ddil-results.md`
 |---|---|---|
 | This design (`docs/system-design.md`, with the maths in `docs/risk-engine-design.md`) | NASA CARA's published methods and data, CCSDS standards | Self, technical reviewers |
 | Technical guide | This design | Engineers reading the repo |
-| White paper | Technical guide | Acquisition, operational, executive |
+| White paper (`docs/white-paper.md`), quad chart (`docs/quad-chart.md`) | This design and the generated reports | Acquisition, operational, executive |
 | SysML v2 model (`mbse/`) | This design | MBSE demonstration; `docs/traceability.md` is generated from it in CI |
 | OSCAL draft SSP (`compliance/oscal/`, explained in `docs/compliance.md`) | Implementation and CI evidence | Security/ATO reviewers |
 
