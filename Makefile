@@ -55,3 +55,18 @@ demo-local: web tools  ## hub on :8000 and edge on :8001 over an emulated link (
 ddil:  ## run all four DDIL scenarios on a real two-node cluster, then write docs/ddil-results.md
 	$(UV) run python -m harness.run all
 	$(UV) run python -m harness.report
+
+# --- M6 MBSE: requirement trace and SysML v2 syntax check (begin) -----------
+# sysml2py carries the SysML v2 pilot implementation's grammar (ported to
+# textX). It pins astropy<6, which has no Python 3.13 wheels, so it runs in an
+# isolated environment rather than in the project's dev extra.
+SYSML2PY ?= sysml2py==0.5.3
+.PHONY: trace sysml-check
+
+trace:  ## regenerate docs/traceability.md from mbse/*.sysml (fails on a broken reference)
+	$(UV) run python scripts/trace.py
+
+sysml-check:  ## parse mbse/*.sysml with the SysML v2 pilot grammar (sysml2py, isolated env)
+	$(UV) run --no-project --isolated --python 3.12 --with '$(SYSML2PY)' --with 'setuptools<81' \
+		python scripts/sysml_check.py mbse/*.sysml
+# --- M6 MBSE (end) -----------------------------------------------------------
