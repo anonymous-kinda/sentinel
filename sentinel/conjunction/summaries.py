@@ -18,6 +18,11 @@ import math
 
 from .policy import ConjunctionPolicy
 
+# ADR-006's answer: one event's summary (CBOR, without its `c` record list)
+# fits in this many bytes. Asserted over the exercise scenario in tests/sync
+# and stated in docs/icd/sync-envelope.md.
+SUMMARY_MAX_BYTES = 256
+
 _BAND = {"RED": "R", "AMBER": "A", "GREEN": "G", "UNASSESSED": "U"}
 _BAND_BACK = {v: k for k, v in _BAND.items()}
 _DC = {"REAL": "R", "DERIVED": "D", "EXERCISE": "X"}
