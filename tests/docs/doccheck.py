@@ -1,15 +1,15 @@
 """Checks for the program documents: the white paper, the quad chart, the
 demo script and the install guide.
 
-Built on tests/doclint.py, which reads a document and checks its paths,
-links and make targets, and on the assistant's number-grounding rule
-(sentinel.ai.grounding, ADR-007). This module adds only what those do not
-cover:
+tests/doclint.py reads documents and holds them to their paths, make
+targets, CLI subcommands and registered claims (tests/test_docs.py applies
+it to every Markdown page). This module reuses it and adds only what it does
+not cover:
 
-- the quad chart's text, which is SVG rather than Markdown;
+- the quad chart's visible text, which is SVG rather than Markdown;
 - make variables, scripts run beside the bundle, and test functions;
-- full `sentinel` command lines, parsed by the real CLI parser;
-- proof-point numbers, each grounded in the generated report its row links;
+- whole `sentinel` command lines, parsed by the real CLI parser;
+- coverage: every proof-point number is a registered claim on a generated report;
 - the white paper's win themes.
 """
 
@@ -18,22 +18,35 @@ from __future__ import annotations
 import pathlib
 import re
 import xml.etree.ElementTree as ET
+from collections.abc import Iterable
 
-from sentinel.ai.grounding import check_grounding, numbers_in_text
+from sentinel.ai.grounding import numbers_in_text
 from sentinel.cli import build_parser
-from tests.doclint import Markdown, commands, makefile_targets, missing_paths, parse_markdown, unknown_make_targets
+from tests.doclint import (
+    Claim,
+    Markdown,
+    cli_tree,
+    commands,
+    load_claims,
+    makefile_targets,
+    missing_paths,
+    parse_markdown,
+    unknown_cli_commands,
+    unknown_make_targets,
+)
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DOCS = ROOT / "docs"
 MAKEFILE = ROOT / "Makefile"
 PROGRAM_DOCS = tuple(DOCS / n for n in ("white-paper.md", "quad-chart.md", "demo-script.md", "install-guide.md"))
 QUAD_CHART_SVG = DOCS / "quad-chart.svg"
+CLAIMS = load_claims(ROOT / "tests" / "doc_claims.toml")
 
 # The only sources of numbers. Each is written by a script and never edited:
 # scripts/validation_report.py, python -m harness.report, scripts/ai_eval.py
 # and scripts/trace.py.
 GENERATED_REPORTS = tuple(
-    DOCS / n for n in ("validation-report.md", "ddil-results.md", "ai-eval.md", "traceability.md")
+    f"docs/{n}" for n in ("validation-report.md", "ddil-results.md", "ai-eval.md", "traceability.md")
 )
 # A script named without a directory runs beside the bundle, at the site.
 SITE_SCRIPTS = ROOT / "deploy" / "bundle"
@@ -64,8 +77,8 @@ def svg_texts(path: pathlib.Path) -> list[str]:
     ]
 
 
-def generated_text(reports: tuple[pathlib.Path, ...] = GENERATED_REPORTS) -> str:
-    return "\n".join(report.read_text(encoding="utf-8") for report in reports)
+def generated_text() -> str:
+    return "\n".join((ROOT / report).read_text(encoding="utf-8") for report in GENERATED_REPORTS)
 
 
 def section(markdown: str, title: str) -> str:
@@ -85,17 +98,28 @@ def section(markdown: str, title: str) -> str:
     raise LookupError(f"no section titled {title!r}")
 
 
+# ------------------------------------------------- doclint, for the SVG too
+
+
+def drift_problems(md: Markdown, doc_dir: pathlib.Path) -> list[str]:
+    """tests/test_docs.py's rules (paths, make targets, CLI subcommands), for a non-Markdown document."""
+    makefile = MAKEFILE.read_text(encoding="utf-8")
+    argvs = commands(md)
+    return (
+        missing_paths(md, doc_dir, ROOT)
+        + [f"make {t}" for t in unknown_make_targets(argvs, makefile_targets(makefile))]
+        + [f"sentinel {c}" for c in unknown_cli_commands(argvs, cli_tree(build_parser()))]
+    )
+
+
 # ----------------------------------------------------------------- commands
 
 
-def missing_make_targets(md: Markdown) -> list[str]:
-    """Targets the Makefile does not define, then variables it never reads (as NAME=)."""
-    makefile = MAKEFILE.read_text(encoding="utf-8")
-    argvs = commands(md)
-    variables = set(re.findall(r"\$\((\w+)\)", makefile))
-    named = [w.split("=", 1)[0] for argv in argvs if argv[0] == "make" for w in argv[1:] if "=" in w]
-    missing_variables = [f"{v}=" for v in dict.fromkeys(named) if v not in variables]
-    return unknown_make_targets(argvs, makefile_targets(makefile)) + missing_variables
+def unknown_make_variables(md: Markdown) -> list[str]:
+    """NAME=value arguments to make that the Makefile never reads."""
+    read = set(re.findall(r"\$\((\w+)\)", MAKEFILE.read_text(encoding="utf-8")))
+    named = (w.split("=", 1)[0] for argv in commands(md) if argv[0] == "make" for w in argv[1:] if "=" in w)
+    return [name for name in dict.fromkeys(named) if name not in read]
 
 
 def cli_problems(md: Markdown) -> list[str]:
@@ -121,9 +145,9 @@ def _parses(argv: list[str]) -> bool:
 # ------------------------------------------------------------------- paths
 
 
-def missing_references(md: Markdown, doc_dir: pathlib.Path) -> list[str]:
-    """Paths and links (doclint), then site scripts and test functions, that do not exist."""
-    return missing_paths(md, doc_dir, ROOT) + _missing_site_scripts(md) + _missing_tests(md)
+def missing_references(md: Markdown) -> list[str]:
+    """Scripts named without a directory (run beside the bundle), and test functions, that do not exist."""
+    return _missing_site_scripts(md) + _missing_tests(md)
 
 
 def _missing_site_scripts(md: Markdown) -> list[str]:
@@ -147,40 +171,36 @@ def _defines(path: pathlib.Path, name: str) -> bool:
 # ----------------------------------------------------------------- numbers
 
 
-def unsupported_numbers(text: str, evidence: str) -> list[str]:
-    """Numbers in text that evidence does not state, at the precision text states them."""
-    return check_grounding(text, evidence).unsupported
-
-
 def table_rows(text: str) -> list[list[str]]:
     rows = [line.strip() for line in text.splitlines() if line.lstrip().startswith("|")]
     return [[c.strip() for c in row.strip("|").split("|")] for row in rows if not re.match(r"\|\s*:?-", row)]
 
 
-def proof_point_problems(proofs: str) -> list[str]:
-    """Each number a proof point states must be in a generated report that the same row links.
+def unregistered_proof_point_numbers(proofs: str, claims: Iterable[Claim]) -> list[str]:
+    """Numbers a proof point states that no registered claim on a generated report quotes.
 
-    A row is | theme | claim ... | evidence |. The evidence column names files,
-    tests and requirement ids, so only the claim columns are checked.
+    A row is | theme | claim ... | evidence |; the evidence column names files,
+    tests and requirement ids, so only the claim columns count. A claim covers
+    a row when its quoted text is part of the row's claim text. test_docs.py
+    then holds each claim's numbers to its report.
     """
+    on_reports = [c for c in claims if c.source in GENERATED_REPORTS]
     problems = []
     for row in table_rows(proofs):
-        theme, claim = row[0], " ".join(row[1:-1])
-        stated = numbers_in_text(claim)
-        if not stated or not _THEME_ID.search(theme):
+        theme, text = row[0], _squash(" ".join(row[1:-1]))
+        if not _THEME_ID.fullmatch(theme):
             continue
-        cited = _cited_reports(" | ".join(row))
-        if not cited:
-            problems.append(f"{theme}: states {', '.join(stated)} but links no generated report")
-            continue
-        names = ", ".join(r.name for r in cited)
-        problems += [f"{theme}: {n} is not in {names}" for n in unsupported_numbers(claim, generated_text(cited))]
+        covering = [c for c in on_reports if _squash(c.quoted) in text]
+        registered = {n for c in covering for n in numbers_in_text(c.quoted)}
+        problems += [f"{theme}: {n}" for n in dict.fromkeys(numbers_in_text(text)) if n not in registered]
     return problems
 
 
-def _cited_reports(text: str) -> tuple[pathlib.Path, ...]:
-    linked = {(DOCS / link.split("#", 1)[0]).resolve() for link in parse_markdown(text).links}
-    return tuple(r for r in GENERATED_REPORTS if r.resolve() in linked)
+def _squash(text: str) -> str:
+    return " ".join(text.split())
+
+
+# ------------------------------------------------------------------ themes
 
 
 def win_theme_problems(themes: str, proofs: str) -> list[str]:

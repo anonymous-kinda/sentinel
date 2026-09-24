@@ -6,7 +6,9 @@ generate or that the allowlist does not explain.
 import re
 import xml.etree.ElementTree as ET
 
-from .doccheck import DOCS, QUAD_CHART_SVG, ROOT, generated_text, svg_texts, unsupported_numbers
+from sentinel.ai.grounding import check_grounding
+
+from .doccheck import DOCS, QUAD_CHART_SVG, ROOT, generated_text, svg_texts
 
 QUAD_CHART_MD = DOCS / "quad-chart.md"
 QUADRANTS = (
@@ -17,10 +19,17 @@ QUADRANTS = (
 )
 
 # Numbers on the chart that no generated report states. Each names the file
-# it comes from and why it is on the chart; nothing here is estimated.
+# it comes from, the exact phrase there, and why it is on the chart. Nothing
+# here is estimated.
 ALLOWED = {
-    "17.50": ("docs/deploy-aws.md", "the AWS demo hub's monthly cost, as the deploy guide states it"),
-    "37": ("docs/compliance.md", "controls in the tailored baseline; tests/compliance checks the count"),
+    "17.50": ("docs/deploy-aws.md", "about $17.50/month",
+              "the AWS demo hub's monthly cost, as the deploy guide states it"),
+    "37": ("docs/compliance.md", "Tailored baseline: **37** controls.",
+           "controls in the tailored baseline; tests/compliance/test_package_integrity.py checks the count"),
+    "9": ("docs/compliance.md", "**9** implemented controls",
+          "controls implemented; checked by the same test"),
+    "28": ("docs/compliance.md", "**28** partial controls",
+           "controls partly implemented; checked by the same test"),
 }
 
 LETTER_LANDSCAPE_IN = (11.0, 8.5)
@@ -33,7 +42,8 @@ SYSTEM_FONTS = {
 
 
 def chart_number_problems(texts: list[str], evidence: str) -> list[str]:
-    return unsupported_numbers("\n".join(texts), "\n".join([evidence, *ALLOWED]))
+    """Numbers on the chart that neither the evidence nor the allowlist states (ADR-007's grounding rule)."""
+    return check_grounding("\n".join(texts), "\n".join([evidence, *ALLOWED])).unsupported
 
 
 def font_problems(svg: str) -> list[str]:
@@ -91,10 +101,26 @@ def test_every_number_on_the_chart_is_generated_or_allowlisted():
     assert chart_number_problems(svg_texts(QUAD_CHART_SVG), generated_text()) == []
 
 
+def allowlist_problems(allowed: dict) -> list[str]:
+    problems = []
+    for number, (source, phrase, reason) in allowed.items():
+        text = " ".join((ROOT / source).read_text(encoding="utf-8").split())
+        if not reason or phrase not in text or number not in phrase:
+            problems.append(number)
+    return problems
+
+
+def test_an_allowlisted_number_its_file_does_not_state_is_caught():
+    wrong = {
+        "18.25": ("docs/deploy-aws.md", "about $18.25/month", "a cost the guide does not state"),
+        "37": ("docs/compliance.md", "Tailored baseline: **37** controls.", ""),
+        "12": ("docs/compliance.md", "Tailored baseline: **37** controls.", "number not in its phrase"),
+    }
+    assert allowlist_problems(wrong) == ["18.25", "37", "12"]
+
+
 def test_every_allowlisted_number_is_in_the_file_it_cites():
-    for number, (source, reason) in ALLOWED.items():
-        assert reason
-        assert number in (ROOT / source).read_text(encoding="utf-8"), f"{number} is not in {source}"
+    assert allowlist_problems(ALLOWED) == []
 
 
 def test_letter_size_system_fonts_and_legible_type():

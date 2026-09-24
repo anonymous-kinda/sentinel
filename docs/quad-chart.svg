@@ -62,7 +62,7 @@
   <text class="t b" x="44" y="330">• Cut off, each node keeps working; urgent data crosses first.</text>
   <text class="t b" x="44" y="350">• AI routes and phrases; validated code computes; a person decides.</text>
   <text class="t b" x="44" y="370">• Ground units see when public imagers can observe them,</text>
-  <text class="t b" x="44" y="388">   and the unit's position never leaves its edge node.</text>
+  <text class="t b" x="59" y="388">and the unit's position never leaves its edge node.</text>
   <text class="t h" x="44" y="414">For</text>
   <text class="t b" x="80" y="414">satellite operators, space operations cells, S6/G6 staff.</text>
 
@@ -74,13 +74,13 @@
   <text class="t h" x="570" y="152">Approach</text>
   <text class="t b" x="570" y="173">• CCSDS standards at every seam: CDM, OMM, OEM.</text>
   <text class="t b" x="570" y="192">• Foster-Estes 2D Pc ported from NASA CARA, worst-case</text>
-  <text class="t b" x="570" y="210">   Pc and dilution flag; named refusals, never a zero.</text>
+  <text class="t b" x="585" y="210">Pc and dilution flag; named refusals, never a zero.</text>
   <text class="t b" x="570" y="229">• NATS leaf links; priority pull, summaries first; operator</text>
-  <text class="t b" x="570" y="247">   data merged without loss; decisions signed, hash-chained.</text>
+  <text class="t b" x="585" y="247">data merged without loss; decisions signed, hash-chained.</text>
   <text class="t b" x="570" y="266">• AI tier set by measured link, marking and opt-in; any</text>
-  <text class="t b" x="570" y="284">   unsupported number withheld; no code path to the maths.</text>
+  <text class="t b" x="585" y="284">unsupported number withheld; no code path to the maths.</text>
   <text class="t b" x="570" y="303">• Bundle signed and verified offline before unpacking;</text>
-  <text class="t b" x="570" y="321">   SBOMs; vulnerability gate with reviewed VEX; SLSA Build L2.</text>
+  <text class="t b" x="585" y="321">SBOMs; vulnerability gate with reviewed VEX; SLSA Build L2.</text>
 
   <text class="t h" x="570" y="348">What alternatives often get wrong</text>
   <text class="t b" x="570" y="369">• A Pc printed from element sets, or a refusal shown as zero.</text>
@@ -156,9 +156,10 @@
   <text class="t b" x="570" y="724">• Real CDM access; operator authentication (CAC/PIV)</text>
   <text class="t b" x="570" y="743">• TLS on the leaf link; packaged hub and edge messaging</text>
   <text class="t b" x="570" y="762">• An authorizing official, a STIG scan, an ATO</text>
-  <text class="t b" x="570" y="786">• Cost: the AWS demo hub, about $17.50/month (docs/deploy-aws.md)</text>
+  <text class="t b" x="570" y="781">• Demo hub on AWS: about $17.50/month, no other cost</text>
+  <text class="t s" x="585" y="798">figures claimed (docs/deploy-aws.md)</text>
 
   <!-- Footer -->
   <text class="t s" x="24" y="826">Every number comes from a generated report in docs/: validation-report.md, ddil-results.md, ai-eval.md and traceability.md.</text>
-  <text class="t s" x="24" y="842">Two exceptions, each with its source: the AWS cost (docs/deploy-aws.md) and the control count (docs/compliance.md).</text>
+  <text class="t s" x="24" y="842">Exceptions, each with its source: the AWS cost (docs/deploy-aws.md) and the control counts (docs/compliance.md).</text>
 </svg>
