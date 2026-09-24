@@ -74,6 +74,11 @@ class TextFormatter(logging.Formatter):
         return f"{base} {fields}" if fields else base
 
 
+def log_level(level: str | None = None) -> str:
+    """The level to log at: the one given, else SENTINEL_LOG_LEVEL, else INFO."""
+    return (level or os.environ.get("SENTINEL_LOG_LEVEL") or "INFO").upper()
+
+
 def configure_logging(fmt: str | None = None, level: str | None = None) -> None:
     """Install one Sentinel handler on the root logger (idempotent)."""
     fmt = fmt or os.environ.get("SENTINEL_LOG_FORMAT", "text")
@@ -84,4 +89,4 @@ def configure_logging(fmt: str | None = None, level: str | None = None) -> None:
     handler.setFormatter(JsonFormatter() if fmt == "json" else TextFormatter())
     handler._sentinel = True  # type: ignore[attr-defined]
     root.addHandler(handler)
-    root.setLevel((level or os.environ.get("SENTINEL_LOG_LEVEL", "INFO")).upper())
+    root.setLevel(log_level(level))

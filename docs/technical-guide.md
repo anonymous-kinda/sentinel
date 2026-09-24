@@ -401,7 +401,7 @@ Every node setting is an environment variable read at start-up; `sentinel/api/se
 | Variable | Default | Effect |
 |---|---|---|
 | `SENTINEL_LOG_FORMAT` | `text` | `json` writes one JSON object per line (the container sets it); anything else writes `key=value` text |
-| `SENTINEL_LOG_LEVEL` | `INFO` | Root log level for the scripts that call `configure_logging()` without a level (`scripts/trace.py`, `scripts/oscal_evidence.py`, `scripts/sysml_check.py`, `scripts/sbom.py`, `scripts/scan.py`). `sentinel serve` ignores it: use `--log-level`. |
+| `SENTINEL_LOG_LEVEL` | `INFO` | Root log level for `sentinel serve` when `--log-level` is not given, and for the scripts that call `configure_logging()` without a level (`scripts/trace.py`, `scripts/oscal_evidence.py`, `scripts/sysml_check.py`, `scripts/sbom.py`, `scripts/scan.py`). The flag wins over the variable; `deploy/systemd/sentinel.service` passes `--log-level warning`. |
 
 ### Installer and offline signature verification
 
@@ -788,4 +788,3 @@ The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and t
 | A node will not start: `SENTINEL_ROLE must be one of` | The value is not `hub`, `edge` or `standalone` | the configuration reference above |
 | Requests reach a node you did not start | `make serve` and `make demo-local` use fixed ports 8000 and 8001; if another process holds them, your node fails to bind and your requests go to the other one | `node_id` and `role` in `GET /api/node`; `ss -ltn` |
 | `make scan` fails on a commit that passed yesterday | Trivy's vulnerability database is not pinned, by design (RA-5) | `dist/scan/`; `docs/supply-chain.md` |
-| `sentinel serve` ignores `SENTINEL_LOG_LEVEL` | `serve` passes `--log-level` (default `info`) explicitly | use `--log-level` |

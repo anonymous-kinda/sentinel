@@ -21,14 +21,15 @@ def _serve(args: argparse.Namespace) -> int:
     import uvicorn
 
     from .api import create_app
-    from .obs import configure_logging
+    from .obs import configure_logging, log_level
 
-    configure_logging(level=args.log_level)
+    level = log_level(args.log_level)
+    configure_logging(level=level)
     # log_config=None: uvicorn logs through Sentinel's structured handler.
     # No access log: requests are logged at the TLS proxy in front.
     uvicorn.run(
         create_app(), host=args.host, port=args.port,
-        log_level=args.log_level, log_config=None, access_log=False,
+        log_level=level.lower(), log_config=None, access_log=False,
     )
     return 0
 
@@ -85,7 +86,7 @@ def register(sub) -> None:
     p = sub.add_parser("serve", help="run a node: API + web console")
     p.add_argument("--host", default="127.0.0.1")
     p.add_argument("--port", type=int, default=8000)
-    p.add_argument("--log-level", default="info")
+    p.add_argument("--log-level", default=None, help="default: SENTINEL_LOG_LEVEL, else info")
     p.set_defaults(func=_serve)
 
     ex = sub.add_parser("exercise", help="exercise scenario utilities")
