@@ -1,6 +1,6 @@
 {
   "component-definition": {
-    "uuid": "52a555a1-aec7-584d-a944-688a6b31b4b8",
+    "uuid": "2a60c367-2183-51ec-b4bc-62fb7f653b44",
     "metadata": {
       "title": "Sentinel component definition",
       "last-modified": "2026-09-24T22:00:00Z",
@@ -1817,7 +1817,7 @@
               {
                 "uuid": "c216e6b4-732c-5804-8301-ad268eea64b4",
                 "control-id": "cm-3",
-                "description": "Every change is a git commit, and every push and pull request runs the checks listed under CA-7. Generated documents (the validation report, the AI eval report, this package's authored OSCAL documents) are regenerated and compared in CI, so a change cannot alter them silently. Branch protection and required review are GitHub settings and are not evidenced in the repository.",
+                "description": "Every change is a git commit, and every push and pull request runs the checks listed under CA-7. Generated documents (the validation report, the AI eval report, the OpenAPI interface control document, this package's authored OSCAL documents) are regenerated and compared in CI, so a change cannot alter them silently. Branch protection and required review are GitHub settings and are not evidenced in the repository.",
                 "props": [
                   {
                     "name": "implementation-status",
@@ -1828,6 +1828,11 @@
                     "name": "evidence-test",
                     "ns": "urn:sentinel:oscal",
                     "value": "tests/compliance/test_package_integrity.py::test_committed_documents_are_what_the_sources_generate"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/docs/test_openapi_current.py::test_the_committed_openapi_matches_a_fresh_export"
                   },
                   {
                     "name": "evidence-ci",

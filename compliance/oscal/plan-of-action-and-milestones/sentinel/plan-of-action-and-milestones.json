@@ -1,9 +1,9 @@
 {
   "plan-of-action-and-milestones": {
-    "uuid": "4cd295d8-284a-51ff-9573-de3fbdc4f47a",
+    "uuid": "b95d028d-9f2a-5fa4-ac1e-8c876fbc6e2d",
     "metadata": {
       "title": "Sentinel plan of action and milestones",
-      "last-modified": "2026-09-24T22:31:17Z",
+      "last-modified": "2026-09-24T22:33:47Z",
       "version": "0.3.0",
       "oscal-version": "1.2.1"
     },
@@ -259,7 +259,7 @@
         "uuid": "1a72f9dd-307e-5acb-9719-cadb55106ffa",
         "title": "CM-3 (Build, test and release pipeline): partial",
         "description": "Require the CI checks and one review before merging to main, and record the setting as code.",
-        "statement": "Stated in the SSP as partial: Every change is a git commit, and every push and pull request runs the checks listed under CA-7. Generated documents (the validation report, the AI eval report, this package's authored OSCAL documents) are regenerated and compared in CI, so a change cannot alter them silently. Branch protection and required review are GitHub settings and are not evidenced in the repository.",
+        "statement": "Stated in the SSP as partial: Every change is a git commit, and every push and pull request runs the checks listed under CA-7. Generated documents (the validation report, the AI eval report, the OpenAPI interface control document, this package's authored OSCAL documents) are regenerated and compared in CI, so a change cannot alter them silently. Branch protection and required review are GitHub settings and are not evidenced in the repository.",
         "status": "open",
         "remediations": [
           {

@@ -380,10 +380,14 @@ rationale = "A change to the engine or the sync layer changes what operators are
 component = "pipeline"
 status = "partial"
 statement = """Every change is a git commit, and every push and pull request runs the checks listed \
-under CA-7. Generated documents (the validation report, the AI eval report, this package's authored \
-OSCAL documents) are regenerated and compared in CI, so a change cannot alter them silently. Branch \
-protection and required review are GitHub settings and are not evidenced in the repository."""
-tests = ["tests/compliance/test_package_integrity.py::test_committed_documents_are_what_the_sources_generate"]
+under CA-7. Generated documents (the validation report, the AI eval report, the OpenAPI interface \
+control document, this package's authored OSCAL documents) are regenerated and compared in CI, so a \
+change cannot alter them silently. Branch protection and required review are GitHub settings and \
+are not evidenced in the repository."""
+tests = [
+    "tests/compliance/test_package_integrity.py::test_committed_documents_are_what_the_sources_generate",
+    "tests/docs/test_openapi_current.py::test_the_committed_openapi_matches_a_fresh_export",
+]
 ci = ["ci.yml#python", "ci.yml#compliance"]
 plan = "Require the CI checks and one review before merging to main, and record the setting as code."
 
