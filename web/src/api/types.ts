@@ -290,3 +290,95 @@ export interface AiAnswer {
   draft_id: string | null;
   audit_seq: number | null;
 }
+
+// ------------------------------------------------------------ passes (M3)
+// Mirrors docs/icd/passes-api.md. Edge-local: the unit's position and its
+// pass windows never leave the node (ADR-010). Times are ISO 8601 UTC.
+
+export type PassSensor = "EO" | "SAR";
+
+export interface PassUnit {
+  unit_id: string;
+  lat_deg: number;
+  lon_deg: number;
+  alt_m: number;
+  reaction_time_min: number;
+}
+
+export interface PassWindow {
+  norad_id: number;
+  name: string;
+  sensor: PassSensor;
+  rise: string;
+  culmination: string;
+  set: string;
+  /** rise and set widened by the element-set timing pad */
+  padded_start: string;
+  padded_end: string;
+  pad_s: number;
+  max_elevation_deg: number;
+  /** the elevation the imager's field of regard implies */
+  mask_elevation_deg: number;
+  element_age_days: number;
+  /** element set older than 3 days */
+  stale: boolean;
+  /** EO: unit lit at culmination. SAR: null (no daylight rule for radar). */
+  sunlit: boolean | null;
+  /** counts against the unit: SAR, or EO with the unit lit */
+  usable: boolean;
+}
+
+/** Time not observed by catalogued imagers. Never an all-clear. */
+export interface UnobservedGap {
+  start: string;
+  end: string;
+  duration_s: number;
+  /** a stale element set bounds or overlaps it */
+  low_confidence: boolean;
+}
+
+export interface SkippedImager {
+  norad_id: number;
+  name: string;
+  reason: string;
+}
+
+export interface PassesView {
+  unit: PassUnit;
+  start: string;
+  end: string;
+  provider: string;
+  /** the gap label, shown verbatim */
+  label: string;
+  windows: PassWindow[];
+  gaps: UnobservedGap[];
+  next_unobserved: UnobservedGap | null;
+  catalog: { imagers: number; skipped: SkippedImager[] };
+  elements: { oldest_age_days: number | null; newest_age_days: number | null; stale: number };
+}
+
+export interface CatalogImager {
+  norad_id: number;
+  name: string;
+  sensor: PassSensor;
+  /** field of regard: a planning assumption, sourced in `basis` */
+  max_off_nadir_deg: number;
+  gsd_m: number | null;
+  basis: string;
+  element_epoch: string | null;
+  element_age_days: number | null;
+  stale: boolean;
+}
+
+export interface PassCatalog {
+  imagers: CatalogImager[];
+  skipped: SkippedImager[];
+}
+
+/** Visualization only: never an input to a window or a gap. */
+export interface PassTrack {
+  norad_id: number;
+  positions_ecef_m: [number, number, number][];
+  step_s: number;
+  note: string;
+}

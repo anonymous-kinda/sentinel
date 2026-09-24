@@ -44,6 +44,14 @@ export function countdown(seconds: number): string {
   return `${sign}${m}m ${String(s - m * 60).padStart(2, "0")}s`;
 }
 
+/** 1h 30m - a length of time, rounded to the minute, with no sign. */
+export function duration(seconds: number): string {
+  const minutes = Math.round(Math.abs(seconds) / 60);
+  const h = Math.floor(minutes / 60);
+  const m = minutes - h * 60;
+  return h > 0 ? `${h}h ${String(m).padStart(2, "0")}m` : `${m}m`;
+}
+
 const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
 
 /** Military date-time group: 241907Z SEP 26. */
