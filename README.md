@@ -2,7 +2,7 @@
 
 A DDIL-resilient conjunction assessment decision aid for satellite operators.
 
-**Status: risk engine (validated against NASA CARA), operator console, hub/edge DDIL sync (tested on a real two-node network) and the AI decision layer are implemented and tested. Army pass module and ATO evidence in progress.**
+**Status: implemented and tested end to end: the risk engine (validated against NASA CARA), the operator console, hub/edge DDIL sync on a real two-node network, the Army overhead-pass module, AI decision support, a signed and offline-verifiable supply chain, a generated OSCAL package (no ATO is claimed) and a SysML v2 requirement trace. Nothing has been fielded.**
 
 ![Sentinel operator console](docs/img/console.png)
 
@@ -140,6 +140,20 @@ Claim three. The assistant never produces a risk number, and that is enforced ra
 SENTINEL_AI_CLOUD=1 TYPESAFE_API_KEY=... ANTHROPIC_API_KEY=... make serve   # hosted tiers (opt-in)
 make ai-eval                                                               # score the routers
 ```
+
+---
+
+## Overhead passes for a disconnected Army unit
+
+The second mission module. A unit on the ground needs to know when a catalogued imaging satellite can see it, and when none can for long enough to move.
+
+- **What it computes.** Pass windows for 38 public-catalog EO and SAR imagers, from public CelesTrak element sets and each imager's field of regard. Fields of regard are planning assumptions with cited sources, chosen to err wide. EO passes count only when the unit is lit. The next window long enough for the unit's reaction time is shown as a date-time group.
+- **What it will not say.** A gap is labelled *not observed by catalogued imagers*, never "safe": uncatalogued and non-public sensors are outside the model, and a test keeps the word out of the module and the console. Element-set error is covered by a timing pad that widens with age, and sets older than three days are flagged stale.
+- **Two providers, one contract.** Local SGP4 and a CCSDS OEM ephemeris provider must both pass one conformance suite: rise and set within 2 s of a brute-force oracle. A Wayfinder adapter feeds the second provider, on an *assumed* schema (see `docs/adapters/wayfinder.md`) (ADR-011).
+- **The unit's position never leaves the edge (ADR-010).** It is not a sync record, never logged, stored in one 0600 file, and the edge's leaf link denies the subjects that could carry it. The OPSEC harness scenario checks this on real processes: the hub's wire never carries the unit in any checked encoding, and a deliberate canary never crosses. The results are in `docs/ddil-results.md`.
+- **Reference data rides the same sync.** Public element sets reach the edge through the unchanged priority agent. The hub offers edges only the imaging catalog, and ADR-008 records what that costs on a thin link.
+
+![Passes tab: next unobserved window, the unit, and 24 h of pass windows by imager](docs/img/passes.png)
 
 ---
 
