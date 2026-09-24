@@ -2,6 +2,8 @@
 
 Sentinel is a DDIL-resilient conjunction assessment decision aid, with an overhead-pass mission module. The architecture record is in `docs/system-design.md` (ADRs) and the maths in `docs/risk-engine-design.md`.
 
+**Before adding a mission module, pass provider, source adapter, AI tool or requirement,** follow its recipe under "How to extend" in `docs/technical-guide.md`. Each recipe names the files to touch and the tests and contracts that hold you to it. `docs/technical-guide.md` also has the configuration reference, `docs/index.md` lists every document, and `CONTRIBUTING.md` has the pre-PR commands for each kind of change.
+
 ## Commands
 
 ```bash

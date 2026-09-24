@@ -297,6 +297,7 @@ The architecture decisions, including the ones rejected and why, are in
 anyone can choose a message bus, the useful part is being able to say why not
 the other one.
 
+- **Engineers:** the [technical guide](docs/technical-guide.md) covers architecture, data flows, the configuration reference and how to extend. [`docs/index.md`](docs/index.md) lists every document, and [`CONTRIBUTING.md`](CONTRIBUTING.md) the rules and checks.
 - **Interfaces:** [`docs/icd/`](docs/icd/README.md) has the OpenAPI, AsyncAPI 3.0, CDM admission profile and sync envelope. Each is held to the code by `tests/docs/`.
 - **For program offices and operators:**
   - the [white paper](docs/white-paper.md);
