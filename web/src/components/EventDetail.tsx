@@ -8,6 +8,7 @@ import { HistorySpark } from "./HistorySpark";
 import { BandChip } from "./EventList";
 import { PcValue } from "./PcValue";
 import { OpsPanel } from "./OpsPanel";
+import { Pending } from "./Pending";
 import { VerificationChip } from "./Verification";
 
 export function EventDetail({
@@ -23,14 +24,14 @@ export function EventDetail({
   readOnly?: boolean;
   hasOps?: boolean;
 }) {
-  const { data: detail } = useResource<Detail>(`/api/events/${encodeURIComponent(eventId)}`, version);
+  const { data: detail, error } = useResource<Detail>(`/api/events/${encodeURIComponent(eventId)}`, version);
   const { data: encounter } = useResource<Encounter>(`/api/events/${encodeURIComponent(eventId)}/encounter`, version);
   const { data: curve } = useResource<Curve>(`/api/events/${encodeURIComponent(eventId)}/dilution-curve`, version);
   const [log10k, setLog10k] = useState(0);
 
   useEffect(() => setLog10k(0), [eventId]);
 
-  if (!detail) return <div className="empty">Loading…</div>;
+  if (!detail) return <Pending what="Event" error={error} />;
   const s = detail.summary;
   const a = s.assessment;
   const latest = detail.history[detail.history.length - 1];

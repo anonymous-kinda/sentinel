@@ -1,6 +1,7 @@
 import type { Validation } from "../api/types";
 import { useResource } from "../api/client";
 import { sciPlain } from "../lib/format";
+import { Pending } from "./Pending";
 
 function Scatter({ rows }: { rows: NonNullable<Validation["rows"]> }) {
   const W = 360;
@@ -53,8 +54,8 @@ function Scatter({ rows }: { rows: NonNullable<Validation["rows"]> }) {
 }
 
 export function ValidationPanel() {
-  const { data } = useResource<Validation>("/api/validation");
-  if (!data) return <div className="empty">Running the NASA comparison on this node…</div>;
+  const { data, error } = useResource<Validation>("/api/validation");
+  if (!data) return <Pending what="NASA comparison" error={error} loading="Running the NASA comparison on this node…" />;
   if (!data.available || !data.rows || !data.confusion) {
     return <div className="empty">Validation data not bundled with this node. {data.reason}</div>;
   }

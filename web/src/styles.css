@@ -267,6 +267,7 @@ dd { margin: 0; font-size: 12px; font-family: var(--mono); overflow-wrap: anywhe
 .ver-updating { background: var(--amber-bg); color: var(--amber); }
 .ver-verified { background: var(--green-bg); color: var(--green); }
 .ver-mismatch { background: var(--red-bg); color: var(--red); }
+.ver-unknown { background: var(--gray-bg); color: var(--ink-2); border: 1px dashed var(--line-2); }
 .callout-asserted { background: rgba(138, 153, 166, 0.08); border: 1px dashed var(--line-2); color: var(--ink-2); }
 .voice { margin-top: 8px; font: 600 12px var(--mono); color: var(--ink); background: #0a1017; padding: 6px 8px; border-radius: 4px; letter-spacing: 0.02em; }
 
