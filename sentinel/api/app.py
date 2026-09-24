@@ -155,6 +155,11 @@ def _sync_records(node: Node) -> CompositeRecords:
     return CompositeRecords(ConjunctionRecords(node.conjunctions), {ELEMENT_PREFIX: elements})
 
 
+def _runs_sync(node: Node) -> bool:
+    """Whether this node serves or pulls sync: what it built, not what its role implies."""
+    return node.sync_server is not None or node.sync_agent is not None
+
+
 def build_node(settings: Settings, clock: Clock | None = None, bus: Bus | None = None) -> Node:
     clock = clock or from_env()
     late = LateBus(bus) if bus is not None else LateBus()
@@ -279,7 +284,7 @@ def create_app(
             "now": node.clock.now().isoformat(),
             "read_only": settings.read_only,
             "demo_controls": settings.demo_controls,
-            "modules": ["conjunction", "ops", *(["sync"] if settings.role != "standalone" else []),
+            "modules": ["conjunction", "ops", *(["sync"] if _runs_sync(node) else []),
                         *node.extensions.get("modules", [])],
             "hub_id": settings.hub_id,
             "policy": dataclasses.asdict(node.conjunctions.policy),

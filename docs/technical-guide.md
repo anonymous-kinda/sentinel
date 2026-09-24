@@ -374,7 +374,7 @@ Every node setting is an environment variable read at start-up; `sentinel/api/se
 | Variable | Default | Effect |
 |---|---|---|
 | `SENTINEL_NODE_ID` | `standalone` | The node's identity: its subject namespace (`node.<id>.>`), its signing-key file name, the default operator (`operator@<id>`) |
-| `SENTINEL_ROLE` | `standalone` | `hub` starts `SyncServer`; `edge` starts `SyncAgent` when `SENTINEL_HUB_ID` is set; anything other than `standalone` adds `sync` to the modules the node reports. The value is not validated. |
+| `SENTINEL_ROLE` | `standalone` | `hub` starts `SyncServer`; `edge` starts `SyncAgent` when `SENTINEL_HUB_ID` is set. The node reports the `sync` module only when it runs one of them. Any value other than `hub`, `edge` or `standalone` stops the node at start-up with `ValueError`. |
 | `SENTINEL_HUB_ID` | unset | Edge only: the hub to sync from. Without it an edge runs no sync agent. |
 | `SENTINEL_NATS_URL` | unset | This node's own `nats-server`, for example `nats://127.0.0.1:4222`. Unset means the in-process bus. The node retries the connection 60 times at 0.5 s intervals, then fails to start. |
 | `SENTINEL_SYNC_MODE` | `edf` | Edge only: `edf` (earliest deadline first, with admission control) or `fifo` (the measured baseline). Any other value stops the edge at start-up with `ValueError`. |
@@ -785,6 +785,7 @@ The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and t
 | The Passes tab lists every imager as skipped, or `GET /api/passes/catalog` is empty on an edge | Element sets have not arrived: the hub holds none (its log says `Element snapshot missing`) or lacks those imagers, or sync has not run yet | `GET /api/sync` on the edge; `SENTINEL_ELEMENTS` and `SENTINEL_SYNC_ELEMENTS` on the hub |
 | `GET /api/passes` returns 409 or 503 | 409: no unit is set. 503: an element set for a catalogued imager cannot be propagated | `PUT /api/passes/unit`; the node log `Pass computation refused` |
 | A node will not start: `SENTINEL_SYNC_ELEMENTS must be one of` | The value is not `catalog` or `all` | the configuration reference above |
+| A node will not start: `SENTINEL_ROLE must be one of` | The value is not `hub`, `edge` or `standalone` | the configuration reference above |
 | Requests reach a node you did not start | `make serve` and `make demo-local` use fixed ports 8000 and 8001; if another process holds them, your node fails to bind and your requests go to the other one | `node_id` and `role` in `GET /api/node`; `ss -ltn` |
 | `make scan` fails on a commit that passed yesterday | Trivy's vulnerability database is not pinned, by design (RA-5) | `dist/scan/`; `docs/supply-chain.md` |
 | `sentinel serve` ignores `SENTINEL_LOG_LEVEL` | `serve` passes `--log-level` (default `info`) explicitly | use `--log-level` |
