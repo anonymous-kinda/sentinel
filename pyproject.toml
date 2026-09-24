@@ -6,17 +6,33 @@ build-backend = "setuptools.build_meta"
 name = "sentinel"
 version = "0.1.0"
 description = "DDIL-resilient conjunction assessment decision aid"
-requires-python = ">=3.10"
-dependencies = ["numpy>=1.24", "scipy>=1.10"]
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.24",
+    "scipy>=1.10",
+]
 
 [project.optional-dependencies]
-dev = ["pytest>=7"]
+dev = [
+    "pytest>=7",
+    "pytest-socket>=0.7",
+    "hypothesis>=6.100",
+    "ruff>=0.6",
+    "mypy>=1.10",
+    "import-linter>=2.0",
+]
+
+[project.scripts]
+sentinel = "sentinel.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["sentinel*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "--disable-socket --allow-unix-socket"
 markers = [
     "tier1: geometry, no probability",
     "tier2: integration, analytically checkable",
@@ -24,4 +40,22 @@ markers = [
     "tier4: max Pc and dilution",
     "tier5: refusal gates",
     "tier6: output contract",
+    "req(id): links a test to a requirement in mbse/requirements.sysml",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["web", "fixtures"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]
+ignore = ["E501", "B905", "SIM108"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B018"]
+"scripts/**" = ["E402"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true

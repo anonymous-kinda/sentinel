@@ -1,0 +1,14 @@
+[importlinter]
+root_package = sentinel
+include_external_packages = True
+
+[importlinter:contract:risk-pure]
+name = The risk engine is pure maths: no I/O, transport, web or storage
+type = forbidden
+source_modules =
+    sentinel.risk
+forbidden_modules =
+    fastapi
+    nats
+    sqlite3
+    httpx

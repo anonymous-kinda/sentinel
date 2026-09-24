@@ -2,6 +2,36 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
 .venv/
 build/
 dist/
+
+# local runtime state
+var/
+*.sqlite3
+*.db
+
+# secrets and credentials - never commit
+.env
+.env.*
+*.creds
+*.nk
+*.pem
+*.key
+!deploy/trust/*.pub.pem
+
+# tooling / infra state
+.tools/
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl.bak
+
+# web
+node_modules/
+web/dist/
+web/playwright-report/
+web/test-results/

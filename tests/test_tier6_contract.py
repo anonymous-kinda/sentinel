@@ -8,7 +8,6 @@ the bound it implies, and every result is traceable to its inputs.
 Rungs 24-26 of the ladder.
 """
 
-import numpy as np
 import pytest
 
 from sentinel.risk.engine import assess

@@ -63,7 +63,7 @@ class ObjectState:
     covariance_rtn_m2: np.ndarray | None
     radius_m: float | None
 
-    def replace(self, **changes: Any) -> "ObjectState":
+    def replace(self, **changes: Any) -> ObjectState:
         return dataclasses.replace(self, **changes)
 
 
@@ -75,7 +75,7 @@ class Conjunction:
     secondary: ObjectState
     tca: Any = None
 
-    def replace(self, **changes: Any) -> "Conjunction":
+    def replace(self, **changes: Any) -> Conjunction:
         return dataclasses.replace(self, **changes)
 
     def inputs_hash(self) -> str:

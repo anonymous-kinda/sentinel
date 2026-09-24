@@ -6,10 +6,10 @@ Rungs 1-6 of the ladder in docs/risk-engine-design.md section 7.
 import numpy as np
 import pytest
 
-from sentinel.risk.frames import rtn_to_eci_matrix, rotate_covariance_rtn_to_eci
+from sentinel.risk.engine import assess
+from sentinel.risk.frames import rotate_covariance_rtn_to_eci, rtn_to_eci_matrix
 from sentinel.risk.geometry import encounter_plane_basis, projection_matrix
 from sentinel.risk.types import Method, RefusalReason
-from sentinel.risk.engine import assess
 
 from .conftest import make_conjunction
 

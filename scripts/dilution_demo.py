@@ -8,8 +8,8 @@ Then prints what an operator would see.
 Run:  python3 scripts/dilution_demo.py
 """
 
-import sys
 import pathlib
+import sys
 
 import numpy as np
 
@@ -25,12 +25,12 @@ BOUNDARY = MISS_M / np.sqrt(2.0)
 
 def main() -> None:
     print()
-    print(f"  Conjunction geometry held constant:")
+    print("  Conjunction geometry held constant:")
     print(f"    miss distance      {MISS_M:,.0f} m")
     print(f"    hard-body radius   {2 * RADIUS_M:,.0f} m")
-    print(f"    relative speed     15,000 m/s")
+    print("    relative speed     15,000 m/s")
     print()
-    print(f"  Only the orbit-determination uncertainty changes.")
+    print("  Only the orbit-determination uncertainty changes.")
     print(f"  Predicted dilution boundary: sigma = d/sqrt(2) = {BOUNDARY:,.0f} m")
     print()
 
