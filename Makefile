@@ -159,3 +159,15 @@ compliance-catalog:  ## verify the vendored NIST SP 800-53 Rev 5 catalog, then i
 	rm -rf compliance/oscal/catalogs/nist-800-53-rev5
 	cd compliance/oscal && $(TRESTLE) import -f ../vendor/nist/NIST_SP-800-53_rev5_catalog-min.json -o nist-800-53-rev5
 # <<< compliance (M4) <<<
+
+# >>> interface control documents (docs/icd) >>>
+# openapi.json is exported from the app; the other ICDs are written by hand
+# and held to the code by tests/docs. See docs/icd/README.md.
+.PHONY: openapi icd
+
+openapi:  ## regenerate docs/icd/openapi.json from the FastAPI app (deterministic; never hand-edit)
+	$(UV) run python scripts/export_openapi.py
+
+icd: openapi  ## regenerate the OpenAPI export, then run every ICD drift test
+	$(UV) run pytest -q tests/docs
+# <<< interface control documents (docs/icd) <<<
