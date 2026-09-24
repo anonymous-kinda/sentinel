@@ -10,7 +10,8 @@ Output: dist/sentinel-<version>-<arch>.tar.gz (+ .sha256), containing
     requirements.txt   the hash-locked dependency set (uv export)
     bin/               uv and nats-server for the target arch (tools.lock)
     web/               the built console (Cesium assets included)
-    fixtures/          NASA CARA reference data (NOSA 1.3, unmodified)
+    fixtures/          reference data, unmodified, with provenance: NASA CARA
+                       (NOSA 1.3) and the public CelesTrak element-set snapshot
     systemd/           hardened unit files
     install.sh         offline installer
     VERSION            human-readable identity
@@ -37,7 +38,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from supplychain.bundle import PYTHON_TAG, bundle_manifest, export_requirements, write_tarball  # noqa: I001
+from supplychain.bundle import PYTHON_TAG, bundle_manifest, export_requirements, stage_fixtures, write_tarball  # noqa: I001
 from supplychain.checksums import sha256_file, write_manifest
 from supplychain.toolslock import read_lock
 
@@ -105,9 +106,7 @@ def build(arch: str, out_dir: pathlib.Path) -> pathlib.Path:
 
     # 5. Console, reference data, deployment files.
     shutil.copytree(web_dist, stage / "web")
-    (stage / "fixtures").mkdir()
-    shutil.copytree(ROOT / "fixtures" / "cara", stage / "fixtures" / "cara")
-    shutil.copy2(ROOT / "fixtures" / "cara_cases.json", stage / "fixtures" / "cara_cases.json")
+    stage_fixtures(ROOT / "fixtures", stage)
     shutil.copytree(ROOT / "deploy" / "systemd", stage / "systemd")
     shutil.copy2(ROOT / "deploy" / "bundle" / "install.sh", stage / "install.sh")
     shutil.copy2(ROOT / "LICENSE", stage / "LICENSE")
