@@ -27,8 +27,12 @@ from ..clock import Clock
 from ..crdt import DotContext, NodeKey, SignedLog, TrustStore, codec
 from ..crdt.log import Entry
 from ..crdt.mvmap import MVMap, Register
+from ..obs import get_logger
+
+log = get_logger(__name__)
 
 ANNOTATION_FIELDS = ("triage_status", "assignee", "note")
+ANNOTATION_VALUE_KEYS = frozenset({"v", "by", "node", "at"})
 TRIAGE_STATUSES = ("NEW", "WATCH", "MANEUVER_PLANNING", "NO_ACTION", "CLOSED")
 DECISIONS = ("MANEUVER", "NO_MANEUVER", "MONITOR", "REQUEST_TASKING")
 
@@ -184,12 +188,11 @@ class OpsService:
         }
 
     async def merge_payload(self, payload: dict) -> dict:
-        added = self.log.merge(Entry.from_wire(e) for e in payload.get("log", []))
-        if added:
-            self._save_entries(added)
+        added = self._merge_entries(payload.get("log", []))
         changed_keys = []
         for key, wire in payload.get("reg", {}).items():
-            if self.mv.merge_register(key, Register.from_wire(wire)):
+            register = _peer_register(key, wire)
+            if register is not None and self.mv.merge_register(key, register):
                 self._save_register(key)
                 changed_keys.append(key)
         if added or changed_keys:
@@ -197,6 +200,18 @@ class OpsService:
             for event_id in events:
                 await self._changed("merge", event_id)
         return {"entries_added": len(added), "registers_changed": len(changed_keys)}
+
+    def _merge_entries(self, wires: list) -> list[Entry]:
+        """Decode every entry before merging any, so a malformed payload
+        merges nothing. A merge that stops part-way (IntegrityError) has
+        already taken entries into memory, and peers learn this replica's
+        context from memory and never resend them: save those too."""
+        incoming = [Entry.from_wire(wire) for wire in wires]
+        before = set(self.log.entries)
+        try:
+            return self.log.merge(incoming)
+        finally:
+            self._save_entries([e for dot, e in self.log.entries.items() if dot not in before])
 
     # peer contexts remembered between exchanges (stale is safe: sends more)
     def peer_contexts(self, peer: str) -> dict:
@@ -209,6 +224,33 @@ class OpsService:
     def remember_peer(self, peer: str, contexts: dict) -> None:
         with self._lock:
             self._db.execute("INSERT OR REPLACE INTO ops_peers VALUES (?,?)", (peer, codec.encode(contexts)))
+
+
+def _peer_register(key: object, wire: Any) -> Register | None:
+    """A peer's register, or None when this node could not show it: an
+    annotation key it does not know, or a value that is not an annotation."""
+    try:
+        register = Register.from_wire(wire)
+    except (KeyError, TypeError, ValueError, IndexError):
+        log.warning("Peer register rejected", key=str(key)[:80], reason="malformed")
+        return None
+    problem = _annotation_problem(key, register)
+    if problem is not None:
+        log.warning("Peer register rejected", key=str(key)[:80], reason=problem)
+        return None
+    return register
+
+
+def _annotation_problem(key: object, register: Register) -> str | None:
+    event_id, separator, field = key.partition("|") if isinstance(key, str) else ("", "", "")
+    if not (event_id and separator and field in ANNOTATION_FIELDS):
+        return "unknown annotation key"
+    for value in register.store.values():
+        if not isinstance(value, dict) or not value.keys() >= ANNOTATION_VALUE_KEYS:
+            return "value is not an annotation"
+        if field == "triage_status" and value["v"] not in TRIAGE_STATUSES:
+            return "unknown triage status"
+    return None
 
 
 def load_identity(node_id: str, var_dir: pathlib.Path, trust_file: pathlib.Path | None) -> tuple[NodeKey, TrustStore]:
