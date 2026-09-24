@@ -251,7 +251,7 @@ An event stays HUB-ASSERTED until that comparison passes (VERIFIED), and any dis
 
 **Consequence.** The hub assigns event identity and the identity travels with the record (`Sentinel-Event-Id`). Updates fetched out of order would otherwise split one event into two.
 
-**Reference data on a thin link (measured in M3).** Sync fetches one record per request/reply, and each record also adds a summary to the priority manifest. In a development run, a hub offering all 167 public element sets it holds pushed DEGRADED convergence past its 180 s bound and LIMITED's FIFO baseline past 200 s.
+**Reference data on a thin link (measured in M3).** Sync fetches one record per request/reply, and each record also adds a summary to the priority manifest. In a development run whose results were not kept in the generated report, a hub offering all 167 public element sets it holds pushed DEGRADED convergence past the scenario's 180 s bound. To reproduce it, run `SENTINEL_SYNC_ELEMENTS=all make ddil`; the harness passes its environment to both nodes.
 
 A hub therefore offers edges only what their missions use: the 38-set imaging catalog (`SENTINEL_SYNC_ELEMENTS=catalog`; `all` to widen). It still holds everything for its own screening.
 
