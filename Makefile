@@ -202,3 +202,12 @@ compose-smoke:  ## on a running stack: health, sync VERIFIED, DENIED measured, r
 compose-link:  ## shape the leaf link from inside the edge: PRESET=CONNECTED|DEGRADED|LIMITED|DENIED
 	$(UV) run python -m harness.compose_link $(PRESET)
 # --- Docker Compose stack (end) ----------------------------------------------
+
+# >>> type check (mypy) >>>
+# Strict on the core (bus, crdt, sync, triage) and the risk engine, standard
+# on the rest of sentinel/. The per-module settings live in pyproject.toml and
+# are held to `mypy --strict` by tests/test_typecheck.py.
+.PHONY: typecheck
+typecheck:  ## mypy over sentinel/: strict on the core and the risk engine, standard on the rest
+	$(UV) run mypy sentinel
+# <<< type check (mypy) <<<

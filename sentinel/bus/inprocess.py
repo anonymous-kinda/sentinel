@@ -5,7 +5,16 @@ from __future__ import annotations
 import asyncio
 
 from ..obs import get_logger
-from .base import Handler, Msg, NoResponders, RequestTimeout, Responder, subject_matches
+from .base import (
+    Bus,
+    Handler,
+    Msg,
+    NoResponders,
+    RequestTimeout,
+    Responder,
+    Subscription,
+    subject_matches,
+)
 
 log = get_logger(__name__)
 
@@ -86,20 +95,22 @@ class LateBus:
     the in-process transport for NATS before anything subscribes.
     """
 
-    def __init__(self, inner=None):
-        self.inner = inner or InProcessBus()
+    def __init__(self, inner: Bus | None = None):
+        self.inner: Bus = inner or InProcessBus()
 
-    async def publish(self, subject, data, headers=None):
+    async def publish(self, subject: str, data: bytes, headers: dict[str, str] | None = None) -> None:
         await self.inner.publish(subject, data, headers)
 
-    async def subscribe(self, subject, handler):
+    async def subscribe(self, subject: str, handler: Handler) -> Subscription:
         return await self.inner.subscribe(subject, handler)
 
-    async def request(self, subject, data, timeout, headers=None):
+    async def request(
+        self, subject: str, data: bytes, timeout: float, headers: dict[str, str] | None = None
+    ) -> Msg:
         return await self.inner.request(subject, data, timeout, headers)
 
-    async def serve(self, subject, responder):
+    async def serve(self, subject: str, responder: Responder) -> Subscription:
         return await self.inner.serve(subject, responder)
 
-    async def close(self):
+    async def close(self) -> None:
         await self.inner.close()

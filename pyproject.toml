@@ -85,8 +85,53 @@ ignore = ["E501", "B905", "SIM108"]
 "scripts/**" = ["E402"]
 
 [tool.mypy]
-python_version = "3.11"
+# The checker targets 3.12 while the code supports 3.11 (requires-python, CI
+# matrix). numpy 2.5, which the 3.12 dev venv and the 3.12/3.13 CI legs
+# install, writes its stubs with PEP 695 `type` statements, and mypy parses
+# those only when it targets 3.12 or later. Every leg checks with this one
+# target, the 3.11 leg (numpy 2.4 stubs) included. That our own code stays
+# 3.11 is held by ruff (target-version py311 rejects 3.12-only syntax) and
+# by the 3.11 test leg.
+python_version = "3.12"
 ignore_missing_imports = true
+warn_unused_configs = true
+warn_redundant_casts = true   # global-only; the rest of --strict is per module below
+
+# Strict on the core (bus, crdt, sync, triage) and the risk engine: every flag
+# `mypy --strict` enables, set one by one because a per-module `strict = true`
+# turns strict mode on for every module. tests/test_typecheck.py holds this
+# list to what `mypy --strict` means in the installed mypy.
+[[tool.mypy.overrides]]
+module = ["sentinel.bus.*", "sentinel.crdt.*", "sentinel.sync.*", "sentinel.triage.*", "sentinel.risk.*"]
+disallow_any_generics = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+warn_unused_ignores = true
+warn_return_any = true
+implicit_reexport = false
+strict_equality = true
+extra_checks = true
+
+# TODO(typing): these modules fail standard mypy on invariants the types do
+# not yet state (Optional narrowing, untyped attributes). They were under
+# active change when checking began; remove each entry as its module is fixed.
+[[tool.mypy.overrides]]
+module = [
+    "sentinel.ai.assistant",
+    "sentinel.ai.calibration",
+    "sentinel.ai.grounding",
+    "sentinel.api.ai_routes",
+    "sentinel.api.app",
+    "sentinel.conjunction.exercise",
+    "sentinel.conjunction.service",
+    "sentinel.passes.providers.tabulated",
+    "sentinel.screening.derived_cdm",
+]
+ignore_errors = true
 
 # --- M3 pass engine: ship the imaging catalog inside the wheel --------------
 [tool.setuptools.package-data]

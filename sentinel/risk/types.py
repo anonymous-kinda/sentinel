@@ -87,7 +87,7 @@ class Conjunction:
         different value means the inputs changed, not that the engine drifted.
         """
 
-        def encode(state: ObjectState) -> dict:
+        def encode(state: ObjectState) -> dict[str, Any]:
             cov = state.covariance_rtn_m2
             return {
                 "id": state.object_id,
@@ -153,12 +153,12 @@ class AssessedConjunction:
     hbr_m: float | None
     inputs_hash: str
     refusal_reason: RefusalReason | None = None
-    diagnostics: dict = dataclasses.field(default_factory=dict)
+    diagnostics: dict[str, Any] = dataclasses.field(default_factory=dict)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """JSON-serialisable form, for the decision log."""
 
-        def clean(value):
+        def clean(value: object) -> object:
             if isinstance(value, np.ndarray):
                 return value.tolist()
             if isinstance(value, (np.floating, np.integer)):
