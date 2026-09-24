@@ -116,3 +116,16 @@ forbidden_modules =
     sentinel.passes
     sentinel.adapters
 # --- end M3 tabulated-ephemeris block ---
+
+# --- screening (ADR-002 demonstration mode) ---------------------------------
+[importlinter:contract:screening-never-decides-pc]
+name = Screening produces element-set geometry; only the engine decides a Pc
+type = forbidden
+source_modules =
+    sentinel.screening
+forbidden_modules =
+    sentinel.risk
+    sentinel.conjunction
+    sentinel.api
+    sentinel.sync
+    sentinel.ai

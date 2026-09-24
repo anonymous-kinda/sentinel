@@ -40,7 +40,11 @@ from .trajectory import encounter_arcs_ecef
 
 EVENT_TCA_WINDOW_S = 60.0
 EXERCISE_ORIGINATOR = "SENTINEL-EXERCISE"
+SCREENING_ORIGINATOR = "SENTINEL-SCREENING"
 DATA_CLASSES = ("REAL", "DERIVED", "EXERCISE")
+# Sentinel's own generators mark their messages at the source. The mark
+# decides the data class, whatever route the message arrived by.
+ORIGINATOR_DATA_CLASS = {EXERCISE_ORIGINATOR: "EXERCISE", SCREENING_ORIGINATOR: "DERIVED"}
 
 
 @dataclasses.dataclass(frozen=True)
@@ -104,8 +108,7 @@ class ConjunctionService:
         except (ValueError, KeyError) as exc:
             return await self._reject(sha, raw, "UNREADABLE", str(exc), source)
 
-        if (message.originator or "").upper() == EXERCISE_ORIGINATOR:
-            data_class = "EXERCISE"
+        data_class = ORIGINATOR_DATA_CLASS.get((message.originator or "").upper(), data_class)
 
         event = self._event_for(message, data_class, event_id)
         warnings = [dataclasses.asdict(w) for w in conversion.warnings]
