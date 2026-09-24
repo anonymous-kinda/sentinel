@@ -1,0 +1,60 @@
+{"id": "lst-01", "text": "What conjunctions do we have right now?", "tool": "list_events"}
+{"id": "lst-02", "text": "Show me all active events.", "tool": "list_events"}
+{"id": "lst-03", "text": "Anything red?", "tool": "list_events", "band": "RED"}
+{"id": "lst-04", "text": "Which events are in the amber band?", "tool": "list_events", "band": "AMBER"}
+{"id": "lst-05", "text": "List the green conjunctions", "tool": "list_events", "band": "GREEN"}
+{"id": "lst-06", "text": "What needs a decision in the next 12 hours?", "tool": "list_events", "window_h": 12}
+{"id": "lst-07", "text": "Show events with a commit point inside 24 hours", "tool": "list_events", "window_h": 24}
+{"id": "lst-08", "text": "Which conjunctions couldn't be assessed?", "tool": "list_events", "band": "UNASSESSED"}
+{"id": "lst-09", "text": "Any red events due in the next 2 days?", "tool": "list_events", "band": "RED", "window_h": 48}
+{"id": "lst-10", "text": "Give me the watch list, soonest first", "tool": "list_events"}
+{"id": "lst-11", "text": "How many close approaches are we tracking?", "tool": "list_events"}
+{"id": "lst-12", "text": "Which events have no probability because the engine refused them?", "tool": "list_events", "band": "UNASSESSED"}
+{"id": "ass-01", "text": "How risky is the 118 conjunction?", "tool": "get_assessment", "event": "99118"}
+{"id": "ass-02", "text": "What's the Pc on EX-DEB 733?", "tool": "get_assessment", "event": "99733"}
+{"id": "ass-03", "text": "Give me the assessment for the event with object 905", "tool": "get_assessment", "event": "99905"}
+{"id": "ass-04", "text": "What does the engine say about the 560 conjunction?", "tool": "get_assessment", "event": "99560"}
+{"id": "ass-05", "text": "What is the miss distance for the 118 event?", "tool": "get_assessment", "event": "99118"}
+{"id": "ass-06", "text": "Status of the GEO conjunction with 207", "tool": "get_assessment", "event": "99207"}
+{"id": "ass-07", "text": "When is TCA for debris 349?", "tool": "get_assessment", "event": "99349"}
+{"id": "ass-08", "text": "Tell me about 881", "tool": "get_assessment", "event": "99881"}
+{"id": "ass-09", "text": "Where does the 733 event stand?", "tool": "get_assessment", "event": "99733"}
+{"id": "ass-10", "text": "How close will EX-DEB 412 get?", "tool": "get_assessment", "event": "99412"}
+{"id": "dil-01", "text": "Is the 412 probability diluted?", "tool": "explain_dilution", "event": "99412"}
+{"id": "dil-02", "text": "Why did the Pc for 412 go down when the covariance grew?", "tool": "explain_dilution", "event": "99412"}
+{"id": "dil-03", "text": "Explain dilution on the 118 event", "tool": "explain_dilution", "event": "99118"}
+{"id": "dil-04", "text": "Could better tracking raise the risk on 733?", "tool": "explain_dilution", "event": "99733"}
+{"id": "dil-05", "text": "Is the low Pc on 905 real or just uncertainty?", "tool": "explain_dilution", "event": "99905"}
+{"id": "dil-06", "text": "What is k* for 412 and what does it mean?", "tool": "explain_dilution", "event": "99412"}
+{"id": "dil-07", "text": "Is 118 in the dilution region?", "tool": "explain_dilution", "event": "99118"}
+{"id": "lnk-01", "text": "Are we connected to the hub?", "tool": "link_status"}
+{"id": "lnk-02", "text": "How is the link?", "tool": "link_status"}
+{"id": "lnk-03", "text": "What's our throughput to the hub right now?", "tool": "link_status"}
+{"id": "lnk-04", "text": "Is the network degraded?", "tool": "link_status"}
+{"id": "lnk-05", "text": "When did we last hear from the hub?", "tool": "link_status"}
+{"id": "lnk-06", "text": "Are we in DDIL conditions?", "tool": "link_status"}
+{"id": "que-01", "text": "What's still waiting to come down from the hub?", "tool": "sync_queue"}
+{"id": "que-02", "text": "Show the sync queue", "tool": "sync_queue"}
+{"id": "que-03", "text": "Which CDMs haven't arrived yet?", "tool": "sync_queue"}
+{"id": "que-04", "text": "What will arrive next when the link recovers?", "tool": "sync_queue"}
+{"id": "que-05", "text": "Is anything stuck as summary only?", "tool": "sync_queue"}
+{"id": "que-06", "text": "How much data is pending from the hub?", "tool": "sync_queue"}
+{"id": "drf-01", "text": "Draft a maneuver decision for 118", "tool": "draft_decision", "event": "99118", "decision": "MANEUVER"}
+{"id": "drf-02", "text": "Record no maneuver for the 905 event", "tool": "draft_decision", "event": "99905", "decision": "NO_MANEUVER"}
+{"id": "drf-03", "text": "Let's monitor 412 and decide on the next update", "tool": "draft_decision", "event": "99412", "decision": "MONITOR"}
+{"id": "drf-04", "text": "Request more tracking on debris 560", "tool": "draft_decision", "event": "99560", "decision": "REQUEST_TASKING"}
+{"id": "drf-05", "text": "We will maneuver for 118, write it up", "tool": "draft_decision", "event": "99118", "decision": "MANEUVER"}
+{"id": "drf-06", "text": "Put down a decision to keep watching 733", "tool": "draft_decision", "event": "99733", "decision": "MONITOR"}
+{"id": "drf-07", "text": "Ask for tasking on the 349 object", "tool": "draft_decision", "event": "99349", "decision": "REQUEST_TASKING"}
+{"id": "drf-08", "text": "Log a no-maneuver decision on 207", "tool": "draft_decision", "event": "99207", "decision": "NO_MANEUVER"}
+{"id": "drf-09", "text": "Draft: maneuver on EX-DEB 881", "tool": "draft_decision", "event": "99881", "decision": "MANEUVER"}
+{"id": "oos-01", "text": "Make me a sandwich", "tool": null}
+{"id": "oos-02", "text": "What's the weather at the ground station?", "tool": null}
+{"id": "oos-03", "text": "Delete all the exercise events", "tool": null}
+{"id": "oos-04", "text": "Recompute the Pc for 118 with a 5 m hard-body radius", "tool": null}
+{"id": "oos-05", "text": "Who is on shift tonight?", "tool": null}
+{"id": "oos-06", "text": "Summarize yesterday's Space Force briefing", "tool": null}
+{"id": "oos-07", "text": "Upload the new TLEs from Space-Track", "tool": null}
+{"id": "oos-08", "text": "Turn off the link emulator", "tool": null}
+{"id": "oos-09", "text": "What's the capital of France?", "tool": null}
+{"id": "oos-10", "text": "Change the RED threshold to 1e-3", "tool": null}

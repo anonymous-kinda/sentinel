@@ -20,7 +20,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Hosted AI providers. Deliberately optional: an air-gapped bundle neither
+# needs nor carries them (the tier policy falls back to local routing).
+ai = [
+    "typesafe-sdk>=0.7",
+    "anthropic>=1.8",
+]
 dev = [
+    "typesafe-sdk>=0.7",
+    "anthropic>=1.8",
     "pytest>=7",
     "pytest-socket>=0.7",
     "hypothesis>=6.100",

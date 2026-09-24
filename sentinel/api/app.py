@@ -29,6 +29,7 @@ from ..linkstate import LinkMonitor
 from ..obs import get_logger
 from ..ops import DECISIONS, OpsService, load_identity
 from ..sync import SyncAgent, SyncServer
+from .identity import operator_of
 from .settings import Settings
 from .validation_view import ValidationView
 
@@ -253,7 +254,7 @@ def create_app(
 
     # ------------------------------------------------------- operator data
     def operator(request: Request) -> str:
-        return request.headers.get("X-Sentinel-Operator") or f"operator@{settings.node_id}"
+        return operator_of(request, settings.node_id)
 
     def writable() -> None:
         if settings.read_only:

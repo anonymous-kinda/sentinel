@@ -25,7 +25,8 @@ make help                               # all make targets
 - **The test ladder comes first**: write the rung, watch it fail, then write the code.
 - **CARA fixtures are transcribed by hand** from NASA's published files, with provenance. Never generate expected values by running this code.
 - **Tests never touch the network** (`pytest-socket`). Skyfield loads bundled ephemerides only.
-- `docs/validation-report.md` and `docs/ddil-results.md` are **generated files**. Regenerate them; never hand-edit.
+- `docs/validation-report.md`, `docs/ddil-results.md` and `docs/ai-eval.md` are **generated files**. Regenerate them; never hand-edit.
+- **AI never computes.** The assistant (`sentinel/ai/`) routes to tools and phrases their facts; `.importlinter` forbids it the maths. Hosted AI (Jev, Claude) needs an UNCLASSIFIED marking, operator opt-in and a usable measured link, and every AI answer passes the number-grounding guard. Never publish a Jev number that did not come from a real run.
 - **Module boundaries are enforced by `.importlinter`**: `bus`, `sync`, `crdt` and `triage` may not import mission modules (`risk`, `cdm`, `passes`).
 - **Data class on everything**: REAL, DERIVED or EXERCISE. Exercise data carries `ORIGINATOR=SENTINEL-EXERCISE`.
 - **Nothing from `../prep/` ever enters this repo.** Privateer products are mentioned only as integration targets, with the disclaimer in `docs/adapters/wayfinder.md`.

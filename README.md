@@ -2,7 +2,7 @@
 
 A DDIL-resilient conjunction assessment decision aid for satellite operators.
 
-**Status: risk engine (validated against NASA CARA), operator console, and hub/edge DDIL sync implemented and tested on a real two-node network. Army pass module, ATO evidence and AI decision layer in progress.**
+**Status: risk engine (validated against NASA CARA), operator console, hub/edge DDIL sync (tested on a real two-node network) and the AI decision layer are implemented and tested. Army pass module and ATO evidence in progress.**
 
 ![Sentinel operator console](docs/img/console.png)
 
@@ -13,7 +13,7 @@ A DDIL-resilient conjunction assessment decision aid for satellite operators.
 A satellite operator receives warnings that a tracked object may pass close
 to one of their assets, and must decide - before the maneuver commit point -
 whether to spend propellant avoiding it. Sentinel is a decision aid for that
-call, built around two claims.
+call, built around three claims.
 
 **Claim one: a low probability of collision is not by itself evidence of safety.**
 
@@ -51,9 +51,18 @@ exceeds the miss distance over root two.
 Conjunction assessment tooling is overwhelmingly cloud-hosted. An operator
 on a deployed ground station, a ship, or any denied or degraded link loses
 the decision aid exactly when the decision still has to be made. The commit
-point does not move because the network went down. The architecture for this
-is designed (see `docs/system-design.md`, ADR-004 through ADR-006) and not
-yet implemented.
+point does not move because the network went down. Sentinel keeps every
+node working on its own data and moves what matters first when a link
+returns: built and measured below (ADR-004 to ADR-006, ADR-008).
+
+**Claim three: AI helps only where it cannot corrupt the decision.**
+
+A language model is good at understanding what an operator is asking and at
+phrasing an answer, and unreliable at arithmetic. A decision aid that lets a
+model state a collision probability has put an unauditable number in front
+of someone deciding whether to burn propellant. Sentinel uses AI to choose
+the tool and to phrase the result, never to compute, and it checks that
+every number in an AI-written answer came from the validated code (ADR-007).
 
 ---
 
@@ -99,6 +108,38 @@ make ddil            # five scenarios on real processes -> docs/ddil-results.md
 ![Conflict and review-required after reconnect](docs/img/edge-conflict.png)
 
 The harness also found four NATS defaults that assume a LAN. One would have made a satellite-linked edge reconnect forever, and another let the edge silently route around its intended path. They are fixed and each is guarded by a scenario (`docs/system-design.md`, "Findings from the DDIL harness").
+
+---
+
+## AI decision support: Jev routes, code computes, the operator decides
+
+Claim three. The assistant never produces a risk number, and that is enforced rather than promised: `.importlinter` forbids `sentinel/ai` from importing the risk engine, the CDM codec, numpy or scipy.
+
+| Step | Hosted, when policy allows | Always-available floor |
+|---|---|---|
+| **Route** the request to one catalogued tool | [Jev](https://docs.typesafe.ai) (TypeSafe's System One model). Typed questions whose options are exactly the tool catalog and the events on this node, answered with calibrated probabilities | slash commands and keyword rules |
+| **Compute** the facts | none: Sentinel's own validated code | the same |
+| **Phrase** the facts | Claude | deterministic templates |
+
+- **The tier follows the measured link and the marking.**
+  - Hosted AI needs an UNCLASSIFIED marking and operator opt-in.
+  - Jev may run on a LIMITED link, because its answer is a few probabilities, not prose.
+  - Claude needs CONNECTED or DEGRADED.
+  - DENIED means local only.
+  - A failing hosted call falls back within the same answer, and the answer says so.
+- **Unsure means ask.** Below 0.5 confidence, or with no event named, the assistant offers the top alternatives as one-click choices.
+- **Every number is grounded.** An AI-written answer that states a number the tool results do not contain is withheld. The template answer is shown instead, with the offending number named.
+- **Drafts, not actions.** "Draft a maneuver decision for 118" produces a draft. A person confirms it, and it becomes a signed DECISION carrying its provenance (router, confidence, model). A draft made against a CDM that has since been superseded cannot be confirmed.
+- **Audited.** Every ask and confirm is a line in a hash-chained log that the console verifies.
+
+![Assistant tab: tier, grounding, ask-back and a draft awaiting confirmation](docs/img/assistant.png)
+
+**Measured, not claimed.** `make ai-eval` scores the routers on 60 labelled requests through the assistant's own confidence gate, reporting accuracy, coverage, abstention, Brier score, ECE and a reliability diagram (`docs/ai-eval.md`). The deterministic floor routes about half of natural-language requests to the right tool, which is the gap a model has to close. Jev's column is filled only by a real run with `TYPESAFE_API_KEY` set; no Jev number in this repository was produced any other way.
+
+```bash
+SENTINEL_AI_CLOUD=1 TYPESAFE_API_KEY=... ANTHROPIC_API_KEY=... make serve   # hosted tiers (opt-in)
+make ai-eval                                                               # score the routers
+```
 
 ---
 
@@ -151,6 +192,7 @@ uv run pytest -q -m tier3             # NASA CARA published cases
 uv run sentinel assess fixtures/cara/PcTestCaseCDMs/000025994_conj_000037558_20210324_151047_20210323_154356.cdm
 uv run python scripts/dilution_demo.py      # the demonstration above
 uv run python scripts/validation_report.py  # regenerate docs/validation-report.md
+make ai-eval                                # score the assistant's routers -> docs/ai-eval.md
 ```
 
 The `assess` example is TERRA against a fragment of Iridium 33, a real 2021 event. Sentinel reproduces the originator's Pc of 2.1e-2 and flags it **diluted**: the covariance sits past the Pc peak, and the worst case over covariance scaling is 3.5e-2.
@@ -181,12 +223,15 @@ sentinel/crdt/         dots, signed decision log, multi-value registers (propert
 sentinel/ops/          operator data service: decisions, triage, persistence, anti-entropy
 sentinel/triage/       class / deadline / consequence - the only thing sync knows about a mission
 sentinel/linkstate/    measured link state; Toxiproxy control for demos and the harness
+sentinel/ai/           assistant: tier policy, Jev and local routers, tools, narrators, grounding guard, eval
+sentinel/audit/        hash-chained JSON Lines audit log
 sentinel/api/          the node: FastAPI, SSE, strict CSP, static console
 sentinel/obs.py        structured logging: stable messages, values as fields
 web/                   React + TypeScript + CesiumJS console (offline imagery, no ion, no CDN)
 harness/               real two-node DDIL scenarios (nats-server + Toxiproxy, no containers)
 deploy/                bundle builder, offline installer, systemd, NATS configs, AWS Terraform, Ansible
 fixtures/cara/         NASA CARA data, unmodified, with licence, provenance and checksums
+evals/                 labelled operator requests for the routing eval
 docs/                  ADRs, risk-engine design, generated validation and DDIL reports
 ```
 

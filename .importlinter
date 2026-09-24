@@ -48,3 +48,29 @@ forbidden_modules =
     sentinel.risk
     sentinel.cdm
     sentinel.api
+
+[importlinter:contract:ai-does-no-math]
+name = The AI layer has no path to the maths: it asks tools, never computes
+type = forbidden
+source_modules =
+    sentinel.ai
+forbidden_modules =
+    sentinel.risk
+    sentinel.cdm
+    numpy
+    scipy
+
+[importlinter:contract:hosted-ai-at-the-edges]
+name = Hosted AI SDKs are confined to their adapters
+type = forbidden
+source_modules =
+    sentinel.ai.assistant
+    sentinel.ai.catalog
+    sentinel.ai.grounding
+    sentinel.ai.narrate
+    sentinel.ai.policy
+    sentinel.ai.router
+    sentinel.ai.tools
+forbidden_modules =
+    typesafe_sdk
+    anthropic

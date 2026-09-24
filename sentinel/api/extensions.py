@@ -5,4 +5,6 @@ than importing modules from app.py, lets a deployment profile (e.g. the
 public read-only node) run without them.
 """
 
-REGISTRARS: list = []
+from .ai_routes import register as register_ai
+
+REGISTRARS: list = [register_ai]

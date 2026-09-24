@@ -3,7 +3,7 @@ SHELL := /bin/bash
 UV ?= uv
 export PATH := $(HOME)/.local/bin:$(PATH)
 
-.PHONY: help install test lint web web-test serve dev report demo clean bundle airgap-verify tools demo-local ddil
+.PHONY: help install test lint web web-test serve dev report ai-eval demo clean bundle airgap-verify tools demo-local ddil
 
 help:  ## list targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -32,6 +32,9 @@ dev:  ## API on :8000 + Vite dev server on :5173 (hot reload)
 
 report:  ## regenerate docs/validation-report.md
 	$(UV) run python scripts/validation_report.py
+
+ai-eval:  ## score the assistant's routers on evals/routing.jsonl -> docs/ai-eval.md (Jev only if TYPESAFE_API_KEY is set)
+	$(UV) run python scripts/ai_eval.py
 
 clean:
 	rm -rf web/dist .pytest_cache .ruff_cache dist build

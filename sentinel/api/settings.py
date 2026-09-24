@@ -32,6 +32,8 @@ class Settings:
     var_dir: str = "var"                     # node keys and state
     trust_file: str | None = None            # node_id -> Ed25519 public key (JSON)
     toxiproxy_api: str | None = None         # demo/harness link emulation
+    ai: bool = True                          # the assistant (off on the public node)
+    ai_cloud: bool = False                   # operator opt-in to hosted AI (Jev, Claude)
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -54,4 +56,6 @@ class Settings:
             var_dir=os.environ.get("SENTINEL_VAR", "var"),
             trust_file=os.environ.get("SENTINEL_TRUST_FILE") or None,
             toxiproxy_api=os.environ.get("SENTINEL_TOXIPROXY_API") or None,
+            ai=_flag("SENTINEL_AI", True),
+            ai_cloud=_flag("SENTINEL_AI_CLOUD", False),
         )

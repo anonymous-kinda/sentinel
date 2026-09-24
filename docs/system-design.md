@@ -179,6 +179,50 @@ Admission control handles the case where the full record can't make it in time. 
 
 ---
 
+### ADR-007 — AI decision support: Jev routes, code computes, Claude phrases, the operator decides
+
+**Status:** Accepted (2026-09-23). Replaces the earlier proposal of a local quantized model as the only AI tier.
+
+**Decision.** The assistant has three parts, and none of them can produce a risk number.
+
+| Part | Job | Hosted provider | Always-available floor |
+|---|---|---|---|
+| System One: router | Turns the operator's words into one catalogued tool call: which tool, which event, which band or decision | **Jev** (`jev-1.13.0`, pinned). It answers typed Choice questions whose options are exactly the tool catalog and the events on this node, with calibrated probabilities, in one parallel pass | Deterministic rules: slash commands (confidence 1.0) and keywords (0.6) |
+| Tools | Compute the facts | none: Sentinel's own services, the code the validation report covers | the same |
+| System Two: narrator | Phrases the facts for the operator | **Claude** (`claude-opus-5`, low effort, server-side refusal fallback) | Templates: deterministic, and tested to be grounded on every tool and exercise event |
+
+The guards, each enforced in code and tested:
+
+1. **Tier policy** (`sentinel/ai/policy.py`) is a pure function of the *measured* link state, the classification marking and operator opt-in (`SENTINEL_AI_CLOUD`). Hosted AI needs an UNCLASSIFIED marking and opt-in. Jev may run on CONNECTED, DEGRADED and LIMITED links, because its answer is a few probabilities. Claude runs only on CONNECTED and DEGRADED links, because prose is kilobytes. DENIED means local only. A hosted call gets one attempt with no retries, and any failure (authentication, rate limit, server error, unreachable, timeout, refusal) falls back to the local tier within the same answer. The answer says that it fell back.
+2. **Confidence gate.** Below 0.5, or when an event tool has no event, the assistant asks back with the top alternatives instead of acting.
+3. **Number-grounding guard.** Every number in an AI-written answer must match, at the precision it is stated, a number in the tool results or in the operator's question. Otherwise the answer is withheld, the template answer is shown instead, and the unsupported numbers are named. Numbers attached to units ("10.9h", "240700Z") are checked too.
+4. **Writes are drafts.** A person confirms a draft, and it becomes a signed DECISION carrying its provenance: router, confidence, model and audit sequence. Confirmation is refused if the CDM the draft was made against has been superseded since.
+5. **Audit.** Every ask and every confirm is one line of a hash-chained log (`GET /api/ai/audit/verify`).
+6. **Enforced in CI, not asserted.** `.importlinter` forbids `sentinel.ai` from importing `risk`, `cdm`, numpy or scipy, so the model has no path to the maths. It also confines the hosted SDKs to their two adapter modules. An air-gapped bundle without the `ai` extra serves the local tier.
+
+**Why Jev as System One.** Routing is classification over a closed set, and Jev's interface is exactly that. It answers declared questions with a probability for every option, and it cannot answer outside them. That gives three properties the assistant needs:
+- a calibrated confidence, which makes the ask-back gate principled;
+- a small answer, so routing survives a LIMITED link;
+- a measurable behaviour, scored by `make ai-eval`.
+
+Its documented weaknesses are arithmetic, dates and prompt injection, and each is designed around:
+- time windows are parsed by code, dates are formatted by code, and Jev is never asked for a number;
+- object names travel as data;
+- the gate and the grounding guard bound what an injected answer can do.
+
+**Why a deterministic floor instead of a local model.** The floor always works and is exact for commands. On natural language it is weak, and the eval says so: `docs/ai-eval.md` measures it at about half of requests routed to the right tool. That gap is what a model has to earn its place against, measured on the same set through the same gate. Jev's numbers are published only from a real run. A local model can slot in later behind the same `Router` protocol as a DENIED or classified tier (open question 4). It is not built.
+
+**Assumption, stated.** An edge reaches hosted AI over the same link it uses to reach its hub, so the measured hub-link state stands in for the WAN. A hub or standalone node has no upstream link to measure. It is treated as CONNECTED, and the console labels that as assumed.
+
+**Rejected.**
+- A model that computes or "checks" a Pc. There is no path to the maths, by construction.
+- Free-form query generation against the store: unbounded and unauditable.
+- An LLM tool-calling loop as the router. Its answers are larger, which rules out LIMITED links, it gives no calibrated probability per option, and a request needs only one tool call.
+- Retries on hosted calls. The local answer is already there, and backoff on a degraded link only delays the operator.
+- Hosted-only AI, which fails principle 1.
+
+---
+
 ### ADR-008 — Reference data: application-level priority pull, not transport replication
 
 **Status:** Accepted (2026-09-23).
@@ -225,20 +269,6 @@ The real-process harness surfaced four defaults that would have failed a satelli
 | Ping interval 2 min | A black-holed link took minutes to detect. | `ping_interval: 5s`, `ping_max: 3` |
 
 The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and third fixes were in. It now re-establishes the leaf in about 5 s.
-
----
-
-### ADR-007 — AI layer is advisory, tool-constrained, and locally runnable
-
-**Status:** Proposed
-
-**Decision.** Natural language input is translated by a language model into calls against a typed, validated internal API. The model never computes risk, never writes to the decision log without confirmation, and never takes an action with operational consequence. Every prompt, tool call, and result is logged. A small quantized model runs locally so the capability survives disconnection; when unavailable, the interface falls back to deterministic controls with no loss of function.
-
-**Rationale.** DoD's AI ethical principles require traceability, reliability, and governability, and CDAO's responsible AI tooling operationalizes them. The architecture satisfies these by construction rather than by policy assertion: the model cannot produce an untraceable number because it has no path to the math.
-
-This also happens to be the correct engineering choice independent of policy. Deterministic computation belongs in code.
-
-**Rejected.** Free-form query generation against the data store — unauditable and unbounded. Cloud-hosted inference only — fails the core premise. No AI layer — leaves a named requirement unaddressed.
 
 ---
 
@@ -303,6 +333,11 @@ The project is only credible if the math is provably right, so validation is a d
 
 The recorded output of the Denied scenario is the single most persuasive artifact this project will produce. It should be captured as a short clip.
 
+**AI layer.** Three kinds of evidence:
+- Unit tests pin every guard: the tier policy, the confidence gate, grounding, confirm-once and stale drafts, and audit-chain tampering.
+- The Jev and Claude adapters run their real SDKs against mock transports, which pins the wire requests without a network or a key.
+- `make ai-eval` scores the routers on 60 labelled requests, reporting accuracy, coverage, abstention, Brier score, ECE and a reliability diagram. The report (`docs/ai-eval.md`) is generated and never hand-edited.
+
 ---
 
 ## 7. Open Questions
@@ -310,7 +345,7 @@ The recorded output of the Denied scenario is the single most persuasive artifac
 1. Does Space-Track CDM-class access get granted? Gates demonstration versus assessment mode as the default.
 2. Orekit-python CI viability (ADR-003).
 3. Degraded-summary sizing against a realistic link budget (ADR-006).
-4. Which quantized model is small enough for the target edge profile while still reliable at tool-calling (ADR-007).
+4. Whether a local model beats the deterministic floor by enough to justify its footprint at the edge (ADR-007). To be measured with `make ai-eval`, not assumed.
 5. Whether the TraCSS transition changes CDM access mechanics during the build window.
 
 ---

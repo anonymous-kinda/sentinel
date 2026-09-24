@@ -240,3 +240,53 @@ export interface SyncStatus {
   last_cycle?: Record<string, unknown>;
   requests?: Record<string, number>;
 }
+
+// ------------------------------------------------------------ assistant (M5)
+export interface AiTier {
+  router: "jev" | "deterministic";
+  narrator: "claude" | "template";
+  reason: string;
+  link_state: string;
+  marking: string;
+}
+
+export interface AiStatus {
+  enabled: boolean;
+  tier?: AiTier;
+  link_source?: string;
+  cloud_opt_in?: boolean;
+  providers?: { jev: boolean; claude: boolean };
+  models?: { jev: string | null; claude: string | null };
+  min_confidence?: number;
+}
+
+export interface AiRoute {
+  tool: string | null;
+  args: Record<string, unknown>;
+  confidence: number;
+  provider: string;
+  tool_probabilities: Record<string, number>;
+  event_probabilities: Record<string, number>;
+  detail: {
+    model?: string;
+    latency_ms?: number;
+    request_bytes?: number;
+    response_bytes?: number;
+    consequential?: number;
+  };
+}
+
+export interface AiAnswer {
+  status: "answered" | "clarify" | "draft";
+  text: string;
+  tier: AiTier;
+  route: AiRoute | null;
+  facts: Record<string, unknown> | null;
+  narrated_by: string | null;
+  grounding: { ok: boolean; unsupported: string[] } | null;
+  withheld: { narrator: string; unsupported: string[] } | null;
+  alternatives: { tool?: string; event_id?: string; label?: string; p: number | null; description?: string }[];
+  fallbacks: { from: string; to: string; reason: string }[];
+  draft_id: string | null;
+  audit_seq: number | null;
+}
