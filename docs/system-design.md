@@ -121,7 +121,7 @@ CARA publishes expected values for real conjunctions, including its own judgemen
 
 **Rationale.** Microservices, event-driven architectures and modular monoliths are often offered as alternatives. The interesting answer is knowing when each applies. For an edge-deployable system the honest answer is both: decompose in the cloud where orchestration is free, and ship a single deployable at the edge where it is not.
 
-A node's console, store and engine talk only to their *local* NATS server. So a denied link never breaks the node; the leaf reconnects by itself. The DENIED scenario measures this: 2.7 ms p95 console latency while the link is cut.
+A node's console, store and engine talk only to their *local* NATS server. So a denied link never breaks the node; the leaf reconnects by itself. The DENIED scenario measures this: 2.8 ms p95 console latency while the link is cut.
 
 **Amendment: what NATS is used for.**
 - Leafnode connectivity, request/reply, and compression (s2).
@@ -284,7 +284,7 @@ The real-process harness surfaced four defaults that would have failed a satelli
 | Leaf authentication timeout 2 s | The handshake could not complete over the thin link. | `authorization { timeout: 30 }` |
 | Ping interval 2 min | A black-holed link took minutes to detect. | `ping_interval: 5s`, `ping_max: 3` |
 
-The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and third fixes were in. It now re-establishes the leaf in 5.5 s.
+The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and third fixes were in. It now re-establishes the leaf in 11.8 s.
 
 ---
 
@@ -444,6 +444,7 @@ The project is only credible if the math is provably right, so validation is a d
 - *Intermittent* — repeated short drops. Assert no duplicate decision log entries.
 - *Limited* — hard bandwidth cap at satellite-link rates. Assert priority ordering holds and degraded summaries transit.
 - *Recovery* — DENIED straight to LIMITED. Assert the leaf re-establishes and operator data written while denied reaches the hub.
+- *OPSEC* — see ADR-010.
 
 The recorded results of the latest run are generated into `docs/ddil-results.md`.
 

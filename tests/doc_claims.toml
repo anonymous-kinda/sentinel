@@ -24,58 +24,72 @@ patterns = ["Toxiproxy latency 600 +/- 200 ms each way, bandwidth 32 kB/s"]
 [[claim]]
 id = "readme-denied-console-p95"
 doc = "README.md"
-quoted = "(2.7 ms p95 while cut off)"
+quoted = "(2.8 ms p95 while cut off)"
 source = "docs/ddil-results.md"
-patterns = ["p95 2.7 ms over 40 requests"]
+patterns = ["p95 2.8 ms over 40 requests"]
 
 [[claim]]
 id = "readme-limited-summaries"
 doc = "README.md"
-quoted = "Within 2.5 s the edge has a summary of every event"
+quoted = "first: within 5.5 s in the latest run"
 source = "docs/ddil-results.md"
-patterns = ["summaries at 2.5 s"]
+patterns = ["summaries at 5.5 s"]
 
 [[claim]]
 id = "readme-limited-edf-vs-fifo"
 doc = "README.md"
-quoted = "**5.5 s with earliest-deadline-first vs 38.2 s in FIFO order** (about 7×"
+quoted = "**12.1 s with earliest-deadline-first vs 46.8 s in FIFO order** (3.9×"
 source = "docs/ddil-results.md"
-patterns = ["EDF 5.5 s vs FIFO 38.2 s (6.9x)"]
+patterns = ["EDF 12.1 s vs FIFO 46.8 s (3.9x)"]
+
+[[claim]]
+id = "readme-limited-catalog-element-sets"
+doc = "README.md"
+quoted = "the 38 imaging-catalog element sets"
+source = "docs/ddil-results.md"
+patterns = ["38 element sets crossed"]
 
 [[claim]]
 id = "adr004-denied-console-p95"
 doc = "docs/system-design.md"
-quoted = "The DENIED scenario measures this: 2.7 ms p95 console latency"
+quoted = "The DENIED scenario measures this: 2.8 ms p95 console latency"
 source = "docs/ddil-results.md"
-patterns = ["p95 2.7 ms over 40 requests"]
+patterns = ["p95 2.8 ms over 40 requests"]
 
 [[claim]]
 id = "adr006-summaries-visible"
 doc = "docs/system-design.md"
-quoted = "At about 8 kbit/s, every event is visible in 2.5 s."
+quoted = "At about 8 kbit/s, every event was visible as a summary within 5.5 s in the latest run"
 source = "docs/ddil-results.md"
-patterns = ["measured over ~8 kbit/s + 600 ms", "summaries at 2.5 s"]
+patterns = ["measured over ~8 kbit/s + 600 ms", "summaries at 5.5 s"]
 
 [[claim]]
 id = "adr006-edf-vs-fifo"
 doc = "docs/system-design.md"
-quoted = "Same link, same bytes, same 13 records: the most urgent event's full CDM arrives in **5.5 s with EDF vs 38.2 s with FIFO** in the latest run (`docs/ddil-results.md`, generated; about 7×)"
+quoted = "same 13 CDMs: the most urgent event's full CDM arrives in **12.1 s with EDF vs 46.8 s with FIFO** (3.9×)"
 source = "docs/ddil-results.md"
-patterns = ["same 13 records", "EDF 5.5 s vs FIFO 38.2 s (6.9x)"]
+patterns = ["same 13 records", "EDF 12.1 s vs FIFO 46.8 s (3.9x)"]
 
 [[claim]]
 id = "adr008-fifo-slower"
 doc = "docs/system-design.md"
-quoted = "measures at about 7× slower"
+quoted = "measures at 3.9× slower"
 source = "docs/ddil-results.md"
-patterns = ["(6.9x)"]
+patterns = ["(3.9x)"]
+
+[[claim]]
+id = "adr008-thin-link-summaries"
+doc = "docs/system-design.md"
+quoted = "every event summary arrived at 5.5 s, not sooner, because 38 more summaries ride in the manifest"
+source = "docs/ddil-results.md"
+patterns = ["summaries at 5.5 s", "38 element sets crossed"]
 
 [[claim]]
 id = "findings-recovery-leaf"
 doc = "docs/system-design.md"
-quoted = "It now re-establishes the leaf in 5.5 s."
+quoted = "It now re-establishes the leaf in 11.8 s."
 source = "docs/ddil-results.md"
-patterns = ["leaf re-establishes over ~8 kbit/s after a denial (5.5 s)"]
+patterns = ["leaf re-establishes over ~8 kbit/s after a denial (11.8 s)"]
 
 # --- Summary size: asserted by the sync tests ---------------------------------
 
@@ -263,9 +277,9 @@ patterns = ["60 labelled requests (50 in scope, 10 out of scope)"]
 [[claim]]
 id = "readme-trace-counts"
 doc = "README.md"
-quoted = "54 requirements: 49 verified, 5 unverified (planned), 0 broken references"
+quoted = "54 requirements: 53 verified, 1 unverified (planned), 0 broken references"
 source = "docs/traceability.md"
-patterns = ["| **total** | **54** | **49** | **5** | **0** |"]
+patterns = ["| **total** | **54** | **53** | **1** | **0** |"]
 
 # --- Pins and test parameters quoted by the ADRs --------------------------------
 

@@ -39,7 +39,7 @@ make ai-eval bench-passes               # score the AI routers; time the pass en
 - **Passes: a gap is "not observed by catalogued imagers", never "safe".** A provider asked about an imager it has no data for raises `ImagerNotCovered`; silently skipping one makes gaps look longer than they are. The unit's position never leaves the edge node: not a sync record, never logged, never published.
 - **Supply chain:**
   - Never commit keys.
-  - Every third-party binary is pinned in `deploy/tools.lock` with a locally computed sha256. Workflow actions are pinned by commit SHA in `release.yml` and the newer `ci.yml` jobs; pin any action you add or touch (the `python`, `web`, `infra`, `secrets` and `mbse` jobs and `harness.yml` still use version tags).
+  - Every third-party binary is pinned in `deploy/tools.lock` with a locally computed sha256. Every workflow action is pinned by commit SHA (`tests/test_workflows_pinned.py`).
   - A VEX statement is written only for a finding a raw scan produced, with justification and checkable evidence.
 - **Nothing from `../prep/` ever enters this repo.** Privateer products are mentioned only as integration targets, with the disclaimer in `docs/adapters/wayfinder.md`.
 

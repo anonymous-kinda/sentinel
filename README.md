@@ -2,7 +2,7 @@
 
 A DDIL-resilient conjunction assessment decision aid for satellite operators.
 
-**Status: the risk engine (validated against NASA CARA), operator console, hub/edge DDIL sync (tested on a real two-node network), AI decision layer, demonstration-mode screening, signed supply chain and generated requirement trace are implemented and tested. The Army pass module's engine and providers are built; its edge service and OPSEC scenario are in progress. The OSCAL package is a draft SSP with a POA&M generated from test evidence.**
+**Status: the risk engine (validated against NASA CARA), operator console, hub/edge DDIL sync (tested on a real two-node network), AI decision layer, Army pass module, demonstration-mode screening, signed supply chain and generated requirement trace are implemented and tested. The OSCAL package is a draft SSP, with assessment results and a POA&M generated from test evidence.**
 
 ![Sentinel operator console](docs/img/console.png)
 
@@ -89,10 +89,10 @@ Claim two, built and measured. Each node runs its own `nats-server` and serves i
 
 ```bash
 make demo-local      # hub :8000, edge :8001 - the edge's LINK chip shapes the real link
-make ddil            # five scenarios on real processes -> docs/ddil-results.md
+make ddil            # every scenario on real processes -> docs/ddil-results.md
 ```
 
-**Denied: the edge keeps working.** The console stays up (2.7 ms p95 while cut off). Operators triage events and record signed decisions locally, and the link state is *measured*, not configured.
+**Denied: the edge keeps working.** The console stays up (2.8 ms p95 while cut off). Operators triage events and record signed decisions locally, and the link state is *measured*, not configured.
 
 ![Edge node while the link is denied](docs/img/edge-denied.png)
 
@@ -160,7 +160,7 @@ A classified or disconnected site has to trust a bundle without reaching the int
 - the part that satisfies it;
 - the evidence that verifies it: a test, a harness scenario, an import contract or a CI step.
 
-CI regenerates `docs/traceability.md`, and fails on any reference to evidence that does not exist. Work not built yet is marked *planned* and reported as unverified, never as verified. The current trace has 54 requirements: 49 verified, 5 unverified (planned), 0 broken references. A real SysML v2 grammar (sysml2py, the pilot implementation's grammar) parses the model in CI. That check covers syntax, not semantics, and the docs say so.
+CI regenerates `docs/traceability.md`, and fails on any reference to evidence that does not exist. Work not built yet is marked *planned* and reported as unverified, never as verified. The current trace has 54 requirements: 53 verified, 1 unverified (planned), 0 broken references. A real SysML v2 grammar (sysml2py, the pilot implementation's grammar) parses the model in CI. That check covers syntax, not semantics, and the docs say so.
 
 ---
 
