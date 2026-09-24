@@ -212,6 +212,10 @@ def test_an_international_designator_needs_the_catalog_number_from_the_caller():
     assert oem.admit(oem.parse(text), norad_id=40115).table.norad_id == 40115
 
 
+def test_an_object_id_that_only_looks_numeric_is_not_taken_as_a_catalog_number():
+    assert rejected_code(oem_text(meta={"OBJECT_ID": "4011²"})) == "NORAD_ID_UNKNOWN"
+
+
 def test_a_catalog_number_that_contradicts_the_message_is_rejected():
     assert rejected_code(oem_text(), norad_id=40115) == "NORAD_ID_MISMATCH"
     assert oem.admit(oem.parse(oem_text()), norad_id=99001).table.norad_id == 99001

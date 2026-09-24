@@ -35,6 +35,8 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
+import numpy as np
+
 from sentinel.ephemeris.table import EphemerisRejected, StateTable, require_earth_fixed, require_utc
 from sentinel.obs import get_logger
 
@@ -48,13 +50,17 @@ def _mismatch(detail: str) -> EphemerisRejected:
     return EphemerisRejected("SCHEMA_MISMATCH", f"{detail} (assumed Wayfinder schema)")
 
 
-def _field(mapping: Any, key: str, kind: type | tuple[type, ...], where: str) -> Any:
+def _field(mapping: Any, key: str, kind: type, where: str) -> Any:
     if not isinstance(mapping, Mapping) or key not in mapping:
         raise _mismatch(f"{where}{key} is missing")
     value = mapping[key]
     if isinstance(value, bool) or not isinstance(value, kind):
-        raise _mismatch(f"{where}{key} is {type(value).__name__}, expected {getattr(kind, '__name__', kind)}")
+        raise _mismatch(f"{where}{key} is {type(value).__name__}, expected {kind.__name__}")
     return value
+
+
+def _is_number(value: Any) -> bool:
+    return isinstance(value, int | float) and not isinstance(value, bool)
 
 
 def _time(text: Any, where: str) -> dt.datetime:
@@ -68,10 +74,9 @@ def _time(text: Any, where: str) -> dt.datetime:
 
 
 def _position(row: Any, index: int) -> tuple[float, float, float]:
-    numbers = row if isinstance(row, list) else None
-    if numbers is None or len(numbers) != 3 or any(isinstance(v, bool) or not isinstance(v, int | float) for v in numbers):
+    if not (isinstance(row, list) and len(row) == 3 and all(_is_number(v) for v in row)):
         raise _mismatch(f"positions_km[{index}] is not three numbers")
-    return tuple(float(v) for v in numbers)
+    return tuple(float(v) for v in row)
 
 
 def parse_ephemeris(payload: Mapping[str, Any]) -> StateTable:
@@ -86,7 +91,7 @@ def parse_ephemeris(payload: Mapping[str, Any]) -> StateTable:
         norad_id=norad_id,
         name=_field(obj, "name", str, "object."),
         epochs=tuple(_time(text, f"epochs[{i}]") for i, text in enumerate(epochs)),
-        positions_km=[_position(row, i) for i, row in enumerate(rows)],
+        positions_km=np.array([_position(row, i) for i, row in enumerate(rows)], dtype=float).reshape(-1, 3),
         created=_time(_field(payload, "created", str, ""), "created"),
     )
     log.info("Ephemeris parsed from assumed schema", adapter=ADAPTER, norad_id=norad_id, states=len(table.epochs))

@@ -253,7 +253,7 @@ def _catalog_number(object_id: str, norad_id: int | None) -> int:
     """OBJECT_ID is free text (the standard recommends the international
     designator). A numeric OBJECT_ID is taken as the catalog number; a caller's
     number must agree with it; otherwise the caller must supply one."""
-    stated = int(object_id) if object_id.strip().isdigit() else None
+    stated = int(object_id) if _INTEGER.match(object_id.strip()) else None
     if norad_id is None and stated is None:
         raise EphemerisRejected("NORAD_ID_UNKNOWN", f"OBJECT_ID = {object_id!r}; supply the catalog number")
     if norad_id is not None and stated is not None and norad_id != stated:
