@@ -11,6 +11,7 @@ import datetime as dt
 from skyfield.api import EarthSatellite
 
 from sentinel.ephemeris.tabulate import tabulate
+from sentinel.passes.providers.skyfield_local import SkyfieldProvider
 from sentinel.passes.providers.tabulated import TabulatedEphemerisProvider
 from tests.omm_snapshot import TIMESCALE
 
@@ -33,3 +34,8 @@ def tabulated_from_skyfield(scenario: Scenario) -> TabulatedEphemerisProvider:
         )
         tables[table.norad_id] = table
     return TabulatedEphemerisProvider(tables)
+
+
+def skyfield_local(scenario: Scenario) -> SkyfieldProvider:
+    """Local SGP4 straight from the scenario's public element sets."""
+    return SkyfieldProvider({record["NORAD_CAT_ID"]: record for record in scenario.omm_records}, TIMESCALE)

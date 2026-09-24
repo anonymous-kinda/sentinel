@@ -11,7 +11,7 @@ import datetime as dt
 
 import pytest
 
-from sentinel.passes.model import PassWindow
+from sentinel.passes.model import ImagerNotCovered, PassWindow
 
 from . import factories
 from .oracle import oracle_passes
@@ -19,6 +19,7 @@ from .scenario import SCENARIO, STRANGER
 
 PROVIDER_FACTORIES = [
     pytest.param(factories.tabulated_from_skyfield, id="tabulated-ephemeris"),
+    pytest.param(factories.skyfield_local, id="skyfield-local"),
 ]
 
 RISE_SET_TOLERANCE_S = 2.0
@@ -87,10 +88,12 @@ def test_radar_has_no_daylight_verdict_and_optical_always_has_one(day):
             assert isinstance(w.sunlit, bool)
 
 
-def test_an_imager_absent_from_the_data_gets_no_windows(provider, day):
-    assert provider.windows(UNIT, [STRANGER], START, END) == []
-    with_stranger = provider.windows(UNIT, [*IMAGERS, STRANGER], START, END)
-    assert [(w.norad_id, w.rise) for w in with_stranger] == [(w.norad_id, w.rise) for w in day]
+def test_an_imager_absent_from_the_data_is_refused_not_silently_dropped(provider):
+    """Dropping it would make every gap look longer than it is - the dangerous
+    direction. Callers pair the catalog with the data first and report skips."""
+    with pytest.raises(ImagerNotCovered) as exc:
+        provider.windows(UNIT, [*IMAGERS, STRANGER], START, END)
+    assert exc.value.norad_id == STRANGER.norad_id
 
 
 # --- the overlap convention (sentinel/passes/model.py) -------------------------

@@ -7,7 +7,7 @@ import pytest
 
 from sentinel.passes.elements import ElementSetError, epoch_utc, mean_altitude_km
 from sentinel.passes.geometry import min_elevation_deg, sun_elevation_deg
-from sentinel.passes.model import Imager
+from sentinel.passes.model import Imager, ImagerNotCovered
 from sentinel.passes.providers.skyfield_local import EO_MIN_SUN_ELEVATION_DEG, SkyfieldProvider
 
 from .exercise import END, EXERCISE_UNIT, START
@@ -109,13 +109,13 @@ def test_no_imagers_means_no_windows(provider):
 
 def test_an_imager_without_a_matched_element_set_is_refused(provider):
     unknown = Imager(norad_id=99999, name="NOT CATALOGUED", sensor="EO", max_off_nadir_deg=30.0)
-    with pytest.raises(ElementSetError, match="missing"):
+    with pytest.raises(ImagerNotCovered, match="missing"):
         provider.windows(EXERCISE_UNIT, [unknown], START, END)
 
 
 def test_an_imager_whose_element_set_is_another_object_is_refused(provider):
     wrong = Imager(norad_id=40115, name="WORLDVIEW-2", sensor="EO", max_off_nadir_deg=40.0)
-    with pytest.raises(ElementSetError, match="name_mismatch"):
+    with pytest.raises(ImagerNotCovered, match="name_mismatch"):
         provider.windows(EXERCISE_UNIT, [wrong], START, END)
 
 

@@ -17,6 +17,9 @@ J2000 = dt.datetime(2000, 1, 1, 12, tzinfo=dt.UTC)
 BASE_PAD_S = 60.0
 PAD_PER_DAY_S = 30.0
 STALE_AFTER_DAYS = 3.0
+# An optical imager needs the unit lit: sun at least this high at culmination.
+# A planning assumption shared by every provider.
+EO_MIN_SUN_ELEVATION_DEG = 10.0
 
 
 def min_elevation_deg(max_off_nadir_deg: float, altitude_km: float) -> float:

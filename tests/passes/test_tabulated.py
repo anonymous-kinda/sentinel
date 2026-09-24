@@ -16,7 +16,7 @@ from skyfield.framelib import itrs
 from sentinel.ephemeris.table import EphemerisRejected, StateTable
 from sentinel.ephemeris.tabulate import tabulate
 from sentinel.passes.geometry import EARTH_RADIUS_KM, min_elevation_deg, sun_elevation_deg
-from sentinel.passes.model import Imager, PassWindow, Unit
+from sentinel.passes.model import Imager, ImagerNotCovered, PassWindow, Unit
 from sentinel.passes.providers.tabulated import TabulatedEphemerisProvider
 from tests.omm_snapshot import TIMESCALE, satellite
 
@@ -110,12 +110,11 @@ def test_radar_windows_carry_no_sunlight_verdict(tables):
     assert all(w.sunlit is None for w in windows)
 
 
-def test_an_imager_with_no_table_gets_no_windows_and_a_warning(tables, caplog):
+def test_an_imager_with_no_table_is_refused_not_silently_dropped(tables):
     stranger = Imager(99999, "NOBODY", "EO", 45.0)
-    with caplog.at_level(logging.WARNING, logger=LOGGER):
-        assert TabulatedEphemerisProvider(tables).windows(UNIT, [stranger], START, END) == []
-    (record,) = warnings_named(caplog, "No ephemeris for imager")
-    assert record.fields["norad_id"] == 99999
+    with pytest.raises(ImagerNotCovered) as exc:
+        TabulatedEphemerisProvider(tables).windows(UNIT, [stranger], START, END)
+    assert exc.value.norad_id == 99999
 
 
 def test_it_never_extrapolates_and_says_when_the_table_is_short(tables, wv3_windows, caplog):

@@ -37,16 +37,15 @@ from ..elements import (
     orbital_period_s,
     skip_reason,
 )
-from ..geometry import min_elevation_deg, sun_elevation_deg
+from ..geometry import EO_MIN_SUN_ELEVATION_DEG, min_elevation_deg, sun_elevation_deg
 from ..interval import require_interval
-from ..model import Imager, PassWindow, Unit
+from ..model import Imager, ImagerNotCovered, PassWindow, Unit
 from .skyfield_passes import Pass, find_passes
 
 log = get_logger(__name__)
 
 # Planning assumption: an optical imager needs the sun at least 10 deg above
 # the unit's horizon at culmination to collect a usable image.
-EO_MIN_SUN_ELEVATION_DEG = 10.0
 
 # The conventional upper bound on a low-Earth-orbit period.
 MAX_LEO_PERIOD_S = 128 * 60.0
@@ -92,9 +91,7 @@ class SkyfieldProvider:
     def _element_set(self, imager: Imager) -> ElementSet:
         reason = skip_reason(imager, self._element_sets)
         if reason is not None:
-            raise ElementSetError(
-                f"imager {imager.norad_id} {imager.name!r}: {reason.value}; pair the catalog with match_catalog first"
-            )
+            raise ImagerNotCovered(imager.norad_id, f"{reason.value}; pair the catalog with match_catalog first")
         element_set = self._element_sets[imager.norad_id]
         if orbital_period_s(element_set) > MAX_LEO_PERIOD_S:
             raise ElementSetError(f"imager {imager.norad_id} {imager.name!r}: not in low Earth orbit")

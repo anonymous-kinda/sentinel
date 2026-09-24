@@ -48,8 +48,13 @@ from sentinel.ephemeris.interpolate import LagrangeInterpolator
 from sentinel.ephemeris.table import EphemerisRejected, StateTable
 from sentinel.obs import get_logger
 
-from ..geometry import EARTH_RADIUS_KM, min_elevation_deg, sun_elevation_deg
-from ..model import Imager, PassWindow, Unit
+from ..geometry import (
+    EARTH_RADIUS_KM,
+    EO_MIN_SUN_ELEVATION_DEG,
+    min_elevation_deg,
+    sun_elevation_deg,
+)
+from ..model import Imager, ImagerNotCovered, PassWindow, Unit
 from ..topocentric import Site
 
 log = get_logger(__name__)
@@ -57,7 +62,6 @@ log = get_logger(__name__)
 COARSE_STEP_S = 30.0
 SEARCH_MARGIN_S = 1800.0      # longer than any LEO pass, so rises before the interval are found
 TIME_TOLERANCE_S = 1.0e-3
-DEFAULT_MIN_SUN_ELEVATION_DEG = 10.0
 
 
 @dataclasses.dataclass(frozen=True)
@@ -159,7 +163,7 @@ class TabulatedEphemerisProvider:
 
     name = "tabulated-ephemeris"
 
-    def __init__(self, tables: Mapping[int, StateTable], min_sun_elevation_deg: float = DEFAULT_MIN_SUN_ELEVATION_DEG):
+    def __init__(self, tables: Mapping[int, StateTable], min_sun_elevation_deg: float = EO_MIN_SUN_ELEVATION_DEG):
         for norad_id, table in tables.items():
             if table.norad_id != norad_id:
                 raise EphemerisRejected("NORAD_ID_MISMATCH", f"table for {table.norad_id} filed under {norad_id}")
@@ -174,8 +178,7 @@ class TabulatedEphemerisProvider:
         for imager in imagers:
             track = self._tracks.get(imager.norad_id)
             if track is None:
-                log.warning("No ephemeris for imager", norad_id=imager.norad_id, provider=self.name)
-                continue
+                raise ImagerNotCovered(imager.norad_id, "no ephemeris table")
             found.extend(self._windows_for(track, site, unit, imager, start, end))
         return sorted(found, key=lambda window: window.rise)
 

@@ -67,6 +67,19 @@ class PassWindow:
         return self.sensor != "EO" or bool(self.sunlit)
 
 
+class ImagerNotCovered(ValueError):
+    """A provider was asked about an imager its data does not cover.
+
+    Raised, never skipped: a silently dropped imager would make every gap
+    look longer than it is. Callers pair the catalog with the data first
+    (elements.match_catalog) and report what they skipped."""
+
+    def __init__(self, norad_id: int, reason: str):
+        super().__init__(f"imager {norad_id}: {reason}")
+        self.norad_id = norad_id
+        self.reason = reason
+
+
 class PassProvider(Protocol):
     """Convention every provider follows: return each pass that overlaps
     [start, end], with its true rise, culmination and set - even when they
