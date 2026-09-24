@@ -1,11 +1,14 @@
-"""OPSEC evidence for the harness: find a unit's position in bytes, and
-capture everything a nats-server carries.
+"""OPSEC evidence for the harness: find a unit's position in bytes, capture
+everything a nats-server carries, and read what the edge says it fetched.
 
 `leak_patterns` lists every form a unit could travel or rest in: its id,
 its coordinates as text at the precisions worth leaking, as IEEE-754 bytes
 (the form CBOR and any binary codec use), and its Earth-fixed position.
 `Capture` subscribes to `>` on one nats-server from a background thread,
-so a scenario can drive real processes while it listens.
+so a scenario can drive real processes while it listens. It sees only what
+crosses after it subscribes, so it is evidence of absence (no leak), never
+a count of arrivals. `SyncLedger` counts arrivals from the edge's own
+record instead.
 """
 
 from __future__ import annotations
@@ -117,6 +120,32 @@ class Capture:
         self._ready.set()
         await self._stop.wait()
         await client.drain()
+
+
+class SyncLedger:
+    """Every record an edge says it fetched, from its own `GET /api/sync`.
+
+    The edge counts every arrival since it started but shows only the most
+    recent ones. Fed each status read in turn, the ledger appends the
+    arrivals it has not seen yet. Any that scrolled out of the shown window
+    between two reads are counted in `unseen`, never guessed at."""
+
+    def __init__(self) -> None:
+        self.arrivals: list[dict] = []
+        self.unseen = 0
+
+    def record(self, status: dict) -> None:
+        new = status["arrivals_total"] - len(self.arrivals) - self.unseen
+        if new <= 0:
+            return
+        window = status["arrivals"]
+        shown = min(new, len(window))
+        self.arrivals += window[len(window) - shown :]
+        self.unseen += new - shown
+
+    def items(self, prefix: str) -> set[str]:
+        """The distinct item ids fetched whose id starts with `prefix`."""
+        return {a["event_id"] for a in self.arrivals if a["event_id"].startswith(prefix)}
 
 
 def publish(url: str, messages: list[tuple[str, bytes]]) -> None:

@@ -6,6 +6,8 @@ import dataclasses
 import os
 import pathlib
 
+ROLES = ("hub", "edge", "standalone")
+
 
 def _flag(name: str, default: bool) -> bool:
     value = os.environ.get(name)
@@ -36,6 +38,11 @@ class Settings:
     ai_cloud: bool = False                   # operator opt-in to hosted AI (Jev, Claude)
     sync_elements: str = "catalog"           # element sets a hub offers edges: catalog (imagers) | all
     elements_path: str | None = None         # OMM snapshot; None: hub/standalone load the vendored one, an edge syncs
+
+    def __post_init__(self) -> None:
+        # A mistyped role would start no sync and fail silently: refuse it.
+        if self.role not in ROLES:
+            raise ValueError(f"SENTINEL_ROLE must be one of {', '.join(ROLES)}, not {self.role!r}")
 
     @classmethod
     def from_env(cls) -> Settings:

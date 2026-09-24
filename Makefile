@@ -49,8 +49,8 @@ airgap-verify: supply-tools  ## no network: verify signature, install, run (VERI
 	SENTINEL_CERT_IDENTITY=$(CERT_IDENTITY) \
 	deploy/bundle/verify_offline.sh dist/sentinel-$$($(UV) run python -c 'import sentinel;print(sentinel.__version__)')-$(ARCH).tar.gz
 
-tools:  ## fetch pinned nats-server, toxiproxy, uv into .tools/ (sha256-verified)
-	$(UV) run python scripts/fetch_tools.py
+tools:  ## fetch the pinned nats-server and toxiproxy the harness runs into .tools/<arch>/ (sha256-verified)
+	$(UV) run python scripts/fetch_tools.py nats-server toxiproxy
 
 demo-local: web tools  ## hub on :8000 and edge on :8001 over an emulated link (Ctrl-C to stop)
 	$(UV) run python -m harness.demo
@@ -162,9 +162,9 @@ compliance-catalog:  ## verify the vendored NIST SP 800-53 Rev 5 catalog, then i
 
 # --- M3 pass service: OPSEC evidence (NIST AC-4) -------------------------------
 .PHONY: opsec
-opsec: tools  ## OPSEC scenario on real processes: a unit set at the edge never reaches the hub; then docs/ddil-results.md
+opsec: tools  ## OPSEC scenario on real processes: a unit set at the edge never reaches the hub; rewrites docs/ddil-results.md only if every scenario has a result
 	$(UV) run python -m harness.run opsec
-	$(UV) run python -m harness.report
+	$(UV) run python -m harness.report --if-complete
 # --- end M3 pass service ------------------------------------------------------
 
 # >>> interface control documents (docs/icd) >>>
