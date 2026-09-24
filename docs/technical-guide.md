@@ -174,7 +174,7 @@ Step by step:
 
 1. **Idempotency.** The SHA-256 of the raw bytes is the CDM's identity. A second copy is a no-op.
 2. **Parse.** `sentinel/cdm/kvn.py` reads CCSDS 508.0-B-1 KVN into a `CdmMessage`. Anything that is not a CDM is quarantined as `PARSE_ERROR`; a `ValueError` or `KeyError` later in conversion is quarantined as `UNREADABLE`.
-3. **Admission** follows the repository's ingest rule. Input that would make the answer *wrong* raises `CdmRejected` with a stable code, and the message is quarantined (`GET /api/quarantine`) and announced on `node.<id>.cdm.rejected`. Input that makes it *incomplete* is accepted with a `CdmWarning`, stored beside the CDM. `sentinel/cdm/validate.py` lists which is which: for example a state labelled in metres is wrong, and a missing covariance is incomplete (the engine will refuse a Pc for it).
+3. **Admission** follows the repository's ingest rule, and `docs/icd/cdm-profile.md` lists every code. Input that would make the answer *wrong* raises `CdmRejected` with a stable code, and the message is quarantined (`GET /api/quarantine`) and announced on `node.<id>.cdm.rejected`. Input that makes it *incomplete* is accepted with a `CdmWarning`, stored beside the CDM. `sentinel/cdm/validate.py` lists which is which: for example a state labelled in metres is wrong, and a missing covariance is incomplete (the engine will refuse a Pc for it).
 4. **Data class.** Every CDM is REAL, DERIVED or EXERCISE. Sentinel's own generators mark their output at the source, and the mark wins over the route it arrived by (`ORIGINATOR_DATA_CLASS` in `sentinel/conjunction/service.py`).
 5. **Events.** CCSDS CDMs carry no event id, so the rule is explicit: the same primary and secondary with a TCA within 60 s is the same event. The node that first ingests a CDM assigns the id, and it travels with the record (`Sentinel-Event-Id`); an edge never re-derives it (ADR-008).
 6. **Assessment.** `risk.assess()` never raises on bad data. It returns `Method.REFUSED` with a `RefusalReason` and the value that tripped the gate. Results are cached per CDM hash and *engine version*, which is `sentinel.__version__` plus a hash of `AssessmentConfig`; changing a threshold re-assesses from the raw bytes rather than trusting old numbers.
@@ -227,7 +227,9 @@ Each request's timeout scales with the link the agent has measured: `6 + 1.5 × 
 
 **Element sets share the link.** A hub offers edges the element sets the pass module uses: by default only the 38 in the imaging catalog (`SENTINEL_SYNC_ELEMENTS=catalog`), not every set it holds. Each record costs a request/reply and a manifest entry on a thin link. ADR-008 describes what offering the whole snapshot cost in a development run, how to reproduce it, and why the fix (batched fetch, or a reference-data class below routine CDMs) is an open question rather than done. The DDIL numbers above were measured with the catalog on offer.
 
-A summary is small enough to send first. Without its record list, every summary in the test scenario encodes to at most 256 bytes of CBOR (`tests/sync/test_hub_edge.py::test_summaries_are_small_enough_to_send_first`).
+A summary is small enough to send first. Without its record list, every summary in the test scenario encodes to at most 256 bytes of CBOR: the bound is `SUMMARY_MAX_BYTES` in `sentinel/conjunction/summaries.py`, asserted by `tests/sync/test_hub_edge.py::test_summaries_are_small_enough_to_send_first`.
+
+The full contract of this layer is written down and held to the code. `docs/icd/sync-envelope.md` specifies the summary fields, priority classes, headers and verification states. `docs/icd/asyncapi.yaml` specifies every subject, header and payload on the bus, and what may cross the leaf link.
 
 ### Link state is measured
 
@@ -606,7 +608,7 @@ Expected values come from closed forms or from files NASA published, transcribed
 | `tests/supplychain/` | The tools lock, checksums, SBOMs, Trivy and VEX handling, bundle manifests, and `verify_signature.sh`'s policy against a stub cosign |
 | `tests/compliance/` | The OSCAL generator, its sources and citations, the STIG role, deployment-config conformance, and that the committed OSCAL documents are what the sources generate |
 | `tests/mbse/` | The SysML reader, the evidence indexes, the trace generator, and that `docs/traceability.md` is current with no broken reference |
-| `tests/docs/` | This guide, `docs/index.md` and `CONTRIBUTING.md` against the code: variables, `make` targets, CLI subcommands, import contracts, paths and the document list |
+| `tests/docs/` | Every interface control document against the code, both ways: the OpenAPI export is current and every route documented; the AsyncAPI document matches the subjects, headers and leaf policy, and every message real nodes send validates against it; the CDM profile matches the codec's codes, frames and units; the sync envelope matches `sentinel/sync`, `sentinel/triage` and the adapters. Also this guide, `docs/index.md` and `CONTRIBUTING.md`: variables, `make` targets, CLI subcommands, import contracts, paths and the document list |
 | `tests/test_docs.py`, `tests/doclint.py`, `tests/doc_claims.toml` | The drift guard for `README.md`, `CLAUDE.md`, `SECURITY.md` and `docs/`: every path, `make` target and `sentinel` subcommand exists, every package has a docstring, and every registered headline number matches its generated source at the precision stated |
 | `web/src/__tests__/` | The console: `PcValue`'s contract, formatting, the API client, the assistant panel and the passes views |
 
@@ -638,10 +640,14 @@ The goal is a module whose reference data crosses the link by priority without a
    git diff --stat main -- sentinel/sync sentinel/bus sentinel/crdt sentinel/triage     # must print nothing
    ```
 
-   The pass module's proof of the same property is a fixed commit range, `git diff --stat 67199b7 f16e294 -- sentinel/sync sentinel/bus sentinel/crdt sentinel/triage`, which prints nothing. The core changes only deliberately: a bug fix proven by a failing test, typing with no behaviour change, or a design change recorded in an ADR.
-7. **OPSEC.** Anything that must never leave the edge is not a record. If it travels on the bus, give it a subject the leaf denies (`deny_exports` in `deploy/nats/edge.conf.tmpl`) and add it to the list `tests/compliance/test_deploy_conformance.py` checks.
-8. **Harness.** If the module changes what crosses the link, add a scenario to `SCENARIOS` in `harness/scenarios.py` and to the matrix in `.github/workflows/harness.yml`.
-9. **Trace.** Add the requirement and its evidence (recipe e).
+   The pass module's proof of the same property is a fixed commit range, `git diff --stat 67199b7 f16e294 -- sentinel/sync sentinel/bus sentinel/crdt sentinel/triage`, which prints nothing. The core changes only deliberately: a bug fix proven by a failing test, typing or documentation with no behaviour change, or a design change recorded in an ADR.
+7. **Interface control documents.** Each interface you add goes in `docs/icd/`, and `uv run pytest -q tests/docs` holds you to it:
+   - your item-id prefix and any header your records set go in `docs/icd/sync-envelope.md`. `tests/docs/test_sync_envelope.py` reads the two existing adapters by file name and the `omm:` prefix by import, so add your adapter and prefix there too, or they go unchecked;
+   - a new node-local event kind or bus header goes in `docs/icd/asyncapi.yaml`. `tests/docs/test_asyncapi.py` finds kinds at the `subjects.local` call sites, and fails on any it cannot find in the document;
+   - a new route needs a tag from `sentinel/api/apidoc.py`, a `summary=` and a docstring, which becomes its description; `tests/docs/test_openapi_current.py` checks all three on every route except the pass module's. Then run `make openapi` to regenerate `docs/icd/openapi.json`.
+8. **OPSEC.** Anything that must never leave the edge is not a record. If it travels on the bus, give it a subject the leaf denies (`deny_exports` in `deploy/nats/edge.conf.tmpl`) and add it to the list `tests/compliance/test_deploy_conformance.py` checks.
+9. **Harness.** If the module changes what crosses the link, add a scenario to `SCENARIOS` in `harness/scenarios.py` and to the matrix in `.github/workflows/harness.yml`.
+10. **Trace.** Add the requirement and its evidence (recipe e).
 
 ### (b) A pass provider under `tests/conformance`
 
@@ -670,7 +676,7 @@ For ephemerides, `sentinel/adapters/wayfinder.py` is the pattern.
 4. **Tests.** Add `tests/adapters/test_<source>.py`: one test per rejection code, a payload that becomes a `StateTable`, and a provenance check that the fixture's digest matches.
 5. **Contract.** `ephemeris-and-adapters-are-independent` already covers `sentinel.adapters`: no risk, CDM codec, conjunction, sync, API or AI imports.
 
-For a source of *conjunctions*, the seam is the CDM itself (ADR-001):
+For a source of *conjunctions*, the seam is the CDM itself (ADR-001), specified in `docs/icd/cdm-profile.md`. A new admission code must be added there, or `tests/docs/test_cdm_profile.py` fails:
 - if the source delivers CCSDS 508.0-B-1 KVN, no adapter code is needed: post the bytes to `POST /api/ingest/cdm`, or call `ConjunctionService.ingest`;
 - if it delivers another shape, the adapter must produce a CDM. It needs `sentinel.cdm` to build and emit one, and `ephemeris-and-adapters-are-independent` forbids that inside `sentinel.adapters`. Give it its own package and contract, as `sentinel/screening` does for DERIVED CDMs, rather than weakening that contract.
 
@@ -730,6 +736,7 @@ Never edit these by hand. Change the input and regenerate.
 | `docs/ai-eval.md`, `docs/img/ai-reliability.svg` | `evals/routing.jsonl`, the routers | `make ai-eval` | CI step "AI eval report is reproducible (baseline; Jev needs a key CI never has)" |
 | `docs/ddil-results.md` | `harness/results/*.json`, whichever are present | `make ddil` (GitHub download for the tools); `make opsec` renders only the results present | read by the trace as harness evidence; not re-run in CI |
 | `docs/traceability.md` | `mbse/*.sysml`, pytest collection, `.importlinter`, `.github/workflows/ci.yml`, `docs/ddil-results.md` | `make trace` | `tests/mbse/test_real_model.py`; the CI `mbse` job |
+| `docs/icd/openapi.json` | the FastAPI app's routes (`scripts/export_openapi.py`) | `make openapi` | `tests/docs/test_openapi_current.py`; CI step "ICDs are current (OpenAPI re-exported; bus, CDM and sync ICDs held to the code)" |
 | `deploy/vex/sentinel.openvex.json` | `deploy/vex/statements.toml` and a raw Trivy scan | `make vex` (GitHub and Trivy's database) | `make scan`; the CI `supply-chain` job |
 | `compliance/oscal/` profile, component definition, SSP and assessment plan | `compliance/sources/*.toml` | `uv run python scripts/oscal_evidence.py` | `tests/compliance/test_package_integrity.py` |
 | `compliance/oscal/` assessment results and POA&M | a pytest JUnit run, harness results, an optional XCCDF scan | `make compliance` (PyPI for trestle) | `trestle validate -a`; the CI `compliance` job |
@@ -769,6 +776,7 @@ The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and t
 | Validation tab or library empty on an installed node | `SENTINEL_FIXTURES` not pointing at the bundle's `fixtures/` | log message `Reference library missing` |
 | Assistant stays on the deterministic tier | Marking not UNCLASSIFIED, `SENTINEL_AI_CLOUD` not set, no key, the `ai` extra not installed, or the measured link | `reason` in `GET /api/ai/status`; log message `Hosted AI SDK not installed` |
 | An AI answer was replaced by the template text | The grounding guard found a number the facts do not contain | `withheld.unsupported` in the answer |
+| After a pull, collection fails with `ModuleNotFoundError` (for example `No module named 'yaml'`) | The dev extra gained a dependency your virtual environment predates | `uv pip install -e ".[dev]"` |
 | A test fails with `SocketBlockedError` | The test tried to use the network | Use a fixture or a mock transport; `enable_socket` is only for loopback |
 | `make trace` exits 1 | A verification case names evidence that does not exist | The "Problems" section the regenerated `docs/traceability.md` gains after its summary |
 | `uv run lint-imports` reports a broken contract | An import crosses a module boundary | The contract named in the output; the table under [Architecture](#modules-and-their-allowed-dependencies) |

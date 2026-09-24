@@ -28,6 +28,11 @@ Audiences: **new engineer** (has just cloned the repository), **reviewer** (judg
 | [System design](system-design.md) | `docs/system-design.md` | reviewer, new engineer | authored: ADR-001 to ADR-012, with rejected alternatives | |
 | [Risk engine design](risk-engine-design.md) | `docs/risk-engine-design.md` | reviewer, new engineer | authored: the maths and the test ladder | |
 | [Wayfinder adapter](adapters/wayfinder.md) | `docs/adapters/wayfinder.md` | new engineer | authored: an assumed schema, and how to swap in the real one | |
+| [Interface control index](icd/README.md) | `docs/icd/README.md` | new engineer, integrators | authored: every ICD, its standard and the test that keeps it current; checked by `tests/docs/test_icd_index.py` | |
+| [HTTP API (OpenAPI 3.1)](icd/openapi.json) | `docs/icd/openapi.json` | new engineer, integrators | generated from the FastAPI app; `tests/docs/test_openapi_current.py` fails on a stale export | `make openapi` |
+| [Bus and SSE messages (AsyncAPI 3.0)](icd/asyncapi.yaml) | `docs/icd/asyncapi.yaml` | new engineer, integrators | authored; held to the code both ways by `tests/docs/test_asyncapi.py` | |
+| [CDM admission profile](icd/cdm-profile.md) | `docs/icd/cdm-profile.md` | new engineer, integrators | authored; held to the codec both ways by `tests/docs/test_cdm_profile.py` | |
+| [Sync envelope](icd/sync-envelope.md) | `docs/icd/sync-envelope.md` | new engineer, integrators | authored; held to `sentinel/sync`, `sentinel/triage` and the adapters by `tests/docs/test_sync_envelope.py` | |
 | [Pass API ICD](icd/passes-api.md) | `docs/icd/passes-api.md` | new engineer, integrators | authored; held to the code by `tests/api/test_passes_api.py` | |
 | [Screening API ICD](icd/screening-api.md) | `docs/icd/screening-api.md` | new engineer, integrators | authored; held to the code by `tests/api/test_screening_api.py` | |
 
@@ -87,11 +92,6 @@ Other agents are finishing these documents now. They are named here as plain tex
 
 | Document | Planned path | Audience |
 |---|---|---|
-| Interface control index | docs/icd/README.md | new engineer, integrators |
-| HTTP API description (OpenAPI) | docs/icd/openapi.json | new engineer, integrators |
-| Bus and SSE message description (AsyncAPI) | docs/icd/asyncapi.yaml | new engineer, integrators |
-| CDM profile | docs/icd/cdm-profile.md | new engineer, integrators |
-| Sync envelope | docs/icd/sync-envelope.md | new engineer, integrators |
 | White paper | docs/white-paper.md | acquisition |
 | Quad chart | docs/quad-chart.* | acquisition |
 | Demonstration script | docs/demo-script.md | operator, reviewer |

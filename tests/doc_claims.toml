@@ -382,8 +382,8 @@ patterns = ["edge assessed 38 imagers"]
 id = "guide-summary-size"
 doc = "docs/technical-guide.md"
 quoted = "encodes to at most 256 bytes of CBOR"
-source = "tests/sync/test_hub_edge.py"
-patterns = ["assert size <= 256"]
+source = "sentinel/conjunction/summaries.py"
+patterns = ["SUMMARY_MAX_BYTES = 256"]
 
 [[claim]]
 id = "guide-pass-conformance"
