@@ -288,12 +288,22 @@ class ConjunctionService:
         return "VERIFIED" if mine == remote.get("h") else "MISMATCH"
 
     def current_ref(self, event_id: str) -> dict | None:
-        """What a decision about this event is made against, right now."""
+        """What a decision about this event is made against, right now. For
+        an event known only from the hub's summary, that is the record the
+        hub asserted (the leading hex digits of its sha256), so a decision
+        made on the summary is flagged when a different CDM arrives."""
         latest = self._latest(event_id)
         if latest is None:
-            return None
+            return self._asserted_ref(event_id)
         a = self._assess_sha(latest.sha256)
         return {"cdm_sha256": latest.sha256, "inputs_hash": a["inputs_hash"], "message_id": latest.message_id}
+
+    def _asserted_ref(self, event_id: str) -> dict | None:
+        remote = self.store.remote_summaries().get(event_id)
+        if remote is None or not remote.get("c"):
+            return None
+        return {"cdm_sha256": remote["c"][-1][0], "inputs_hash": remote.get("h"), "message_id": None,
+                "asserted_by": remote.get("_origin")}
 
     def manifest(self) -> list[dict]:
         """Compact summaries of every active event, for edges (P0)."""

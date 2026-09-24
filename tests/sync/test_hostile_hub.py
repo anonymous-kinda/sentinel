@@ -36,7 +36,7 @@ from sentinel.passes.sync_adapter import ElementRecords
 from sentinel.sync import SyncAgent, SyncServer
 from sentinel.sync.agent import LINK_ERRORS
 
-from .test_hub_edge import EPOCH, KEYS, TRUST, Node
+from .conftest import EPOCH, KEYS, TRUST, Node
 
 SNAPSHOT = pathlib.Path(__file__).resolve().parents[2] / "fixtures" / "omm" / "celestrak-resource-20260924.json"
 CORE = "core bug in sentinel/sync (closed; fix belongs to its owner): "

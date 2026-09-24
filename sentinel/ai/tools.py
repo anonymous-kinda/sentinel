@@ -13,6 +13,7 @@ from __future__ import annotations
 import datetime as dt
 from collections.abc import Callable
 
+from ..ops import same_record
 from .catalog import BANDS, DECISIONS
 
 # Diagnostics that explain a refusal: the value that tripped a gate and
@@ -169,7 +170,8 @@ class ToolRegistry:
     async def record_decision(self, draft: dict, author: str, rationale: str, provenance: dict) -> dict:
         """Write a confirmed draft as a signed DECISION, against the CDM it
         was drafted on. A draft on a superseded CDM must be redrafted."""
-        if self.conjunctions.current_ref(draft["event_id"]) != draft["against"]:
+        current, against = self.conjunctions.current_ref(draft["event_id"]), draft["against"]
+        if not (current and against and same_record(current["cdm_sha256"], against["cdm_sha256"])):
             raise ToolError("stale_draft", draft["event_id"])
         body = {"decision": draft["decision"], "rationale": rationale, "drafted_by": provenance}
         return await self.ops.append(draft["event_id"], "DECISION", body, author, event_ref=draft["against"])

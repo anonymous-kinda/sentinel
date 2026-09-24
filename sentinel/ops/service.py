@@ -126,7 +126,7 @@ class OpsService:
         superseded = bool(
             current
             and entry.event_ref.get("cdm_sha256")
-            and current.get("cdm_sha256") != entry.event_ref.get("cdm_sha256")
+            and not same_record(current.get("cdm_sha256"), entry.event_ref.get("cdm_sha256"))
         )
         return {
             "dot": [entry.dot.node, entry.dot.seq],
@@ -224,6 +224,12 @@ class OpsService:
     def remember_peer(self, peer: str, contexts: dict) -> None:
         with self._lock:
             self._db.execute("INSERT OR REPLACE INTO ops_peers VALUES (?,?)", (peer, codec.encode(contexts)))
+
+
+def same_record(a: str | None, b: str | None) -> bool:
+    """Two references to one record: each is a full sha256, or the leading
+    hex digits a hub's summary carries before the record itself arrives."""
+    return bool(a and b and (a.startswith(b) or b.startswith(a)))
 
 
 def _peer_register(key: object, wire: Any) -> Register | None:
