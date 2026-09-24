@@ -42,7 +42,8 @@ def sources_citing(**evidence):
     sources = load_sources(DATA / "sources")
     control = sources.controls[0]
     contribution = dataclasses.replace(
-        control.contributions[0], **{"tests": (), "harness": (), "ci": (), "files": (), **evidence}
+        control.contributions[0],
+        **{"tests": (), "harness": (), "ci": (), "files": (), "planned_evidence": (), **evidence},
     )
     stig = dataclasses.replace(sources.stig, xccdf="vendor/stig.xml", cci_list="vendor/cci.zip", role="roles/stig")
     return dataclasses.replace(
@@ -57,6 +58,7 @@ def test_resolvable_citations_report_nothing(repo):
         harness=("denied",),
         ci=("ci.yml#python", "ci.yml#infra"),
         files=("sentinel/code.py",),
+        planned_evidence=("docs/not-written-yet.md",),
     )
     assert unresolved(sources, repo) == []
 
@@ -71,6 +73,8 @@ def test_resolvable_citations_report_nothing(repo):
         ({"ci": ("ci.yml#web",)}, "si-10: CI job ci.yml#web does not exist"),
         ({"ci": ("release.yml#build",)}, "si-10: CI job release.yml#build does not exist"),
         ({"harness": ("sunny",)}, "si-10: harness scenario sunny does not exist"),
+        # Evidence that has landed is no longer planned: a POA&M item waiting for it would misstate the plan.
+        ({"planned_evidence": ("sentinel/code.py",)}, "si-10: planned evidence sentinel/code.py already exists"),
     ],
 )
 def test_each_kind_of_dangling_citation_is_reported(repo, evidence, problem):

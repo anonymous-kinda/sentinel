@@ -1,10 +1,10 @@
 {
   "assessment-results": {
-    "uuid": "f80d3fc0-9365-553d-9242-962c91401f26",
+    "uuid": "e6e2c74f-977b-5e00-8ab4-57419b2dee7b",
     "metadata": {
       "title": "Sentinel automated assessment results",
-      "last-modified": "2026-09-24T07:26:17Z",
-      "version": "0.1.0",
+      "last-modified": "2026-09-24T08:14:36Z",
+      "version": "0.2.0",
       "oscal-version": "1.2.1"
     },
     "import-ap": {
@@ -12,11 +12,11 @@
     },
     "results": [
       {
-        "uuid": "b8992cd0-e590-5a56-9950-0583fe59f5f2",
-        "title": "Automated assessment of the test run started 2026-09-24T07:25:45Z",
-        "description": "pytest: 1052 cases, 1052 passed, 0 failed, 0 errors, 0 skipped. Controls with automated evidence in this run: 33; all cited checks passed for 33. DDIL harness results supplied; STIG scan results not supplied.",
-        "start": "2026-09-24T07:25:45Z",
-        "end": "2026-09-24T07:26:17Z",
+        "uuid": "6847aa3b-de5e-5764-a9c7-8c266dade2ea",
+        "title": "Automated assessment of the test run started 2026-09-24T08:14:02Z",
+        "description": "pytest: 1054 cases, 1054 passed, 0 failed, 0 errors, 0 skipped. Controls with automated evidence in this run: 35; all cited checks passed for 35. DDIL harness results supplied; STIG scan results not supplied.",
+        "start": "2026-09-24T08:14:02Z",
+        "end": "2026-09-24T08:14:36Z",
         "reviewed-controls": {
           "control-selections": [
             {
@@ -138,7 +138,7 @@
         },
         "observations": [
           {
-            "uuid": "83a60a43-cfd7-5ed7-89a6-d4855c030469",
+            "uuid": "1c85e739-dd3d-5979-8b94-1d844c026a6a",
             "title": "AC-2: automated evidence",
             "description": "1 of 1 cited checks passed. The SSP states AC-2 as partial.",
             "props": [
@@ -187,10 +187,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "0ce5bc8c-a288-5721-bbf9-a6e3c8cf6e2c",
+            "uuid": "2f8407c8-c61e-54bb-bdce-8fef6f2a6c86",
             "title": "AC-3: automated evidence",
             "description": "4 of 4 cited checks passed. The SSP states AC-3 as partial.",
             "props": [
@@ -288,10 +288,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "8c88c22c-6b45-5ea5-a616-298758adfa9d",
+            "uuid": "1bbea980-29f0-52ff-b676-84e02640cbf7",
             "title": "AC-4: automated evidence",
             "description": "4 of 4 cited checks passed. The SSP states AC-4 as partial.",
             "props": [
@@ -389,10 +389,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "055d9235-5c4c-5474-b840-6471dda68c5a",
+            "uuid": "cf1b026c-b4f2-51b2-9a7d-07319253b52e",
             "title": "AC-6: automated evidence",
             "description": "2 of 2 cited checks passed. The SSP states AC-6 as partial.",
             "props": [
@@ -460,10 +460,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "9162d12a-12fd-53ec-a655-221a1a303ad1",
+            "uuid": "b8b550b8-b52d-5077-b6d6-5af95109bb20",
             "title": "AC-17: automated evidence",
             "description": "3 of 3 cited checks passed. The SSP states AC-17 as partial.",
             "props": [
@@ -546,10 +546,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "73850416-e972-58a6-b7bb-4e7bb7b2db77",
+            "uuid": "b9da100b-83a9-5ef7-a1bd-be7b2f531b06",
             "title": "AU-2: automated evidence",
             "description": "5 of 5 cited checks passed. The SSP states AU-2 as partial.",
             "props": [
@@ -662,10 +662,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "f4330144-f271-5ed5-9abb-a07dd286f71e",
+            "uuid": "b96e6f48-bdef-533f-8ecd-28a639da671f",
             "title": "AU-3: automated evidence",
             "description": "4 of 4 cited checks passed. The SSP states AU-3 as implemented.",
             "props": [
@@ -759,10 +759,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "6256070a-0f2b-50bd-b174-d2dde4447955",
+            "uuid": "f8d9298e-7ba0-5d7c-a680-58abc6d1a7e3",
             "title": "AU-6: automated evidence",
             "description": "4 of 4 cited checks passed. The SSP states AU-6 as partial.",
             "props": [
@@ -860,10 +860,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "00c8d59b-d2f6-560e-9b82-cf8571ee47c4",
+            "uuid": "860080d1-dc66-5c27-bc17-44cf0253a274",
             "title": "AU-9: automated evidence",
             "description": "7 of 7 cited checks passed. The SSP states AU-9 as partial.",
             "props": [
@@ -1010,10 +1010,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "bf456026-2d71-53f7-9de6-270fd996786d",
+            "uuid": "1e821ec9-e7c8-5959-9cab-493520f77880",
             "title": "AU-10: automated evidence",
             "description": "5 of 5 cited checks passed. The SSP states AU-10 as partial.",
             "props": [
@@ -1126,10 +1126,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "dbb43cfb-5d5d-5672-ba45-eafa13763dd7",
+            "uuid": "d587e2d9-7567-55ea-98fb-e64d47209666",
             "title": "CM-3: automated evidence",
             "description": "1 of 1 cited checks passed. The SSP states CM-3 as partial.",
             "props": [
@@ -1178,10 +1178,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "f20b94c2-8c94-5fc1-99ed-3f7a056a6e66",
+            "uuid": "d351d303-8111-5f8a-9b44-826f37795c13",
             "title": "CM-6: automated evidence",
             "description": "6 of 6 cited checks passed. The SSP states CM-6 as partial.",
             "props": [
@@ -1313,10 +1313,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "ee6c51ca-9456-5add-be2d-8daa590a09b3",
+            "uuid": "2a6c7df7-afa5-5793-99af-a08d613e05e8",
             "title": "CM-7: automated evidence",
             "description": "5 of 5 cited checks passed. The SSP states CM-7 as partial.",
             "props": [
@@ -1429,12 +1429,12 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "b2dc1f11-3bb9-5d72-abd1-3897c0940087",
-            "title": "CM-14: automated evidence",
-            "description": "1 of 1 cited checks passed. The SSP states CM-14 as partial.",
+            "uuid": "9fe06895-4ba2-5a71-919e-b8ffa473f5c0",
+            "title": "CM-8: automated evidence",
+            "description": "6 of 6 cited checks passed. The SSP states CM-8 as partial.",
             "props": [
               {
                 "name": "implementation-status",
@@ -1460,11 +1460,262 @@
             ],
             "subjects": [
               {
+                "subject-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
+                "type": "component"
+              }
+            ],
+            "relevant-evidence": [
+              {
+                "description": "tests/supplychain/test_sbom.py::test_a_missing_component_raises_and_names_it: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_sbom.py::test_a_missing_component_raises_and_names_it"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_sbom.py::test_an_empty_sbom_raises_even_with_nothing_required: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_sbom.py::test_an_empty_sbom_raises_even_with_nothing_required"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_sbom.py::test_syft_writes_both_formats_from_one_catalog_pass: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_sbom.py::test_syft_writes_both_formats_from_one_catalog_pass"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_bundle.py::test_manifest_records_identity_shipped_tools_for_this_arch_and_every_wheel: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_bundle.py::test_manifest_records_identity_shipped_tools_for_this_arch_and_every_wheel"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_bundle.py::test_manifest_refuses_a_shipped_tool_with_no_pin_for_the_arch: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_bundle.py::test_manifest_refuses_a_shipped_tool_with_no_pin_for_the_arch"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_toolslock.py::test_the_committed_lock_parses_and_pins_both_architectures_for_every_tool: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_toolslock.py::test_the_committed_lock_parses_and_pins_both_architectures_for_every_tool"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              }
+            ],
+            "collected": "2026-09-24T08:14:02Z"
+          },
+          {
+            "uuid": "712eb10f-3254-5681-b8bc-a2bcee565b66",
+            "title": "CM-14: automated evidence",
+            "description": "9 of 9 cited checks passed. The SSP states CM-14 as partial.",
+            "props": [
+              {
+                "name": "implementation-status",
+                "ns": "urn:sentinel:oscal",
+                "value": "partial"
+              }
+            ],
+            "methods": [
+              "TEST"
+            ],
+            "types": [
+              "control-objective"
+            ],
+            "origins": [
+              {
+                "actors": [
+                  {
+                    "type": "tool",
+                    "actor-uuid": "0dfbb68e-410b-5aba-afb5-b15a1e2bc183"
+                  }
+                ]
+              }
+            ],
+            "subjects": [
+              {
+                "subject-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
+                "type": "component"
+              },
+              {
                 "subject-uuid": "7aeb24b9-53ea-5b02-954f-2cb7f448c8d9",
                 "type": "component"
               }
             ],
             "relevant-evidence": [
+              {
+                "description": "tests/supplychain/test_verify_signature.py::test_keyless_verifies_against_the_bundle_trust_root_identity_and_issuer: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_verify_signature.py::test_keyless_verifies_against_the_bundle_trust_root_identity_and_issuer"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_verify_signature.py::test_keyless_never_skips_the_transparency_log: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_verify_signature.py::test_keyless_never_skips_the_transparency_log"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_verify_signature.py::test_a_rejected_signature_fails_closed: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_verify_signature.py::test_a_rejected_signature_fails_closed"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_verify_signature.py::test_no_policy_is_refused_before_cosign_runs: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_verify_signature.py::test_no_policy_is_refused_before_cosign_runs"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_verify_signature.py::test_two_policies_at_once_are_refused: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_verify_signature.py::test_two_policies_at_once_are_refused"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_verify_signature.py::test_keyless_without_an_identity_is_refused: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_verify_signature.py::test_keyless_without_an_identity_is_refused"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_verify_signature.py::test_a_missing_signature_bundle_is_refused: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_verify_signature.py::test_a_missing_signature_bundle_is_refused"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_verify_signature.py::test_a_pinned_trusted_root_digest_is_checked_before_use: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_verify_signature.py::test_a_pinned_trusted_root_digest_is_checked_before_use"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
               {
                 "description": "tests/compliance/test_stig_role.py::test_every_applied_rule_is_implemented_by_the_role: 1 case passed",
                 "props": [
@@ -1481,10 +1732,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "5a3485d6-2a6b-507f-9cba-fa359273cd7e",
+            "uuid": "ba3648e1-e010-512d-92c3-54dc8c729b2c",
             "title": "IA-2: automated evidence",
             "description": "1 of 1 cited checks passed. The SSP states IA-2 as partial.",
             "props": [
@@ -1533,10 +1784,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "43778f5d-83ee-5a52-a563-535af68519ab",
+            "uuid": "a063f05d-af37-5693-bf4b-85270cfc5f29",
             "title": "IA-5: automated evidence",
             "description": "1 of 1 cited checks passed. The SSP states IA-5 as partial.",
             "props": [
@@ -1585,12 +1836,12 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "5a20ce25-296c-5922-bc8a-d4f7210a695b",
+            "uuid": "d0ab9d7c-43ae-5f2d-b4ea-95ce947f922b",
             "title": "RA-5: automated evidence",
-            "description": "1 of 1 cited checks passed. The SSP states RA-5 as partial.",
+            "description": "8 of 8 cited checks passed. The SSP states RA-5 as partial.",
             "props": [
               {
                 "name": "implementation-status",
@@ -1622,6 +1873,111 @@
             ],
             "relevant-evidence": [
               {
+                "description": "tests/supplychain/test_trivy.py::test_a_raw_scan_neither_applies_vex_nor_gates: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_trivy.py::test_a_raw_scan_neither_applies_vex_nor_gates"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_trivy.py::test_a_gating_scan_applies_vex_and_fails_on_any_remaining_finding: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_trivy.py::test_a_gating_scan_applies_vex_and_fails_on_any_remaining_finding"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_trivy.py::test_findings_exit_differs_from_trivys_own_error_exit: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_trivy.py::test_findings_exit_differs_from_trivys_own_error_exit"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_vex.py::test_a_statement_for_a_finding_no_scan_produced_is_stale: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_vex.py::test_a_statement_for_a_finding_no_scan_produced_is_stale"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_vex.py::test_not_affected_without_a_justification_is_refused: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_vex.py::test_not_affected_without_a_justification_is_refused"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_vex.py::test_build_refuses_when_the_evidence_no_longer_holds: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_vex.py::test_build_refuses_when_the_evidence_no_longer_holds"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_evidence.py::test_fails_when_the_control_is_missing_because_absence_then_proves_nothing: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_evidence.py::test_fails_when_the_control_is_missing_because_absence_then_proves_nothing"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
                 "description": "tests/compliance/test_assessment.py::test_scan_results_are_triaged_against_the_stig_decisions: 1 case passed",
                 "props": [
                   {
@@ -1637,12 +1993,12 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "8bf14a3c-6d73-5d9c-8a1f-fb25b19803b5",
+            "uuid": "75652376-2041-5d2e-ab80-d1ce4dcbda28",
             "title": "SA-10: automated evidence",
-            "description": "3 of 3 cited checks passed. The SSP states SA-10 as implemented.",
+            "description": "7 of 7 cited checks passed. The SSP states SA-10 as implemented.",
             "props": [
               {
                 "name": "implementation-status",
@@ -1717,14 +2073,74 @@
                     "value": "passed"
                   }
                 ]
+              },
+              {
+                "description": "tests/supplychain/test_bundle.py::test_same_tree_and_epoch_give_identical_bytes_regardless_of_file_mtimes: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_bundle.py::test_same_tree_and_epoch_give_identical_bytes_regardless_of_file_mtimes"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_bundle.py::test_the_gzip_header_carries_the_epoch_not_the_build_time: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_bundle.py::test_the_gzip_header_carries_the_epoch_not_the_build_time"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_bundle.py::test_a_build_from_uncommitted_changes_says_so: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_bundle.py::test_a_build_from_uncommitted_changes_says_so"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/mbse/test_real_model.py::test_the_committed_trace_is_current: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/mbse/test_real_model.py::test_the_committed_trace_is_current"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "cf39d7ef-c4a0-5f75-8694-1afd2ed53366",
+            "uuid": "f5c70f3d-d39c-5107-a4c3-d7c03406ad56",
             "title": "SA-11: automated evidence",
-            "description": "11 of 11 cited checks passed. The SSP states SA-11 as implemented.",
+            "description": "14 of 14 cited checks passed. The SSP states SA-11 as implemented.",
             "props": [
               {
                 "name": "implementation-status",
@@ -1850,6 +2266,51 @@
                 ]
               },
               {
+                "description": "tests/mbse/test_real_model.py::test_the_model_has_no_broken_references: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/mbse/test_real_model.py::test_the_model_has_no_broken_references"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/mbse/test_real_model.py::test_every_requirement_is_satisfied_by_a_part_and_has_a_verification_case: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/mbse/test_real_model.py::test_every_requirement_is_satisfied_by_a_part_and_has_a_verification_case"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/mbse/test_real_model.py::test_unverified_means_planned_never_forgotten: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/mbse/test_real_model.py::test_unverified_means_planned_never_forgotten"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
                 "description": "denied: all assertions passed (2026-09-24T02:39:13.471516+00:00)",
                 "props": [
                   {
@@ -1925,12 +2386,12 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "339d774e-8a69-537f-b975-9def68288a48",
+            "uuid": "8b8a8df4-855a-548a-a3ca-e7effc61abea",
             "title": "SA-15: automated evidence",
-            "description": "1 of 1 cited checks passed. The SSP states SA-15 as implemented.",
+            "description": "3 of 3 cited checks passed. The SSP states SA-15 as implemented.",
             "props": [
               {
                 "name": "implementation-status",
@@ -1975,12 +2436,42 @@
                     "value": "passed"
                   }
                 ]
+              },
+              {
+                "description": "tests/mbse/test_real_model.py::test_the_committed_trace_is_current: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/mbse/test_real_model.py::test_the_committed_trace_is_current"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/mbse/test_syntax_check.py::test_a_validator_that_accepts_a_known_bad_model_is_not_trusted: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/mbse/test_syntax_check.py::test_a_validator_that_accepts_a_known_bad_model_is_not_trusted"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "8f09b0ac-f32a-5c46-bf74-f0fae9287892",
+            "uuid": "734c37c5-efed-5887-ab60-95c220558150",
             "title": "SC-7: automated evidence",
             "description": "4 of 4 cited checks passed. The SSP states SC-7 as partial.",
             "props": [
@@ -2082,10 +2573,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "fde1c5d9-268a-5db4-aead-ff2ce8f534b9",
+            "uuid": "ae7214df-16e0-5df8-a352-134c05cb71ae",
             "title": "SC-8: automated evidence",
             "description": "1 of 1 cited checks passed. The SSP states SC-8 as partial.",
             "props": [
@@ -2134,10 +2625,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "316fa9ea-90e1-595c-a1f6-8bb89031a46b",
+            "uuid": "ce439138-8469-58b2-8742-2851fe625962",
             "title": "SC-12: automated evidence",
             "description": "1 of 1 cited checks passed. The SSP states SC-12 as partial.",
             "props": [
@@ -2186,10 +2677,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "71076d2d-4049-5aee-9337-682c18e0a34e",
+            "uuid": "29e26cb0-905d-52d3-9764-22c5cadc9dcb",
             "title": "SC-13: automated evidence",
             "description": "3 of 3 cited checks passed. The SSP states SC-13 as partial.",
             "props": [
@@ -2272,10 +2763,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "558ced24-36ff-5d16-ae68-737364cd7086",
+            "uuid": "c14831bc-bd1b-5ddf-94e6-7989001cab91",
             "title": "SC-28: automated evidence",
             "description": "1 of 1 cited checks passed. The SSP states SC-28 as partial.",
             "props": [
@@ -2324,12 +2815,12 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "1a36f554-6961-509f-a84c-f6684d3e66b4",
+            "uuid": "f7e9ff06-b4bd-5460-80b8-1aa807072889",
             "title": "SI-2: automated evidence",
-            "description": "2 of 2 cited checks passed. The SSP states SI-2 as partial.",
+            "description": "3 of 3 cited checks passed. The SSP states SI-2 as partial.",
             "props": [
               {
                 "name": "implementation-status",
@@ -2380,6 +2871,21 @@
                 ]
               },
               {
+                "description": "tests/supplychain/test_trivy.py::test_a_gating_scan_applies_vex_and_fails_on_any_remaining_finding: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_trivy.py::test_a_gating_scan_applies_vex_and_fails_on_any_remaining_finding"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
                 "description": "tests/compliance/test_stig_role.py::test_every_applied_rule_is_implemented_by_the_role: 1 case passed",
                 "props": [
                   {
@@ -2395,10 +2901,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "b5e22490-1ef3-5330-8d0f-0987347acf4a",
+            "uuid": "f16b36c8-0b7b-5c39-8b8a-353e1051bb9e",
             "title": "SI-4: automated evidence",
             "description": "5 of 5 cited checks passed. The SSP states SI-4 as partial.",
             "props": [
@@ -2515,12 +3021,12 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "74c20632-fa39-5158-817d-f88ed0707f60",
+            "uuid": "ae93120d-50c4-5952-ae20-d3429fc7cef5",
             "title": "SI-7: automated evidence",
-            "description": "5 of 5 cited checks passed. The SSP states SI-7 as partial.",
+            "description": "9 of 9 cited checks passed. The SSP states SI-7 as partial.",
             "props": [
               {
                 "name": "implementation-status",
@@ -2551,6 +3057,10 @@
               },
               {
                 "subject-uuid": "7aeb24b9-53ea-5b02-954f-2cb7f448c8d9",
+                "type": "component"
+              },
+              {
+                "subject-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
                 "type": "component"
               }
             ],
@@ -2616,6 +3126,36 @@
                 ]
               },
               {
+                "description": "tests/supplychain/test_verify_signature.py::test_a_rejected_signature_fails_closed: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_verify_signature.py::test_a_rejected_signature_fails_closed"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_checksums.py::test_sha256sum_accepts_the_manifest_and_rejects_a_tampered_file: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_checksums.py::test_sha256sum_accepts_the_manifest_and_rejects_a_tampered_file"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
                 "description": "tests/compliance/test_stig_role.py::test_every_applied_rule_is_implemented_by_the_role: 1 case passed",
                 "props": [
                   {
@@ -2629,12 +3169,42 @@
                     "value": "passed"
                   }
                 ]
+              },
+              {
+                "description": "tests/supplychain/test_verify_signature.py::test_keyless_verifies_against_the_bundle_trust_root_identity_and_issuer: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_verify_signature.py::test_keyless_verifies_against_the_bundle_trust_root_identity_and_issuer"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_verify_signature.py::test_a_pinned_trusted_root_digest_is_checked_before_use: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_verify_signature.py::test_a_pinned_trusted_root_digest_is_checked_before_use"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "5ac8a698-814e-59eb-b1b4-119b81f0ef71",
+            "uuid": "5ef00dba-cbfa-5c5d-a55e-d878c9ad1a8a",
             "title": "SI-10: automated evidence",
             "description": "9 of 9 cited checks passed. The SSP states SI-10 as implemented.",
             "props": [
@@ -2803,10 +3373,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "ecbe3a8e-a857-52d1-900c-10eb15e63d19",
+            "uuid": "d4914db9-38f4-5eef-b96e-8b956c6cae6f",
             "title": "SI-15: automated evidence",
             "description": "8 of 8 cited checks passed. The SSP states SI-15 as implemented.",
             "props": [
@@ -2960,10 +3530,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "415bc71f-d457-5b48-8216-00d7ea20c6a9",
+            "uuid": "95e6a736-6f3b-5e54-92b5-114f263bad54",
             "title": "SI-17: automated evidence",
             "description": "11 of 11 cited checks passed. The SSP states SI-17 as implemented.",
             "props": [
@@ -3166,12 +3736,12 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "a4f77d1e-91f1-5281-be87-5ec276e9f8ab",
+            "uuid": "c538848d-95fd-547d-861d-17455342312f",
             "title": "SR-3: automated evidence",
-            "description": "2 of 2 cited checks passed. The SSP states SR-3 as partial.",
+            "description": "4 of 4 cited checks passed. The SSP states SR-3 as partial.",
             "props": [
               {
                 "name": "implementation-status",
@@ -3203,6 +3773,36 @@
             ],
             "relevant-evidence": [
               {
+                "description": "tests/supplychain/test_toolslock.py::test_fetch_refuses_a_digest_mismatch_and_writes_nothing: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_toolslock.py::test_fetch_refuses_a_digest_mismatch_and_writes_nothing"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_toolslock.py::test_the_committed_lock_parses_and_pins_both_architectures_for_every_tool: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_toolslock.py::test_the_committed_lock_parses_and_pins_both_architectures_for_every_tool"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
                 "description": "tests/test_tier3_cara_validation.py::test_vendored_nasa_files_are_unmodified: 1 case passed",
                 "props": [
                   {
@@ -3233,12 +3833,12 @@
                 ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
           },
           {
-            "uuid": "228dd0a8-fb0e-59fa-8a3c-e4421a98dca0",
+            "uuid": "85ae42be-c876-5326-81fe-aace1489b059",
             "title": "SR-4: automated evidence",
-            "description": "1 of 1 cited checks passed. The SSP states SR-4 as partial.",
+            "description": "3 of 3 cited checks passed. The SSP states SR-4 as partial.",
             "props": [
               {
                 "name": "implementation-status",
@@ -3283,9 +3883,121 @@
                     "value": "passed"
                   }
                 ]
+              },
+              {
+                "description": "tests/supplychain/test_bundle.py::test_manifest_records_identity_shipped_tools_for_this_arch_and_every_wheel: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_bundle.py::test_manifest_records_identity_shipped_tools_for_this_arch_and_every_wheel"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_bundle.py::test_a_build_from_uncommitted_changes_says_so: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_bundle.py::test_a_build_from_uncommitted_changes_says_so"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
               }
             ],
-            "collected": "2026-09-24T07:25:45Z"
+            "collected": "2026-09-24T08:14:02Z"
+          },
+          {
+            "uuid": "9250878c-4879-5de4-9418-104f54b893cf",
+            "title": "SR-11: automated evidence",
+            "description": "3 of 3 cited checks passed. The SSP states SR-11 as partial.",
+            "props": [
+              {
+                "name": "implementation-status",
+                "ns": "urn:sentinel:oscal",
+                "value": "partial"
+              }
+            ],
+            "methods": [
+              "TEST"
+            ],
+            "types": [
+              "control-objective"
+            ],
+            "origins": [
+              {
+                "actors": [
+                  {
+                    "type": "tool",
+                    "actor-uuid": "0dfbb68e-410b-5aba-afb5-b15a1e2bc183"
+                  }
+                ]
+              }
+            ],
+            "subjects": [
+              {
+                "subject-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
+                "type": "component"
+              }
+            ],
+            "relevant-evidence": [
+              {
+                "description": "tests/supplychain/test_toolslock.py::test_fetch_refuses_a_digest_mismatch_and_writes_nothing: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_toolslock.py::test_fetch_refuses_a_digest_mismatch_and_writes_nothing"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_verify_signature.py::test_a_pinned_trusted_root_digest_is_checked_before_use: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_verify_signature.py::test_a_pinned_trusted_root_digest_is_checked_before_use"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/supplychain/test_verify_signature.py::test_a_rejected_signature_fails_closed: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/supplychain/test_verify_signature.py::test_a_rejected_signature_fails_closed"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              }
+            ],
+            "collected": "2026-09-24T08:14:02Z"
           }
         ]
       }

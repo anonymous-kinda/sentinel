@@ -1,7 +1,9 @@
 """Resolve every citation in the authored sources against the repository.
 
 The SSP may only cite evidence that exists: a file on disk, a test function
-pytest can collect, a job in a workflow, a DDIL harness scenario. Tests are
+pytest can collect, a job in a workflow, a DDIL harness scenario. The
+reverse holds for planned evidence: a path that already exists is no longer
+planned, and a POA&M item still waiting for it would misstate the plan. Tests are
 resolved statically (AST), so this runs in milliseconds and needs no
 collection. A class bound by assignment (hypothesis's `Machine.TestCase`)
 cannot be inspected statically; any method cited on it is accepted.
@@ -38,6 +40,7 @@ def _contribution_problems(contribution, root: pathlib.Path, scenarios: set[str]
     problems += [p for t in contribution.tests if (p := _test_problem(t, root))]
     problems += [f"CI job {j} does not exist" for j in contribution.ci if not _job_exists(j, root)]
     problems += [f"harness scenario {s} does not exist" for s in contribution.harness if s not in scenarios]
+    problems += [f"planned evidence {p} already exists" for p in contribution.planned_evidence if (root / p).exists()]
     return problems
 
 

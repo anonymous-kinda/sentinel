@@ -1,10 +1,10 @@
 {
   "system-security-plan": {
-    "uuid": "d6a68aa5-7929-5503-b42b-16c3eabda858",
+    "uuid": "95ff83a7-5aa1-50f7-aca2-8a0523eef632",
     "metadata": {
       "title": "Sentinel system security plan (draft)",
-      "last-modified": "2026-09-23T00:00:00Z",
-      "version": "0.1.0",
+      "last-modified": "2026-09-24T00:00:00Z",
+      "version": "0.2.0",
       "oscal-version": "1.2.1",
       "roles": [
         {
@@ -935,7 +935,7 @@
             {
               "component-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
               "uuid": "eed961b2-8e47-58ac-9edd-6ffc4464ed7b",
-              "description": "Every push and pull request runs the full test ladder with the network disabled, lint, the module-boundary contracts, reproducibility checks of the generated reports, Terraform and Ansible validation, and secret scanning over the full history. The DDIL harness runs on changes to the layers it exercises and nightly with a 15-minute denial. Every CI run regenerates this package's assessment results and POA&M from its own test evidence.",
+              "description": "Every push and pull request runs the full test ladder with the network disabled, lint, the module-boundary contracts, reproducibility checks of the generated reports and the requirement trace, Terraform and Ansible validation, secret scanning over the full history, lint of the workflows, the container file and the deploy scripts, and the supply-chain checks: SBOMs with a completeness gate, a vulnerability scan that fails on any finding no reviewed VEX statement answers, and offline signature verification with the real cosign. The DDIL harness runs on changes to the layers it exercises and nightly with a 15-minute denial. Every CI run regenerates this package's assessment results and POA&M from its own test evidence.",
               "props": [
                 {
                   "name": "evidence-ci",
@@ -956,6 +956,21 @@
                   "name": "evidence-ci",
                   "ns": "urn:sentinel:oscal",
                   "value": "ci.yml#compliance"
+                },
+                {
+                  "name": "evidence-ci",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "ci.yml#supply-chain"
+                },
+                {
+                  "name": "evidence-ci",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "ci.yml#release-lint"
+                },
+                {
+                  "name": "evidence-ci",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "ci.yml#mbse"
                 },
                 {
                   "name": "evidence-ci",
@@ -1276,8 +1291,63 @@
             {
               "component-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
               "uuid": "af2a8abd-df25-54fd-904f-7716f40264e9",
-              "description": "Software components are inventoried with versions and hashes: uv.lock for Python, web/package-lock.json for the console, deploy/tools.lock for the uv, nats-server and toxiproxy binaries; each bundle carries SHA256SUMS for every file it contains. There is no SBOM in a standard format yet.",
+              "description": "Software components are inventoried with versions and hashes. On every push the supply-chain CI job writes SPDX 2.3 and CycloneDX SBOMs with the pinned syft for what a bundle ships from source: the Python runtime (the hash-locked runtime set and the sentinel wheel, installed for the bundle's CPython 3.12 target) and the web console (the production closure of web/package-lock.json). The step fails if an SBOM is empty or lacks a component known to ship (scripts/sbom.py, step \"SBOMs (fails if empty or missing a shipped component)\"). The bundle builder writes BUNDLE.json, which lists every wheel with its digest and every bundled binary with its version, upstream URL and SHA-256, and refuses a binary with no pin for the target architecture; deploy/tools.lock pins every third-party binary for both architectures. Two gaps remain. The container image's base layer (Chainguard's CPython image) is in no SBOM that Sentinel produces. In CI, bundles are built, and SBOMs published with a release and attested to it, only by .github/workflows/release.yml, which runs on a tag on GitHub, has been checked only statically (actionlint) and has not run yet.",
               "props": [
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_sbom.py::test_a_missing_component_raises_and_names_it"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_sbom.py::test_an_empty_sbom_raises_even_with_nothing_required"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_sbom.py::test_syft_writes_both_formats_from_one_catalog_pass"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_bundle.py::test_manifest_records_identity_shipped_tools_for_this_arch_and_every_wheel"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_bundle.py::test_manifest_refuses_a_shipped_tool_with_no_pin_for_the_arch"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_toolslock.py::test_the_committed_lock_parses_and_pins_both_architectures_for_every_tool"
+                },
+                {
+                  "name": "evidence-ci",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "ci.yml#supply-chain"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "scripts/sbom.py"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "supplychain/sbom.py"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "supplychain/bundle.py"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "deploy/tools.lock"
+                },
                 {
                   "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
@@ -1291,16 +1361,6 @@
                 {
                   "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
-                  "value": "deploy/tools.lock"
-                },
-                {
-                  "name": "evidence-file",
-                  "ns": "urn:sentinel:oscal",
-                  "value": "scripts/build_bundle.py"
-                },
-                {
-                  "name": "planned-evidence",
-                  "ns": "urn:sentinel:oscal",
                   "value": "docs/supply-chain.md"
                 },
                 {
@@ -1311,7 +1371,7 @@
               ],
               "implementation-status": {
                 "state": "partial",
-                "remarks": "Generate an SBOM (CycloneDX or SPDX) for each release artifact in the release pipeline (docs/supply-chain.md)."
+                "remarks": "Catalogue each container image archive with syft in the release workflow and gate it like the bundle SBOMs. Push the first release tag, then check that the published SBOMs and their attestations match the bundles (gh attestation verify --predicate-type https://spdx.dev/Document/v2.3)."
               }
             }
           ],
@@ -1331,15 +1391,85 @@
             {
               "component-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
               "uuid": "64106822-f1f3-50f3-a93c-0f5ab6b3adcc",
-              "description": "Release bundles are to be signed with cosign and the signature verified before install (docs/supply-chain.md). Today the bundle is checked only against its published SHA-256 digest, which proves the bytes match the digest, not who published them (deploy/ansible/roles/sentinel/tasks/main.yml).",
+              "description": "Installation refuses a bundle whose signature does not verify against the approved signer. One verifier, deploy/bundle/verify_signature.sh, holds the policy for every install path. It accepts exactly one policy: the release workflow's keyless identity, checked offline against the Sigstore trusted root (whose SHA-256 is pinned), or a site public key. No policy, two policies, a missing signature bundle, or a trusted root that does not match its pin is refused before cosign runs, and a rejected signature fails closed. On every push the supply-chain CI job runs the verifier with the pinned cosign in a namespace with no network: a good signature verifies; a tampered artifact, another key's signature and a wrong identity are rejected; a real Sigstore public-good signature verifies offline (deploy/bundle/selftest_signature.sh). The same job runs the Ansible role's gate on localhost (deploy/ansible/tests/test_verify.sh): a tampered bundle with a regenerated digest, a missing policy and another signer's identity are refused. Not yet proven: releases are signed keyless only by the sign job of .github/workflows/release.yml, which runs on a tag on GitHub, has been checked only statically (actionlint) and has not run yet, so no Sentinel release signature exists. The full offline install behind the gate (make airgap-local) is proven only on a developer machine. Unpacking a bundle by hand and running install.sh skips the gate by construction: a script inside a bundle cannot vouch for that bundle.",
               "props": [
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_verify_signature.py::test_keyless_verifies_against_the_bundle_trust_root_identity_and_issuer"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_verify_signature.py::test_keyless_never_skips_the_transparency_log"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_verify_signature.py::test_a_rejected_signature_fails_closed"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_verify_signature.py::test_no_policy_is_refused_before_cosign_runs"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_verify_signature.py::test_two_policies_at_once_are_refused"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_verify_signature.py::test_keyless_without_an_identity_is_refused"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_verify_signature.py::test_a_missing_signature_bundle_is_refused"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_verify_signature.py::test_a_pinned_trusted_root_digest_is_checked_before_use"
+                },
+                {
+                  "name": "evidence-ci",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "ci.yml#supply-chain"
+                },
                 {
                   "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
-                  "value": "deploy/ansible/roles/sentinel/tasks/main.yml"
+                  "value": "deploy/bundle/verify_signature.sh"
                 },
                 {
-                  "name": "planned-evidence",
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "deploy/bundle/selftest_signature.sh"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "deploy/ansible/roles/sentinel/tasks/verify.yml"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "deploy/ansible/roles/sentinel/defaults/main.yml"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "deploy/ansible/tests/test_verify.sh"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": ".github/workflows/release.yml"
+                },
+                {
+                  "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
                   "value": "docs/supply-chain.md"
                 },
@@ -1350,8 +1480,8 @@
                 }
               ],
               "implementation-status": {
-                "state": "planned",
-                "remarks": "Sign release bundles with cosign in the release pipeline and verify the signature in the sentinel role before unpacking."
+                "state": "partial",
+                "remarks": "Push the first release tag and confirm that the sign job's offline verification and the verify job (signature, install and run under unshare -rn) pass on both architectures. Then run the full offline install (deploy/bundle/verify_offline.sh) in CI on every push, not only in a release."
               }
             },
             {
@@ -1519,12 +1649,52 @@
             {
               "component-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
               "uuid": "f60205d1-dc9a-57da-a7b3-d3b52cf30e99",
-              "description": "Secret scanning (gitleaks) runs over the full history on every push. Dependency and image vulnerability scanning with Trivy, with VEX statements for triaged findings, is planned in the release pipeline (docs/supply-chain.md). Host compliance scanning with OpenSCAP against the DISA STIG benchmark is defined in the STIG role and has not yet been run; when it is, its failing rules become POA&M items automatically.",
+              "description": "On every push the supply-chain CI job scans with the pinned Trivy against its current vulnerability database, which is not pinned. It scans uv.lock (every locked package, dev tools and optional extras included), the console's runtime dependencies in web/package-lock.json, and the nats-server and uv binaries the bundle ships, for both architectures. Every reviewed VEX statement must answer a finding the raw scan reported and pass its evidence check against the shipped binaries, and a not_affected statement must carry an OpenVEX justification and a written impact statement. Then any finding left, at any severity, fails the job, with an exit code distinct from Trivy's own errors (scripts/scan.py, step \"Vulnerability gate (raw scan, reviewed VEX and its evidence checked, SARIF)\"). Secret scanning (gitleaks) runs over the full history on every push. Not yet covered: no scan runs on a schedule, so a new advisory against unchanged code is found only on the next push; the container image is scanned only in release.yml, which has not run yet, and its findings are reported, not gated; the npm build toolchain (devDependencies) is not scanned; and host compliance scanning with OpenSCAP against the DISA STIG benchmark is defined in the STIG role but has not been run. When it is, its failing rules become POA&M items automatically.",
               "props": [
                 {
                   "name": "evidence-test",
                   "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_trivy.py::test_a_raw_scan_neither_applies_vex_nor_gates"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_trivy.py::test_a_gating_scan_applies_vex_and_fails_on_any_remaining_finding"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_trivy.py::test_findings_exit_differs_from_trivys_own_error_exit"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_vex.py::test_a_statement_for_a_finding_no_scan_produced_is_stale"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_vex.py::test_not_affected_without_a_justification_is_refused"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_vex.py::test_build_refuses_when_the_evidence_no_longer_holds"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_evidence.py::test_fails_when_the_control_is_missing_because_absence_then_proves_nothing"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
                   "value": "tests/compliance/test_assessment.py::test_scan_results_are_triaged_against_the_stig_decisions"
+                },
+                {
+                  "name": "evidence-ci",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "ci.yml#supply-chain"
                 },
                 {
                   "name": "evidence-ci",
@@ -1534,10 +1704,40 @@
                 {
                   "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
+                  "value": "scripts/scan.py"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "supplychain/trivy.py"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "supplychain/vex.py"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "supplychain/evidence.py"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "deploy/vex/statements.toml"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "deploy/vex/sentinel.openvex.json"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
                   "value": "deploy/ansible/roles/stig/tasks/scan.yml"
                 },
                 {
-                  "name": "planned-evidence",
+                  "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
                   "value": "docs/supply-chain.md"
                 },
@@ -1549,7 +1749,7 @@
               ],
               "implementation-status": {
                 "state": "partial",
-                "remarks": "Trivy with VEX on every release and on a schedule; run the STIG scan on the hub."
+                "remarks": "Run the vulnerability gate daily as well as on every push; gate the container image scan once base-image findings have a VEX process; run the STIG scan on the hub."
               }
             },
             {
@@ -1578,7 +1778,7 @@
             {
               "component-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
               "uuid": "2a4d09ce-25e6-5f19-824f-35589794644e",
-              "description": "Every change is a git commit; dependencies and tools are pinned by hash; generated artifacts are regenerated and compared in CI; vendored upstream data (NASA CARA, CelesTrak, NIST, DISA) carries provenance and checksums that the tests verify; module boundaries are contracts checked in CI.",
+              "description": "Every change is a git commit; dependencies and tools are pinned by hash; generated artifacts (the validation and AI eval reports, the requirement trace, this package's authored OSCAL documents) are regenerated and compared in CI; vendored upstream data (NASA CARA, CelesTrak, NIST, DISA) carries provenance and checksums that the tests verify; module boundaries are contracts checked in CI. The bundle writer is deterministic: the same tree and SOURCE_DATE_EPOCH give identical bytes whatever the file times, the gzip header carries the epoch rather than the build time, and a build from uncommitted changes records a dirty tree, so it cannot pass as its commit. The workflows (with shellcheck on every run block), the container file and the deploy scripts are linted in CI with actionlint, shellcheck and hadolint, each pinned by SHA-256.",
               "props": [
                 {
                   "name": "evidence-test",
@@ -1596,9 +1796,49 @@
                   "value": "tests/compliance/test_package_integrity.py::test_committed_documents_are_what_the_sources_generate"
                 },
                 {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_bundle.py::test_same_tree_and_epoch_give_identical_bytes_regardless_of_file_mtimes"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_bundle.py::test_the_gzip_header_carries_the_epoch_not_the_build_time"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_bundle.py::test_a_build_from_uncommitted_changes_says_so"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/mbse/test_real_model.py::test_the_committed_trace_is_current"
+                },
+                {
                   "name": "evidence-ci",
                   "ns": "urn:sentinel:oscal",
                   "value": "ci.yml#python"
+                },
+                {
+                  "name": "evidence-ci",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "ci.yml#release-lint"
+                },
+                {
+                  "name": "evidence-ci",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "ci.yml#mbse"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "supplychain/bundle.py"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "scripts/build_bundle.py"
                 }
               ],
               "implementation-status": {
@@ -1622,7 +1862,7 @@
             {
               "component-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
               "uuid": "4ce83ed7-3e8d-5c50-9f37-fb2818eaf8ab",
-              "description": "Developer testing is a ladder of pytest markers run in CI with the network disabled: geometry, integration against closed forms and an independent quadrature, agreement with NASA CARA's published values for 53 operational conjunctions and its benchmark cases, maximum Pc and dilution, every refusal gate, and the output contract. CRDT convergence is property-tested (Hypothesis); the DDIL harness runs real processes over a shaped link; the assistant's routing is scored on a labelled set. Every CI run turns its JUnit evidence into assessment results and a POA&M (this package).",
+              "description": "Developer testing is a ladder of pytest markers run in CI with the network disabled: geometry, integration against closed forms and an independent quadrature, agreement with NASA CARA's published values for 53 operational conjunctions and its benchmark cases, maximum Pc and dilution, every refusal gate, and the output contract. CRDT convergence is property-tested (Hypothesis); the DDIL harness runs real processes over a shaped link; the assistant's routing is scored on a labelled set. Every CI run turns its JUnit evidence into assessment results and a POA&M (this package). The tests are traced to the requirements they verify: the SysML v2 model (mbse/) links each requirement to the tests, harness scenarios, import contracts and CI steps that verify it, and its generated trace (docs/traceability.md) fails CI when a reference names evidence that does not exist. Work not yet built is marked planned and shown as unverified, never as verified.",
               "props": [
                 {
                   "name": "evidence-test",
@@ -1653,6 +1893,21 @@
                   "name": "evidence-test",
                   "ns": "urn:sentinel:oscal",
                   "value": "tests/ai/test_evaluation.py::test_the_summary_separates_routing_accuracy_coverage_and_calibration"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/mbse/test_real_model.py::test_the_model_has_no_broken_references"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/mbse/test_real_model.py::test_every_requirement_is_satisfied_by_a_part_and_has_a_verification_case"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/mbse/test_real_model.py::test_unverified_means_planned_never_forgotten"
                 },
                 {
                   "name": "evidence-harness",
@@ -1693,6 +1948,21 @@
                   "name": "evidence-ci",
                   "ns": "urn:sentinel:oscal",
                   "value": "ci.yml#compliance"
+                },
+                {
+                  "name": "evidence-ci",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "ci.yml#mbse"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "mbse/verification.sysml"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "docs/traceability.md"
                 }
               ],
               "implementation-status": {
@@ -1716,7 +1986,7 @@
             {
               "component-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
               "uuid": "6d0d673e-5e95-5c30-a3ef-17698c05d60a",
-              "description": "The development process is written down and enforced by tools: test-first development and architecture decision records (docs/system-design.md), ruff and import-linter in CI, a test that forbids interpolated log messages, pre-commit hooks for ruff and gitleaks, and pinned tool versions.",
+              "description": "The development process is written down and enforced by tools: test-first development and architecture decision records (docs/system-design.md); requirements modelled in SysML v2 (mbse/), parsed with the SysML v2 pilot grammar and traced to their verification evidence in CI; ruff and import-linter in CI; a test that forbids interpolated log messages; pre-commit hooks for ruff and gitleaks; and pinned tool versions, with the workflow, container and shell linters fetched against SHA-256 pins.",
               "props": [
                 {
                   "name": "evidence-test",
@@ -1724,9 +1994,29 @@
                   "value": "tests/test_logging_policy.py::test_log_messages_are_constants_with_values_as_fields"
                 },
                 {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/mbse/test_real_model.py::test_the_committed_trace_is_current"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/mbse/test_syntax_check.py::test_a_validator_that_accepts_a_known_bad_model_is_not_trusted"
+                },
+                {
                   "name": "evidence-ci",
                   "ns": "urn:sentinel:oscal",
                   "value": "ci.yml#python"
+                },
+                {
+                  "name": "evidence-ci",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "ci.yml#mbse"
+                },
+                {
+                  "name": "evidence-ci",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "ci.yml#release-lint"
                 },
                 {
                   "name": "evidence-file",
@@ -1747,6 +2037,21 @@
                   "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
                   "value": "pyproject.toml"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "mbse/requirements.sysml"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "mbse/verification.sysml"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "docs/traceability.md"
                 }
               ],
               "implementation-status": {
@@ -2090,7 +2395,7 @@
             {
               "component-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
               "uuid": "0688fe9d-77ff-5b1e-98c1-34c2c32164ed",
-              "description": "Every failing test becomes a POA&M item, linked to the controls that cite it, on every CI run (this package); dependency updates go through the lockfile and the full test ladder. Vulnerability-driven updates wait on dependency scanning (RA-5).",
+              "description": "Every failing test becomes a POA&M item, linked to the controls that cite it, on every CI run (this package); dependency updates go through the lockfile and the full test ladder. On every push the vulnerability gate fails the build on any finding in a dependency or a shipped binary that no reviewed VEX statement answers (RA-5), so a known flaw cannot pass unnoticed. Those findings reach the job's SARIF output, not yet this package's POA&M.",
               "props": [
                 {
                   "name": "evidence-test",
@@ -2098,14 +2403,19 @@
                   "value": "tests/compliance/test_assessment.py::test_every_failing_test_is_an_open_item_linked_to_its_controls"
                 },
                 {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_trivy.py::test_a_gating_scan_applies_vex_and_fails_on_any_remaining_finding"
+                },
+                {
                   "name": "evidence-ci",
                   "ns": "urn:sentinel:oscal",
                   "value": "ci.yml#compliance"
                 },
                 {
-                  "name": "planned-evidence",
+                  "name": "evidence-ci",
                   "ns": "urn:sentinel:oscal",
-                  "value": "docs/supply-chain.md"
+                  "value": "ci.yml#supply-chain"
                 },
                 {
                   "name": "milestone",
@@ -2276,17 +2586,42 @@
             {
               "component-uuid": "7aeb24b9-53ea-5b02-954f-2cb7f448c8d9",
               "uuid": "b497d238-f042-5425-9871-94c6182634eb",
-              "description": "Installation verifies before it unpacks: Ansible checks the bundle against its published SHA-256 digest, and install.sh checks every file against SHA256SUMS and installs dependencies offline with --require-hashes. AIDE checks file integrity daily (STIG role). A digest shipped next to the bundle proves the bytes match it, not who published them.",
+              "description": "Installation verifies before it unpacks, and each check fails closed. The sentinel Ansible role first verifies the bundle's signature on the target (verify.yml: the pinned cosign, itself checked against deploy/tools.lock on the host, runs verify_signature.sh), then the tarball's SHA-256; install.sh then checks every file against the bundle's SHA256SUMS and installs dependencies offline with --require-hashes. CI exercises the signature gate on every push: on localhost, a tampered bundle is refused even when its .sha256 is regenerated to match (deploy/ansible/tests/test_verify.sh, in the supply-chain job). The complete offline path (deploy/bundle/verify_offline.sh: signature, digest, SHA256SUMS, install and run inside unshare -rn) is proven only on a developer machine (make airgap-local) and in the release workflow, which has not run yet. AIDE checks file integrity daily (STIG role), and the STIG role has not been applied to a host.",
               "props": [
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_verify_signature.py::test_a_rejected_signature_fails_closed"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_checksums.py::test_sha256sum_accepts_the_manifest_and_rejects_a_tampered_file"
+                },
                 {
                   "name": "evidence-test",
                   "ns": "urn:sentinel:oscal",
                   "value": "tests/compliance/test_stig_role.py::test_every_applied_rule_is_implemented_by_the_role"
                 },
                 {
+                  "name": "evidence-ci",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "ci.yml#supply-chain"
+                },
+                {
                   "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
                   "value": "deploy/ansible/roles/sentinel/tasks/main.yml"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "deploy/ansible/roles/sentinel/tasks/verify.yml"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "deploy/ansible/tests/test_verify.sh"
                 },
                 {
                   "name": "evidence-file",
@@ -2297,20 +2632,65 @@
                   "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
                   "value": "deploy/bundle/verify_offline.sh"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "deploy/ansible/roles/stig/tasks/integrity.yml"
+                },
+                {
+                  "name": "milestone",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "M4"
                 }
               ],
               "implementation-status": {
                 "state": "partial",
-                "remarks": "Verify the bundle's cosign signature before the digest (docs/supply-chain.md); run make airgap-verify in CI."
+                "remarks": "Run verify_offline.sh on a freshly built bundle in CI on every push (the gap the requirement trace records as VC-DEP-002); apply the STIG role to the hub and scan."
               }
             },
             {
               "component-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
               "uuid": "70c7f13d-0822-5b51-85c5-b45780efddfa",
-              "description": "Release artifacts are to be signed with cosign and carry SLSA build provenance (docs/supply-chain.md).",
+              "description": "The release workflow (.github/workflows/release.yml, sign job) signs every release artifact keyless: both bundles, both container image archives, and SHA256SUMS, which covers the SBOMs, the VEX document and the trusted root. Before anything is uploaded it verifies every signature offline under unshare -rn against the pinned trusted root and the exact workflow identity, and it attests SLSA build provenance. That workflow runs only on a tag on GitHub. It has been checked statically (actionlint with shellcheck, in the release-lint CI job) and has not run yet, so no release has been signed. The verifier it calls is exercised on every push with the real cosign and no network (deploy/bundle/selftest_signature.sh, in the supply-chain CI job).",
               "props": [
                 {
-                  "name": "planned-evidence",
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_verify_signature.py::test_keyless_verifies_against_the_bundle_trust_root_identity_and_issuer"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_verify_signature.py::test_a_pinned_trusted_root_digest_is_checked_before_use"
+                },
+                {
+                  "name": "evidence-ci",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "ci.yml#supply-chain"
+                },
+                {
+                  "name": "evidence-ci",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "ci.yml#release-lint"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": ".github/workflows/release.yml"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "deploy/bundle/verify_signature.sh"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "deploy/bundle/selftest_signature.sh"
+                },
+                {
+                  "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
                   "value": "docs/supply-chain.md"
                 },
@@ -2321,8 +2701,8 @@
                 }
               ],
               "implementation-status": {
-                "state": "planned",
-                "remarks": "Sign and attest release artifacts in the release pipeline."
+                "state": "partial",
+                "remarks": "Push the first release tag; confirm the sign job's offline verification passes, then verify the published release offline as docs/supply-chain.md describes."
               }
             }
           ],
@@ -2574,8 +2954,18 @@
             {
               "component-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
               "uuid": "f21909e9-e767-5eeb-ba41-9234bb858013",
-              "description": "Third-party binaries are pinned by version and SHA-256 (deploy/tools.lock), and a mismatch aborts the download (scripts/fetch_tools.py, run in the harness workflow). Python dependencies are hash-locked and installed offline with --require-hashes. Upstream data (NASA CARA, CelesTrak, NIST, DISA) is vendored unmodified with provenance and checksums that the tests verify. SBOMs, signing, build provenance and vulnerability scanning are planned in the release pipeline.",
+              "description": "The supply-chain controls are documented in docs/supply-chain.md, and the supply-chain CI job runs them on every push: SBOMs with a completeness gate (CM-8), a Trivy scan that fails on any finding no reviewed VEX statement answers (RA-5), and offline signature verification with the real cosign (CM-14, SI-7). Third-party binaries and trust material are pinned by version and SHA-256 (deploy/tools.lock); a mismatch writes nothing (scripts/fetch_tools.py, used by every job that fetches a tool). Python dependencies are hash-locked and installed offline with --require-hashes. Upstream data (NASA CARA, CelesTrak, NIST, DISA) is vendored unmodified with provenance and checksums that the tests verify. Not yet done: actions are pinned by commit SHA in release.yml and in the supply-chain, release-lint and compliance CI jobs, but the other CI jobs (python, web, infra, secrets, mbse) and the harness workflow still pin actions by tag. Signing, SLSA provenance and SBOM attestation of releases exist only in release.yml, which has not run yet.",
               "props": [
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_toolslock.py::test_fetch_refuses_a_digest_mismatch_and_writes_nothing"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_toolslock.py::test_the_committed_lock_parses_and_pins_both_architectures_for_every_tool"
+                },
                 {
                   "name": "evidence-test",
                   "ns": "urn:sentinel:oscal",
@@ -2589,7 +2979,17 @@
                 {
                   "name": "evidence-ci",
                   "ns": "urn:sentinel:oscal",
+                  "value": "ci.yml#supply-chain"
+                },
+                {
+                  "name": "evidence-ci",
+                  "ns": "urn:sentinel:oscal",
                   "value": "harness.yml#scenario"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "docs/supply-chain.md"
                 },
                 {
                   "name": "evidence-file",
@@ -2604,12 +3004,17 @@
                 {
                   "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
+                  "value": "supplychain/toolslock.py"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
                   "value": "deploy/bundle/install.sh"
                 },
                 {
-                  "name": "planned-evidence",
+                  "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
-                  "value": "docs/supply-chain.md"
+                  "value": ".github/workflows/release.yml"
                 },
                 {
                   "name": "milestone",
@@ -2619,7 +3024,7 @@
               ],
               "implementation-status": {
                 "state": "partial",
-                "remarks": "SBOM, cosign signatures, SLSA provenance and Trivy with VEX in the release pipeline (docs/supply-chain.md)."
+                "remarks": "Pin every action in ci.yml and harness.yml by commit SHA, as release.yml already does; push the first release tag so that signing, provenance and SBOM attestation run."
               }
             }
           ],
@@ -2639,12 +3044,27 @@
             {
               "component-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
               "uuid": "2648dd97-f328-57d5-96a4-3f896e21e5b7",
-              "description": "Provenance is recorded for vendored upstream data (fixtures/cara/PROVENANCE.md, fixtures/omm/PROVENANCE.md, compliance/vendor/nist/PROVENANCE.md, compliance/vendor/disa/PROVENANCE.md) and each NASA CARA test case documents its source and tolerance. Each bundle records its version and per-file hashes. There is no build provenance for release artifacts yet.",
+              "description": "Provenance is recorded for vendored upstream data (fixtures/cara/PROVENANCE.md, fixtures/omm/PROVENANCE.md, compliance/vendor/nist/PROVENANCE.md, compliance/vendor/disa/PROVENANCE.md) and each NASA CARA test case documents its source and tolerance. Each bundle's BUNDLE.json records the commit it was built from, whether that tree was clean or dirty, its SOURCE_DATE_EPOCH, and the upstream URL and SHA-256 of every bundled binary; a build from uncommitted changes cannot pass as its commit. deploy/tools.lock records the upstream URL and SHA-256 of every third-party binary. SLSA v1 build provenance (Build L2) and SBOM attestations for every tarball and image archive are generated by the sign job of .github/workflows/release.yml and shipped as files, so they verify offline. That workflow runs only on a tag on GitHub, has been checked only statically (actionlint) and has not run yet, so no release provenance exists. Build L3 is not claimed: the provenance is generated inside this repository's own workflow (docs/supply-chain.md).",
               "props": [
                 {
                   "name": "evidence-test",
                   "ns": "urn:sentinel:oscal",
                   "value": "tests/test_tier3_cara_validation.py::test_every_case_documents_provenance_and_tolerance"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_bundle.py::test_manifest_records_identity_shipped_tools_for_this_arch_and_every_wheel"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_bundle.py::test_a_build_from_uncommitted_changes_says_so"
+                },
+                {
+                  "name": "evidence-ci",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "ci.yml#release-lint"
                 },
                 {
                   "name": "evidence-file",
@@ -2667,7 +3087,22 @@
                   "value": "compliance/vendor/disa/PROVENANCE.md"
                 },
                 {
-                  "name": "planned-evidence",
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "supplychain/bundle.py"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "deploy/tools.lock"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": ".github/workflows/release.yml"
+                },
+                {
+                  "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
                   "value": "docs/supply-chain.md"
                 },
@@ -2679,7 +3114,7 @@
               ],
               "implementation-status": {
                 "state": "partial",
-                "remarks": "SLSA build provenance for every release artifact (docs/supply-chain.md)."
+                "remarks": "Push the first release tag; verify the published provenance and SBOM attestations online (gh attestation verify) and offline (cosign verify-blob-attestation against the pinned trusted root), as docs/supply-chain.md describes. Build L3 needs the provenance generated in an isolated, trusted reusable workflow."
               }
             }
           ],
@@ -2699,12 +3134,37 @@
             {
               "component-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
               "uuid": "c2697360-de2a-560c-bd3f-78ffa86d7b61",
-              "description": "Downloaded tools are accepted only if their SHA-256 matches the pin; the bundle is checked against its digest before install; APT on the host refuses unauthenticated packages (STIG role). Verifying the publisher's signature on Sentinel's own releases (cosign) is planned.",
+              "description": "A component is refused unless it is what was pinned. Downloaded tools and the Sigstore trusted root are accepted only if their SHA-256 matches deploy/tools.lock, and a mismatch writes nothing (scripts/fetch_tools.py). Sentinel's own bundles are refused unless their cosign signature verifies against the approved signer, and the trusted root is checked against its pin before use; the supply-chain CI job exercises both with the real cosign and no network on every push. The Ansible role re-checks the cosign binary's SHA-256 on the target host before running it. The container base images are pinned by registry digest (deploy/containers/Dockerfile). Not yet done: actions are pinned by commit SHA in release.yml and in the supply-chain, release-lint and compliance CI jobs, but not in the other CI jobs or the harness workflow; and APT on the host refuses unauthenticated packages only once the STIG role, not yet applied, has run.",
               "props": [
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_toolslock.py::test_fetch_refuses_a_digest_mismatch_and_writes_nothing"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_verify_signature.py::test_a_pinned_trusted_root_digest_is_checked_before_use"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/supplychain/test_verify_signature.py::test_a_rejected_signature_fails_closed"
+                },
+                {
+                  "name": "evidence-ci",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "ci.yml#supply-chain"
+                },
                 {
                   "name": "evidence-ci",
                   "ns": "urn:sentinel:oscal",
                   "value": "harness.yml#scenario"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "supplychain/toolslock.py"
                 },
                 {
                   "name": "evidence-file",
@@ -2719,12 +3179,17 @@
                 {
                   "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
-                  "value": "deploy/ansible/roles/stig/tasks/packages.yml"
+                  "value": "deploy/ansible/roles/sentinel/tasks/verify.yml"
                 },
                 {
-                  "name": "planned-evidence",
+                  "name": "evidence-file",
                   "ns": "urn:sentinel:oscal",
-                  "value": "docs/supply-chain.md"
+                  "value": "deploy/containers/Dockerfile"
+                },
+                {
+                  "name": "evidence-file",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "deploy/ansible/roles/stig/tasks/packages.yml"
                 },
                 {
                   "name": "milestone",
@@ -2734,7 +3199,7 @@
               ],
               "implementation-status": {
                 "state": "partial",
-                "remarks": "cosign signature verification before install (docs/supply-chain.md)."
+                "remarks": "Pin every action in ci.yml and harness.yml by commit SHA; apply the STIG role to the hub and scan."
               }
             }
           ],
