@@ -136,8 +136,8 @@ export function EventDetail({
       {a.dilution_flag && (
         <section className="callout callout-dil">
           <b>Diluted.</b> The operating point sits past the Pc peak (k* = {Number(diag.k_star).toPrecision(3)}): more
-          uncertainty would <i>lower</i> this Pc. Treat {sci(a.pc ?? 0)} as a floor on ignorance, not evidence of safety -
-          the worst case over covariance scaling is {sci(a.pc_max ?? 0)}.
+          uncertainty would <i>lower</i> this Pc. Treat it as a floor on ignorance, not evidence of safety, and weigh the
+          worst case over covariance scaling shown beside it.
         </section>
       )}
 

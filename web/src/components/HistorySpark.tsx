@@ -1,5 +1,5 @@
 import type { HistoryEntry } from "../api/types";
-import { sciPlain } from "../lib/format";
+import { pcText } from "./PcValue";
 
 /**
  * Pc and worst-case Pc across the CDM updates for one event. Operators
@@ -50,10 +50,7 @@ export function HistorySpark({ history }: { history: HistoryEntry[] }) {
               r={3.5}
               className={a.dilution_flag ? "spark-dot spark-dot-diluted" : "spark-dot"}
             >
-              <title>
-                {h.message_id}: Pc {sciPlain(a.pc)}
-                {a.dilution_flag ? ` (diluted; worst ${sciPlain(a.pc_max ?? 0)})` : ""}
-              </title>
+              <title>{`${h.message_id ?? "CDM"}: ${pcText(a)}`}</title>
             </circle>
           );
         })}

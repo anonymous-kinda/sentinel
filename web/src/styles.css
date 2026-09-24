@@ -24,6 +24,7 @@
   --dil: #c792ff;
   --dil-bg: rgba(199, 146, 255, 0.14);
   --banner-unclass: #1c7c3c;
+  --banner-unknown: #4a5560;
   /* Pass timeline sensors: identity, not status. Checked for colour-blind
      separation and 3:1 contrast on the dark plot surface. */
   --pass-eo: #3987e5;
@@ -50,13 +51,19 @@ b.past { color: var(--red); }
 .app { display: grid; grid-template-rows: auto auto 1fr auto; height: 100%; min-height: 0; }
 
 .banner {
-  background: var(--banner-unclass);
+  background: var(--banner-unknown);
   color: #fff;
   text-align: center;
   font: 600 11px/1 var(--mono);
   letter-spacing: 0.14em;
   padding: 4px 8px;
 }
+/* The conventional banner colours; the text always states the marking. */
+.banner-unclassified { background: var(--banner-unclass); }
+.banner-cui { background: #502b85; }
+.banner-confidential { background: #0033a0; }
+.banner-secret { background: #c8102e; }
+.banner-top-secret { background: #ff671f; color: #000; }
 
 .topbar {
   display: flex;
@@ -84,6 +91,7 @@ b.past { color: var(--red); }
 .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .dot.ok { background: var(--green); box-shadow: 0 0 8px var(--green); }
 .dot.bad { background: var(--red); }
+.stream-status { display: inline-flex; align-items: center; gap: 5px; font: 11px var(--mono); color: var(--ink-2); }
 
 /* ---------------------------------------------------------------- ops */
 .ops {
