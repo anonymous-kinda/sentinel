@@ -1,7 +1,7 @@
 # Sentinel — Risk Engine Design & Pseudocode v0.1
 
 **Module:** `sentinel.risk`
-**Implements:** ADR-002 (two modes), ADR-003 (Foster-Estes 2D Pc, Orekit as oracle)
+**Implements:** ADR-002 (two modes), ADR-003 (Foster-Estes 2D Pc, NASA CARA's published cases as the oracle)
 **Status:** Implemented and validated against NASA CARA published cases (see `docs/validation-report.md`).
 
 This document is written to be implemented test-first. Section 7 is the test ladder; work down it in order. Do not write engine code ahead of the test that demands it.
@@ -46,17 +46,17 @@ AssessedConjunction:
     pc                  float | None      # None when model inapplicable
     pc_max              float | None      # worst-case over covariance scaling
     dilution_flag       bool
-    dilution_margin     float             # how far into/out of dilution
-    miss_distance       float             # km
-    relative_speed      float             # km/s
-    hbr                 float             # m
+    dilution_margin     float | None      # how far into/out of dilution
+    miss_distance_m     float             # m
+    relative_speed_m_s  float             # m/s
+    hbr_m               float | None      # m
     method              enum              # FOSTER_ESTES_2D | REFUSED
     refusal_reason      enum | None
     inputs_hash         str               # traceability, per Principle 2
     diagnostics         dict              # conditioning, eigenvalues, k*
 ```
 
-`pc` and `method` travel together always. A consumer must never be able to obtain a probability without also obtaining how it was computed and whether it is trustworthy.
+The field names are those in `sentinel/risk/types.py`, where every field carries its unit as a suffix. `pc` and `method` travel together always. A consumer must never be able to obtain a probability without also obtaining how it was computed and whether it is trustworthy.
 
 ---
 
@@ -191,7 +191,7 @@ Thresholds are configuration, not constants, and every refusal records the value
 ```
 function assess(cdm, config) -> AssessedConjunction:
 
-    # --- extract & normalize units (km, km/s, m², m) -----------------
+    # --- extract & normalize units: km, km/s -> m, m/s; m² and m kept -
     r1, v1 = cdm.object1.state
     r2, v2 = cdm.object2.state
     C1_rtn = cdm.object1.covariance      # may be absent
@@ -216,12 +216,13 @@ function assess(cdm, config) -> AssessedConjunction:
     if rel_speed < config.min_relative_speed:
         return refused(LOW_RELATIVE_VELOCITY)
 
-    # --- step 3: encounter plane ------------------------------------
-    z_hat  = dv / rel_speed
-    along  = dot(dr, z_hat)
-    if abs(along) > config.max_tca_residual:
+    # --- step 3: refine TCA, then the encounter plane ----------------
+    dt = -dot(dr, dv) / rel_speed**2
+    if abs(dt) > config.max_tca_adjustment_s:
         return refused(TCA_INCONSISTENT)
-
+    dr     = dr + dv * dt                 # both states moved to the linear closest approach
+    z_hat  = dv / rel_speed
+    along  = dot(dr, z_hat)               # ~0 after refinement
     r_perp = dr - along * z_hat
     x_hat  = r_perp / norm(r_perp)
     y_hat  = cross(z_hat, x_hat)
@@ -236,6 +237,8 @@ function assess(cdm, config) -> AssessedConjunction:
         return refused(INVALID_COVARIANCE)
     if condition_number(C2d) > config.max_condition:
         return refused(ILL_CONDITIONED_COVARIANCE)
+    if along_track_sagitta(C1, C2, r1, r2) > config.max_curvilinear_ratio * min_sigma(C2d):
+        return refused(CURVILINEAR_UNCERTAINTY)
 
     # --- step 5: integrate ------------------------------------------
     pc = integrate_gaussian_over_disk(C2d, mu, hbr)
@@ -250,9 +253,9 @@ function assess(cdm, config) -> AssessedConjunction:
         pc_max          = pc_max,
         dilution_flag   = diluted,
         dilution_margin = log(k_star),
-        miss_distance   = norm(dr),
-        relative_speed  = rel_speed,
-        hbr             = hbr,
+        miss_distance_m = norm(dr),
+        relative_speed_m_s = rel_speed,
+        hbr_m           = hbr,
         method          = FOSTER_ESTES_2D,
         inputs_hash     = hash_of(cdm_relevant_fields),
         diagnostics     = { k_star, eigenvalues(C2d), condition_number(C2d),
@@ -283,7 +286,7 @@ Procedure:
 1. Transcribe CARA's published cases into a fixture file, recording provenance for each.
 2. Assert agreement to a stated relative tolerance, chosen and justified rather than tuned until green.
 3. Where Sentinel disagrees, investigate before adjusting tolerance. A disagreement is information.
-4. Where Orekit is available in CI, cross-check as an independent third opinion. Orekit is never a runtime dependency (ADR-003).
+4. Cross-check the quadrature against an independent oracle: `scipy.integrate.dblquad` in Cartesian coordinates (Tier 2). Orekit was dropped as a cross-check and is never a runtime dependency (ADR-003).
 
 The validation report — cases, tolerances, results — goes in the repo as a first-class artifact. It converts "I implemented a method" into "I implemented a method and demonstrated it correct," which is the difference that matters to a technical evaluator.
 
