@@ -1,9 +1,17 @@
-import { useState } from "react";
-import type { OpsView } from "../api/types";
-import { postJSON, useResource } from "../api/client";
+import { useId, useState } from "react";
+import type { LogEntryView, OpsView, ResolutionBody } from "../api/types";
+import { HttpError, apiErrorMessage, postJSON, useResource } from "../api/client";
 import { dtg } from "../lib/format";
+import { log } from "../lib/log";
 
 const STATUSES = ["NEW", "WATCH", "MANEUVER_PLANNING", "NO_ACTION", "CLOSED"];
+
+/** MANEUVER_PLANNING reads as "MANEUVER PLANNING". Free text, which a peer
+ *  node's operator wrote, is shown exactly as written. */
+const words = (value: unknown): string => {
+  const text = String(value);
+  return /^[A-Za-z_]+$/.test(text) ? text.replaceAll("_", " ") : text;
+};
 
 /**
  * Triage status and the decision log for one event.
@@ -33,7 +41,9 @@ export function OpsPanel({ eventId, version, readOnly }: { eventId: string; vers
       await fn();
       refresh();
     } catch (e) {
-      setError(String((e as { payload?: { detail?: string } }).payload?.detail ?? e));
+      const reason = apiErrorMessage(e);
+      log.error({ event_id: eventId, status: e instanceof HttpError ? e.status : null, error: reason }, "Operator data write failed");
+      setError(reason);
     } finally {
       setBusy(false);
     }
@@ -54,7 +64,7 @@ export function OpsPanel({ eventId, version, readOnly }: { eventId: string; vers
         {status.values.length === 0 && <div className="muted">not triaged</div>}
         {status.values.map((v) => (
           <div key={v.dot.join(":")} className="triage-value">
-            <b>{v.v.replaceAll("_", " ")}</b>
+            <b>{words(v.v)}</b>
             <span className="muted">
               {v.by} on {v.node} · {dtg(v.at)}
             </span>
@@ -70,7 +80,7 @@ export function OpsPanel({ eventId, version, readOnly }: { eventId: string; vers
                 onClick={() => act(() => postJSON(`/api/events/${encodeURIComponent(eventId)}/annotation`, { field: "triage_status", value: s }))}
                 title={status.conflict ? "Setting a status after seeing both values resolves the conflict" : undefined}
               >
-                {s.replaceAll("_", " ")}
+                {words(s)}
               </button>
             ))}
           </div>
@@ -89,7 +99,7 @@ export function OpsPanel({ eventId, version, readOnly }: { eventId: string; vers
           <select value={decision} onChange={(e) => setDecision(e.target.value)} aria-label="Decision">
             {data.decisions.map((d) => (
               <option key={d} value={d}>
-                {d.replaceAll("_", " ")}
+                {words(d)}
               </option>
             ))}
           </select>
@@ -112,26 +122,60 @@ export function OpsPanel({ eventId, version, readOnly }: { eventId: string; vers
           .slice()
           .reverse()
           .map((e) => (
-            <li key={e.digest} className={`log-entry kind-${e.kind.toLowerCase()}`}>
-              <div className="log-head">
-                <b>{e.kind === "DECISION" ? (e.body.decision ?? "").replaceAll("_", " ") : e.kind}</b>
-                {e.review_required && (
-                  <span className="chip chip-review" title="Made against a CDM that has since been superseded. Re-examine before acting on it.">
-                    REVIEW REQUIRED
-                  </span>
-                )}
-                <span className={`sig ${e.signature_valid ? "sig-ok" : "sig-bad"}`} title={`Ed25519 signature by node ${e.node}; digest ${e.digest.slice(0, 16)}`}>
-                  {e.signature_valid ? "✓ signed" : "✗ signature"}
-                </span>
-              </div>
-              {(e.body.rationale || e.body.text) && <div className="log-body">{e.body.rationale || e.body.text}</div>}
-              <div className="muted log-meta">
-                {e.author} on {e.node} · {dtg(e.wall_time)}
-                {e.event_ref.message_id ? ` · against ${e.event_ref.message_id}` : ""}
-              </div>
-            </li>
+            <LogEntry key={e.digest} entry={e} />
           ))}
       </ol>
     </section>
+  );
+}
+
+function LogEntry({ entry: e }: { entry: LogEntryView }) {
+  const labelId = useId();
+  return (
+    <li className={`log-entry kind-${e.kind.toLowerCase()}`} aria-labelledby={labelId}>
+      <div className="log-head">
+        <b id={labelId}>{e.kind === "DECISION" ? words(e.body.decision ?? "") : e.kind}</b>
+        {e.review_required && (
+          <span className="chip chip-review" title="Made against a CDM that has since been superseded. Re-examine before acting on it.">
+            REVIEW REQUIRED
+          </span>
+        )}
+        <span className={`sig ${e.signature_valid ? "sig-ok" : "sig-bad"}`} title={`Ed25519 signature by node ${e.node}; digest ${e.digest.slice(0, 16)}`}>
+          {e.signature_valid ? "✓ signed" : "✗ signature"}
+        </span>
+      </div>
+      <EntryBody entry={e} />
+      <div className="muted log-meta">
+        {e.author} on {e.node} · {dtg(e.wall_time)}
+        {e.event_ref.message_id ? ` · against ${e.event_ref.message_id}` : ""}
+      </div>
+    </li>
+  );
+}
+
+function EntryBody({ entry: e }: { entry: LogEntryView }) {
+  if (e.kind === "RESOLUTION") return <Resolution body={e.body} />;
+  const text = e.kind === "DECISION" ? e.body.rationale : e.body.text;
+  return text ? <div className="log-body">{text}</div> : null;
+}
+
+/** Which field a person settled, to what, and every concurrent value it
+ *  superseded, with who wrote each and on which node. */
+function Resolution({ body }: { body: ResolutionBody }) {
+  const superseded = Array.isArray(body.superseded) ? body.superseded : [];
+  return (
+    <div className="log-body">
+      {words(body.field)} set to <b>{words(body.value)}</b>, superseding:
+      <ul className="superseded" aria-label="Superseded values">
+        {superseded.map((v, i) => (
+          <li key={i}>
+            <b>{words(v.v)}</b>{" "}
+            <span className="muted">
+              by {v.by} on {v.node} · {dtg(v.at)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
