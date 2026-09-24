@@ -240,7 +240,7 @@ The NASA files are vendored **unmodified** under `fixtures/cara/`, with NOSA 1.3
 ## Running it
 
 ```bash
-uv venv && uv pip install -e ".[dev]"
+uv sync --locked --python 3.12 --extra dev   # exactly uv.lock, as CI does
 uv run pytest -q                      # full ladder, network disabled, 0 skipped
 uv run pytest -q -m tier3             # NASA CARA published cases
 uv run sentinel assess fixtures/cara/PcTestCaseCDMs/000025994_conj_000037558_20210324_151047_20210323_154356.cdm

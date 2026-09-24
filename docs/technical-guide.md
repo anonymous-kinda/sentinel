@@ -438,8 +438,7 @@ Every command in this section was run on this commit in a fresh worktree (WSL2, 
 
 ```bash
 export PATH=$HOME/.local/bin:$PATH          # uv lives here
-uv venv --python 3.12                       # 3.12: the lock resolves numpy differently on newer Pythons
-uv pip install -e ".[dev]"                  # PyPI
+uv sync --locked --python 3.12 --extra dev  # exactly uv.lock, as CI installs (PyPI)
 npm --prefix web ci                         # npm registry; only for the console and web tests
 make help                                   # every make target
 ```
@@ -776,7 +775,7 @@ The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and t
 | Validation tab or library empty on an installed node | `SENTINEL_FIXTURES` not pointing at the bundle's `fixtures/` | log message `Reference library missing` |
 | Assistant stays on the deterministic tier | Marking not UNCLASSIFIED, `SENTINEL_AI_CLOUD` not set, no key, the `ai` extra not installed, or the measured link | `reason` in `GET /api/ai/status`; log message `Hosted AI SDK not installed` |
 | An AI answer was replaced by the template text | The grounding guard found a number the facts do not contain | `withheld.unsupported` in the answer |
-| After a pull, collection fails with `ModuleNotFoundError` (for example `No module named 'yaml'`) | The dev extra gained a dependency your virtual environment predates | `uv pip install -e ".[dev]"` |
+| After a pull, collection fails with `ModuleNotFoundError` (for example `No module named 'yaml'`) | The dev extra gained a dependency your virtual environment predates | `uv sync --locked --extra dev` |
 | A test fails with `SocketBlockedError` | The test tried to use the network | Use a fixture or a mock transport; `enable_socket` is only for loopback |
 | `make trace` exits 1 | A verification case names evidence that does not exist | The "Problems" section the regenerated `docs/traceability.md` gains after its summary |
 | `uv run lint-imports` reports a broken contract | An import crosses a module boundary | The contract named in the output; the table under [Architecture](#modules-and-their-allowed-dependencies) |

@@ -22,7 +22,7 @@ jobs:
           python-version: ${{ matrix.python }}
           activate-environment: true
       - name: Install
-        run: uv pip install -e ".[dev]"
+        run: uv sync --locked --extra dev
       - name: Lint
         run: uv run ruff check .
       - name: Module boundaries (MOSA interfaces)
@@ -101,7 +101,7 @@ jobs:
           python-version: "3.12"
           activate-environment: true
       - name: Install
-        run: uv pip install -e ".[dev]"
+        run: uv sync --locked --extra dev
       - name: Requirements trace is reproducible (zero broken references)
         run: |
           make trace
@@ -145,7 +145,7 @@ jobs:
           python-version: "3.12"
           activate-environment: true
       - name: Install
-        run: uv pip install -e .
+        run: uv sync --locked
       - name: Pinned tools and trust root (sha256-verified)
         run: python scripts/fetch_tools.py --arch x86_64 syft trivy cosign cosign.sigstore.json sigstore-trusted-root.json
       - name: SBOMs (fails if empty or missing a shipped component)
@@ -189,7 +189,7 @@ jobs:
           python-version: "3.12"
           activate-environment: true
       - name: Install
-        run: uv pip install -e ".[dev]"
+        run: uv sync --locked --extra dev
       - name: Test evidence, assessment results and POA&M, trestle validate
         run: make compliance
       - name: OSCAL documents and evidence
@@ -229,7 +229,7 @@ jobs:
           activate-environment: true
           enable-cache: false
       - name: Install (the smoke test reuses the DDIL harness's helpers)
-        run: uv pip install -e .
+        run: uv sync --locked
       - name: The compose file as Docker Compose reads it
         run: docker compose -f deploy/compose/compose.yaml config --quiet
       - name: Build and start; returns once both nodes are healthy

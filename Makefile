@@ -9,7 +9,7 @@ help:  ## list targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
 
 install:  ## python venv + web dependencies
-	$(UV) venv -q --allow-existing && $(UV) pip install -q -e ".[dev]"
+	$(UV) sync -q --locked --python 3.12 --extra dev
 	npm --prefix web ci --no-audit --no-fund
 
 test:  ## python test ladder (network disabled) + web tests

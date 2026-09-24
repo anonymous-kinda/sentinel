@@ -8,9 +8,10 @@ Sentinel is a DDIL-resilient conjunction assessment decision aid, with an overhe
 
 ```bash
 export PATH=$HOME/.local/bin:$PATH                  # uv lives here
-uv venv --python 3.12 && uv pip install -e ".[dev]" # 3.12: the lock resolves numpy differently on newer Pythons
+uv sync --locked --python 3.12 --extra dev          # exactly uv.lock, as CI installs; 3.12 matches the dev lock
 uv run pytest -q                                    # must report 0 skipped
 uv run ruff check . && uv run lint-imports
+make typecheck                                      # mypy: strict on the core and risk, standard on the rest
 make help                                           # every target and what it regenerates
 ```
 
@@ -41,6 +42,7 @@ When a regenerated report moves a number the prose quotes, the doc guard fails u
 - **Docs are checked against the repo** (`tests/test_docs.py`): every path, `make` target and `sentinel` subcommand they name must exist, and every headline number registered in `tests/doc_claims.toml` must match its generated source. When a regenerated report changes a number, update the prose and the registry together.
 - **AI never computes.** The assistant (`sentinel/ai/`) routes to tools and phrases their facts; `.importlinter` forbids it the maths. Hosted AI (Jev, Claude) needs an UNCLASSIFIED marking, operator opt-in and a usable measured link, and every AI answer passes the number-grounding guard. Never publish a Jev number that did not come from a real run.
 - **The core stays closed to modules.** Adding or changing a mission module never edits `sentinel/sync`, `bus`, `crdt` or `triage`. The proof for M3: the pass module, its service and its API landed with `git diff --stat 67199b7 f16e294 -- sentinel/sync sentinel/bus sentinel/crdt sentinel/triage` empty. Documentation and checks read the core and its call sites; the core never lists mission names. The core changes only deliberately: a bug fix proven by a failing test, typing or documentation with no behaviour change, or a design change recorded in an ADR.
+- **Types are checked.** `make typecheck` runs mypy strict on `bus`, `crdt`, `sync`, `triage` and `risk`, and standard on the rest (`tests/test_typecheck.py` holds the strict list). Wire data enters as `Mapping[str, Any]`. A `cast` or `# type: ignore` needs an error code and a reason. Modules leave the TODO `ignore_errors` list in `pyproject.toml` when they are fixed; nothing new joins it.
 - **Interfaces are documented where they are checked.** `docs/icd/` holds the OpenAPI, AsyncAPI, CDM-profile and sync-envelope ICDs, each held to the code by `tests/docs/`. A new node-local event kind or bus header needs its channel or message in `docs/icd/asyncapi.yaml`; the test discovers kinds at the `subjects.local` call sites and fails on anything undocumented.
 - **Every record a hub offers over sync costs a round trip on a thin link.** Read ADR-008, "Reference data on a thin link", before a hub offers edges anything more.
 - **Module boundaries are enforced by `.importlinter`**: `bus`, `triage`, `sync`, `crdt`, `ops` and `linkstate` may not import mission modules (`conjunction`, `risk`, `cdm`, `passes`) or the API.
