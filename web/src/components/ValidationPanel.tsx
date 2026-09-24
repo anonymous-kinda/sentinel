@@ -1,6 +1,7 @@
 import type { Validation } from "../api/types";
 import { useResource } from "../api/client";
 import { sciPlain } from "../lib/format";
+import { diamond } from "../lib/marks";
 import { Pending } from "./Pending";
 
 function Scatter({ rows }: { rows: NonNullable<Validation["rows"]> }) {
@@ -16,40 +17,49 @@ function Scatter({ rows }: { rows: NonNullable<Validation["rows"]> }) {
   const ticks = [];
   for (let t = lo; t <= hi; t += Math.max(1, Math.round((hi - lo) / 5))) ticks.push(t);
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="scatter" role="img" aria-label="Sentinel Pc against CARA Pc2D">
-      <rect x={0} y={0} width={W} height={H} className="plot-bg" />
-      <line x1={X(10 ** lo)} y1={Y(10 ** lo)} x2={X(10 ** hi)} y2={Y(10 ** hi)} className="diag" />
-      {ticks.map((t) => (
-        <g key={t}>
-          <text x={X(10 ** t)} y={H - pad + 14} className="tick" textAnchor="middle">
-            1e{t}
-          </text>
-          <text x={pad - 5} y={Y(10 ** t) + 3} className="tick" textAnchor="end">
-            1e{t}
-          </text>
-        </g>
-      ))}
-      {rows.map((r) => (
-        <circle
-          key={r.case_id}
-          cx={X(r.cara_pc2d)}
-          cy={Y(r.sentinel_pc)}
-          r={3.5}
-          className={r.cara_says_2d_valid ? "pt-valid" : "pt-invalid"}
-        >
-          <title>
-            {r.primary} × {r.secondary}: Sentinel {sciPlain(r.sentinel_pc, 6)} vs CARA {sciPlain(r.cara_pc2d, 6)} (rel{" "}
-            {r.rel_error.toExponential(1)})
-          </title>
-        </circle>
-      ))}
-      <text x={W / 2} y={H - 6} className="tick" textAnchor="middle">
-        NASA CARA published Pc2D (values below 1e{lo} drawn at the floor)
-      </text>
-      <text x={12} y={H / 2} className="tick" textAnchor="middle" transform={`rotate(-90 12 ${H / 2})`}>
-        Sentinel Pc (gate off)
-      </text>
-    </svg>
+    <figure className="plot">
+      <svg viewBox={`0 0 ${W} ${H}`} className="scatter" role="img" aria-label="Sentinel Pc against CARA Pc2D">
+        <rect x={0} y={0} width={W} height={H} className="plot-bg" />
+        <line x1={X(10 ** lo)} y1={Y(10 ** lo)} x2={X(10 ** hi)} y2={Y(10 ** hi)} className="diag" />
+        {ticks.map((t) => (
+          <g key={t}>
+            <text x={X(10 ** t)} y={H - pad + 14} className="tick" textAnchor="middle">
+              1e{t}
+            </text>
+            <text x={pad - 5} y={Y(10 ** t) + 3} className="tick" textAnchor="end">
+              1e{t}
+            </text>
+          </g>
+        ))}
+        {rows.map((r) => {
+          const title = (
+            <title>
+              {r.primary} × {r.secondary}: Sentinel {sciPlain(r.sentinel_pc, 6)} vs CARA {sciPlain(r.cara_pc2d, 6)} (rel{" "}
+              {r.rel_error.toExponential(1)})
+            </title>
+          );
+          // Where CARA says 2D is invalid, a diamond: shape, not only colour.
+          return r.cara_says_2d_valid ? (
+            <circle key={r.case_id} cx={X(r.cara_pc2d)} cy={Y(r.sentinel_pc)} r={3.5} className="pt-valid">
+              {title}
+            </circle>
+          ) : (
+            <path key={r.case_id} d={diamond(X(r.cara_pc2d), Y(r.sentinel_pc), 4.5)} className="pt-invalid">
+              {title}
+            </path>
+          );
+        })}
+        <text x={W / 2} y={H - 6} className="tick" textAnchor="middle">
+          NASA CARA published Pc2D (values below 1e{lo} drawn at the floor)
+        </text>
+        <text x={12} y={H / 2} className="tick" textAnchor="middle" transform={`rotate(-90 12 ${H / 2})`}>
+          Sentinel Pc (gate off)
+        </text>
+      </svg>
+      <figcaption>
+        <span className="legend-valid">●</span> CARA: 2D valid <span className="legend-invalid">◆</span> CARA: 2D invalid
+      </figcaption>
+    </figure>
   );
 }
 

@@ -79,7 +79,7 @@ describe("renderings that used to format a Pc by hand", () => {
   it("HistorySpark's tooltip carries the method and never states a worst case of zero", () => {
     const entry = detail(summary({ assessment: { ...diluted, pc_max: null } })).history[0];
     const { container } = render(<HistorySpark history={[entry]} />);
-    const tooltip = container.querySelector("circle title")?.textContent ?? "";
+    const tooltip = container.querySelector(".spark-dot title")?.textContent ?? "";
     expect(tooltip).toMatch(/FOSTER_ESTES_2D/);
     expect(tooltip).not.toMatch(/worst[^,;)]*\b0\b/);
   });

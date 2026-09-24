@@ -20,7 +20,12 @@ export function LinkControl({ version }: { version: number }) {
   const emulation = data.emulation;
   return (
     <span className="link-control">
-      <button className={`link-chip link-${state.toLowerCase()}`} onClick={() => setOpen((o) => !o)} title="Link to hub, as measured by the sync agent">
+      <button
+        className={`link-chip link-${state.toLowerCase()}`}
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        title="Link to hub, as measured by the sync agent"
+      >
         LINK {state}
         {data.monitor.rtt_ms !== null && state !== "DENIED" ? ` · ${Math.round(data.monitor.rtt_ms)} ms` : ""}
       </button>
@@ -38,6 +43,7 @@ export function LinkControl({ version }: { version: number }) {
                   <button
                     key={p}
                     className={`btn-small ${emulation.preset === p ? "active" : ""}`}
+                    aria-pressed={emulation.preset === p}
                     disabled={preset.busy}
                     onClick={async () => {
                       if (await preset.run(() => postJSON("/api/demo/link", { preset: p }), "Link preset failed", { preset: p })) {

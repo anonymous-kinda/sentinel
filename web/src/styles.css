@@ -239,6 +239,8 @@ dd { margin: 0; font-size: 12px; font-family: var(--mono); overflow-wrap: anywhe
 .diag { stroke: var(--line-2); stroke-dasharray: 4 4; }
 .pt-valid { fill: var(--accent); fill-opacity: 0.85; }
 .pt-invalid { fill: var(--amber); fill-opacity: 0.85; }
+.legend-valid { color: var(--accent); }
+.legend-invalid { color: var(--amber); }
 .confusion { border-collapse: collapse; font-size: 13px; margin-bottom: 10px; }
 .confusion th, .confusion td { border: 1px solid var(--line-2); padding: 8px 14px; text-align: center; }
 .confusion td { font: 600 20px var(--mono); }
