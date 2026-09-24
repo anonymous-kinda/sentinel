@@ -8,6 +8,7 @@ import pathlib
 import re
 
 WORKFLOWS = sorted((pathlib.Path(__file__).resolve().parent.parent / ".github" / "workflows").glob("*.yml"))
+MAKEFILE = pathlib.Path(__file__).resolve().parent.parent / "Makefile"
 USES = re.compile(r"^\s*-?\s*uses:\s*([^\s#]+)")
 PINNED = re.compile(r"@[0-9a-f]{40}$")
 
@@ -91,7 +92,7 @@ def test_the_job_check_catches_an_unlocked_job(tmp_path):
     assert unlocked_uv_jobs([workflow]) == ["x.yml#build"]
 
 
-def unpinned_tools(paths=(*WORKFLOWS, pathlib.Path(__file__).resolve().parent.parent / "Makefile")) -> list[str]:
+def unpinned_tools(paths=(*WORKFLOWS, MAKEFILE)) -> list[str]:
     """`uvx --from PKG` without an exact version runs whatever is newest."""
     found = []
     for path in paths:

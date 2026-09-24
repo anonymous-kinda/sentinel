@@ -250,4 +250,6 @@ def test_the_command_runs_without_keys_and_exits_zero():
 
 
 def test_make_ai_live_check_runs_the_script():
-    assert dry_run("ai-live-check") == ["uv run python scripts/ai_live_check.py"]
+    [recipe] = dry_run("ai-live-check")
+    # The first word is $(UV): `uv`, or its full path when run under `uv run`, which exports UV.
+    assert recipe.split()[1:] == ["run", "python", "scripts/ai_live_check.py"]
