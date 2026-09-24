@@ -1,6 +1,6 @@
 {
   "system-security-plan": {
-    "uuid": "2bdf4096-838e-5850-b6be-ebd3bde2e360",
+    "uuid": "4da967c3-2329-5d4a-a627-1d8a982b72e7",
     "metadata": {
       "title": "Sentinel system security plan (draft)",
       "last-modified": "2026-09-24T22:00:00Z",
@@ -1047,7 +1047,7 @@
             {
               "component-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
               "uuid": "22c5bbfb-578c-55e9-b81b-46feaa595f0a",
-              "description": "The baseline is code under version control: hash-locked Python dependencies (uv.lock), third-party binaries pinned by version and SHA-256 (deploy/tools.lock), the bundle build (scripts/build_bundle.py), the Ansible roles, the Terraform and the NATS configuration templates. The Python baseline that CI tests is the declared one: the jobs that test, lint, type-check and assess install exactly uv.lock with uv sync --locked, which refuses a lock that no longer matches pyproject.toml, and a test fails any workflow that installs with pip or uv pip instead, since those resolve afresh. make install uses the same command. CI checks the Terraform (fmt, validate) and the playbook's syntax on every push.",
+              "description": "The baseline is code under version control: hash-locked Python dependencies (uv.lock), third-party binaries pinned by version and SHA-256 (deploy/tools.lock), the bundle build (scripts/build_bundle.py), the Ansible roles, the Terraform and the NATS configuration templates. The Python baseline that CI tests is the declared one: the jobs that test, lint, type-check and assess install exactly uv.lock with uv sync --locked, which refuses a lock that no longer matches pyproject.toml, and a test fails any workflow that installs with pip or uv pip instead, since those resolve afresh. Every workflow sets UV_LOCKED=1, so no uv command in any job can re-lock a stale lock silently (tests/test_workflows_pinned.py checks each job). make install uses the same command. CI checks the Terraform (fmt, validate) and the playbook's syntax on every push.",
               "props": [
                 {
                   "name": "evidence-test",

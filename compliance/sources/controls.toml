@@ -360,7 +360,8 @@ third-party binaries pinned by version and SHA-256 (deploy/tools.lock), the bund
 The Python baseline that CI tests is the declared one: the jobs that test, lint, type-check and assess \
 install exactly uv.lock with uv sync --locked, which refuses a lock that no longer matches \
 pyproject.toml, and a test fails any workflow that installs with pip or uv pip instead, since those \
-resolve afresh. make install uses the same command. CI checks the Terraform (fmt, validate) and the \
+resolve afresh. Every workflow sets UV_LOCKED=1, so no uv command in any job can re-lock a stale \
+lock silently (tests/test_workflows_pinned.py checks each job). make install uses the same command. CI checks the Terraform (fmt, validate) and the \
 playbook's syntax on every push."""
 tests = [
     "tests/test_workflows_pinned.py::test_python_dependencies_install_from_the_lock",
