@@ -97,15 +97,22 @@ patterns = ["leaf re-establishes over ~8 kbit/s after a denial (11.8 s)"]
 id = "readme-summary-size"
 doc = "README.md"
 quoted = "a summary of every event (at most 256 bytes each)"
-source = "tests/sync/test_hub_edge.py"
-patterns = ["assert size <= 256"]
+source = "sentinel/conjunction/summaries.py"
+patterns = ["SUMMARY_MAX_BYTES = 256"]
 
 [[claim]]
 id = "adr006-summary-size"
 doc = "docs/system-design.md"
 quoted = "Summaries measure **≤ 256 bytes** each"
-source = "tests/sync/test_hub_edge.py"
-patterns = ["assert size <= 256"]
+source = "sentinel/conjunction/summaries.py"
+patterns = ["SUMMARY_MAX_BYTES = 256"]
+
+[[claim]]
+id = "icd-sync-summary-size"
+doc = "docs/icd/sync-envelope.md"
+quoted = "is at most 256 bytes of CBOR"
+source = "sentinel/conjunction/summaries.py"
+patterns = ["SUMMARY_MAX_BYTES = 256"]
 
 # --- NASA CARA: docs/validation-report.md (scripts/validation_report.py) -------
 
