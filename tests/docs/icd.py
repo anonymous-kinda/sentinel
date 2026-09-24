@@ -63,6 +63,12 @@ def compare(documented: set, actual: set, what: str) -> list[str]:
     return problems
 
 
+def nats_list(conf: str, key: str) -> set[str]:
+    """A quoted-string list setting from a nats-server config, e.g. deny_exports."""
+    match = re.search(rf"{key}:\s*\[([^\]]*)\]", conf)
+    return set(re.findall(r'"([^"]+)"', match.group(1))) if match else set()
+
+
 def drop_row(markdown: str, token: str) -> str:
     """The document with the table row naming `token` removed: a stale copy."""
     kept = [line for line in markdown.splitlines() if not (line.startswith("|") and f"`{token}`" in line)]
