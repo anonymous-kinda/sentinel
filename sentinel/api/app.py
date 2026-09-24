@@ -425,8 +425,9 @@ def create_app(
     )
     async def annotation(event_id: str, request: Request) -> dict:
         """Writes a multi-value register. Concurrent writes on different nodes are all kept
-        and shown as a conflict, never silently resolved. 422 on an unknown field or triage
-        status; 403 on a read-only node."""
+        and shown as a conflict, never silently resolved. A write over a conflict supersedes
+        every value and appends a signed RESOLUTION entry naming them. 422 on an unknown field
+        or triage status; 403 on a read-only node."""
         writable()
         body = await request.json()
         try:

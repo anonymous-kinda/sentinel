@@ -31,6 +31,10 @@ from ..crdt.mvmap import MVMap, Register
 ANNOTATION_FIELDS = ("triage_status", "assignee", "note")
 TRIAGE_STATUSES = ("NEW", "WATCH", "MANEUVER_PLANNING", "NO_ACTION", "CLOSED")
 DECISIONS = ("MANEUVER", "NO_MANEUVER", "MONITOR", "REQUEST_TASKING")
+# The log entries operator data writes: a decision (from an operator, or an
+# AI draft an operator confirmed, ADR-007), a note, and the resolution of a
+# conflicted annotation (ADR-005). The signed log itself admits these.
+ENTRY_KINDS = ("DECISION", "NOTE", "RESOLUTION")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS ops_entries (node TEXT, seq INTEGER, blob BLOB, PRIMARY KEY (node, seq));
@@ -99,6 +103,8 @@ class OpsService:
     async def append(
         self, event_id: str, kind: str, body: dict, author: str, event_ref: dict | None = None
     ) -> dict:
+        if kind not in ENTRY_KINDS:
+            raise ValueError(f"log entry kind must be one of {ENTRY_KINDS}, not {kind!r}")
         ref = {"event_id": event_id, **(event_ref or self.current_ref(event_id) or {})}
         entry = self.log.append(kind, body, ref, author, self.clock.now().isoformat())
         self._save_entries([entry])
@@ -106,13 +112,19 @@ class OpsService:
         return self._entry_view(entry)
 
     async def annotate(self, event_id: str, field: str, value: Any, author: str) -> dict:
+        """Write an annotation. A write over a CONFLICT supersedes every
+        concurrent value, and appends a RESOLUTION entry saying so (ADR-005)."""
         if field not in ANNOTATION_FIELDS:
             raise ValueError(f"unknown annotation field {field!r}")
         if field == "triage_status" and value not in TRIAGE_STATUSES:
             raise ValueError(f"triage_status must be one of {TRIAGE_STATUSES}")
         key = f"{event_id}|{field}"
+        superseded = self._values(key)
         self.mv.write(key, {"v": value, "by": author, "node": self.node_id, "at": self.clock.now().isoformat()})
         self._save_register(key)
+        if len(superseded) > 1:
+            body = {"field": field, "value": value, "superseded": superseded}
+            await self.append(event_id, "RESOLUTION", body, author)
         await self._changed("annotation", event_id)
         return self.annotations(event_id)
 
@@ -145,12 +157,14 @@ class OpsService:
             if event_id is None or e.event_ref.get("event_id") == event_id
         ]
 
+    def _values(self, key: str) -> list[dict]:
+        """A register's visible values, each with the dot that wrote it."""
+        return [{"dot": [d.node, d.seq], **v} for d, v in self.mv.read(key)]
+
     def annotations(self, event_id: str) -> dict:
         out = {}
         for field in ANNOTATION_FIELDS:
-            values = [
-                {"dot": [d.node, d.seq], **v} for d, v in self.mv.read(f"{event_id}|{field}")
-            ]
+            values = self._values(f"{event_id}|{field}")
             out[field] = {"values": values, "conflict": len(values) > 1}
         return out
 

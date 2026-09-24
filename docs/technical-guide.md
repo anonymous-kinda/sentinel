@@ -250,7 +250,7 @@ Round trip and throughput are exponentially weighted (α = 0.3). Throughput is m
 `sentinel/crdt/` holds the data types; `sentinel/ops/service.py` persists and exchanges them:
 
 - **Decision log** (`SignedLog`, `sentinel/crdt/log.py`): a grow-only set of immutable entries, each Ed25519-signed by its node and hash-chained per node, encoded as canonical CBOR (`sentinel/crdt/codec.py`). An entry from an untrusted node or with a bad signature is rejected before merge and counted. The same dot arriving with different content raises `IntegrityError`.
-- **Annotations** (`MVMap`, `sentinel/crdt/mvmap.py`): multi-value registers for `triage_status`, `assignee` and `note`. Concurrent writes are all kept and shown as a CONFLICT. A person resolves one by writing a value that supersedes both.
+- **Annotations** (`MVMap`, `sentinel/crdt/mvmap.py`): multi-value registers for `triage_status`, `assignee` and `note`. Concurrent writes are all kept and shown as a CONFLICT. A person resolves one by writing a value that supersedes both, and that write appends a signed `RESOLUTION` entry to the log naming the field, the new value and every value it superseded (`tests/test_ops_log.py`). The log's entry kinds are `DECISION`, `NOTE` and `RESOLUTION` (`ENTRY_KINDS`).
 - **REVIEW REQUIRED.** Every decision records the CDM it was made against. If a newer CDM for that event has arrived since, the decision is flagged `review_required`. The ops service asks the conjunction module through a callback (`current_ref`), so it never imports a mission module.
 - **Trust.** Each node creates its key at `<SENTINEL_VAR>/keys/<node_id>.ed25519.pem` on first start. Without `SENTINEL_TRUST_FILE`, a node trusts only itself: it can author entries but will not merge anyone else's.
 
