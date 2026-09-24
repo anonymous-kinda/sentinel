@@ -74,21 +74,32 @@ Building the limitation into the architecture inverts this. The constraint becom
 
 ---
 
-### ADR-003 — Reimplement Foster-Estes 2D Pc in Python; Orekit as the reference oracle
+### ADR-003 — Reimplement Foster-Estes 2D Pc in Python; NASA CARA's published cases as the oracle
 
-**Status:** Proposed — pending Orekit footprint evaluation
+**Status:** Accepted (2026-09-23). Orekit was dropped as the oracle; the reasons are below.
 
-**Decision.** The primary risk engine is a Python implementation of the Foster-Estes 2D collision probability method, ported from NASA CARA's publicly released MATLAB and validated against their published test cases. Orekit via its Python wrapper serves as an independent implementation to check against, not as the runtime dependency at the edge.
+**Decision.** The primary risk engine is a Python implementation of the Foster-Estes 2D collision probability method, ported from NASA CARA's publicly released MATLAB. It is validated against values CARA itself published:
+- the 53-event operational set in `DataFiles/PcTestCaseCDMs`, each with CARA's Pc2D, 3D Nc and usage-violation verdict;
+- the Alfano (2009) benchmark CDMs;
+- the Omitron unit-test cases.
 
-Alongside Pc, the engine computes maximum Pc by covariance contraction and flags events sitting in the dilution region.
+Alongside Pc, the engine computes maximum Pc by covariance scaling and flags events sitting in the dilution region.
 
-**Rationale.** CARA's tools are MATLAB and are explicitly published as building blocks for reimplementation, not as a library. Porting them is the intended use, and the port is the part of this project that demonstrates first-principles command of the domain rather than library plumbing. Validating against their published cases turns "I implemented a paper" into "I implemented a paper and proved it correct."
+**Rationale.** CARA's tools are MATLAB and are explicitly published as building blocks for reimplementation, not as a library. Porting them is the intended use, and the port is the part of this project that shows first-principles command of the domain rather than library plumbing.
 
-Orekit is the most mature open-source flight dynamics library and has Pc implementations built in, but it carries a JVM. At the edge, that footprint has to be justified. Using it as a test oracle gets the validation benefit without the deployment cost.
+CARA publishes expected values for real conjunctions, including its own judgement of when the 2D method is invalid. That makes a third-party oracle unnecessary: the reference is the organisation whose method this is. Result (`docs/validation-report.md`): **53/53 operational events within 1.5e-8 relative**, and **zero** events where Sentinel returns a 2D Pc that CARA says 2D cannot handle.
 
-**Rejected.** Depending on Orekit at runtime — defensible, but it makes the interesting part of the project someone else's code. Calling out to MATLAB — not deployable. Using a third-party Python Pc implementation — none with comparable provenance exists.
+**Rejected.**
+- Depending on Orekit at runtime: defensible, but it makes the interesting part of the project someone else's code, and adds a JVM at the edge.
+- Orekit as a test oracle: superseded, because CARA's published results are a stronger reference than a second independent implementation.
+- Calling out to MATLAB: not deployable.
+- A third-party Python Pc library: none with comparable provenance exists.
 
-**Open question.** Whether Orekit-python installs cleanly enough in CI to be a practical oracle. If it does not, fall back to validating against CARA's published numerical results alone.
+**Consequences found during validation.**
+1. *TCA refinement.* CDM states sit at a TCA rounded to the millisecond. The engine refines both states to the true linear-motion closest approach, as CARA's `FindNearbyCA` does. It refuses only when the required shift exceeds 10 ms, which is 20× the largest rounding error and cannot be rounding.
+2. *Miss-distance convention.* CARA's unadjusted methods take the full |r| as the in-plane miss. Sentinel takes the in-plane component at the refined TCA, which matches CARA's TCA-adjusted Pc2D. The 1.6e-4 difference on Omitron Case 2 is explained to 1e-14 by this convention (asserted in Tier 3).
+3. *Applicability.* A relative-speed gate alone caught only 4 of the 29 events CARA flags. A second gate, `CURVILINEAR_UNCERTAINTY`, compares the bend of each object's 1-sigma along-track arc with the encounter plane's tightest sigma. It catches all 29, at the cost of 5 conservative refusals. The threshold was calibrated on the same set, and the report says so.
+4. *Divergence kept on purpose.* For a non-positive-definite covariance, CARA repairs it and reports Pc = 0. Sentinel refuses: a repaired covariance is not the one the originator supplied.
 
 ---
 

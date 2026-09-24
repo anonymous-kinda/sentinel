@@ -2,7 +2,7 @@
 
 **Module:** `sentinel.risk`
 **Implements:** ADR-002 (two modes), ADR-003 (Foster-Estes 2D Pc, Orekit as oracle)
-**Status:** Design complete, ready for TDD.
+**Status:** Implemented and validated against NASA CARA published cases (see `docs/validation-report.md`).
 
 This document is written to be implemented test-first. Section 7 is the test ladder; work down it in order. Do not write engine code ahead of the test that demands it.
 
@@ -101,7 +101,16 @@ x̂ = r_perp / |r_perp|
 ŷ = ẑ × x̂
 ```
 
-At a true TCA, `dr · ẑ ≈ 0` by definition of closest approach, so `r_perp ≈ dr` and `x̂ ≈ dr̂`. **Do not assume this — compute it and assert the residual is small.** A large `dr · ẑ` means the supplied TCA is not actually the closest approach, which indicates upstream data corruption and should raise rather than silently proceed.
+At a true TCA, `dr · ẑ ≈ 0` by definition of closest approach, so `r_perp ≈ dr` and `x̂ ≈ dr̂`. **Do not assume this - compute it.**
+
+In practice a CDM's TCA is rounded to the millisecond, so the states are slightly off closest approach: half a millisecond at 15 km/s is 7.5 m. Both states are refined to the linear-motion closest approach, as CARA's `FindNearbyCA` does:
+
+```
+dt   = -(dr · dv) / |dv|²          # |dt| ≤ ~0.5 ms for real CDMs
+r_i' = r_i + v_i · dt
+```
+
+The refinement leaves the 2D Pc unchanged, because it moves the states only along `ẑ`, which the projection discards. It does correct the reported miss distance (CARA's MinMiss case goes from 3.88 m to 3.35 m) and makes the geometry self-consistent. A shift larger than `max_tca_adjustment_s` (default 10 ms, 20× the rounding bound) is not rounding. It means the states and the TCA disagree, which is upstream corruption, and the engine refuses with `TCA_INCONSISTENT`.
 
 ### Step 4 — Project
 
@@ -169,7 +178,8 @@ Run **before** returning any Pc. If any condition trips, return `method = REFUSE
 | `C₂d` not positive definite | `INVALID_COVARIANCE` |
 | `C₂d` condition number above threshold | `ILL_CONDITIONED_COVARIANCE` |
 | Covariance absent from CDM | `NO_COVARIANCE` |
-| `dr · ẑ` residual large | `TCA_INCONSISTENT` |
+| TCA refinement shift `abs(dt)` above `max_tca_adjustment_s` | `TCA_INCONSISTENT` |
+| 1-σ along-track sagitta `σ_T²/(2‖r‖)` above `max_curvilinear_ratio` × smallest encounter-plane σ | `CURVILINEAR_UNCERTAINTY` |
 | HBR unavailable and no default policy | `NO_HBR` |
 
 Thresholds are configuration, not constants, and every refusal records the value that tripped it.
@@ -298,9 +308,12 @@ Work down in order. Each rung fails before the code that satisfies it exists.
 10. Pc over a disk of radius ≫ σ approaches 1.
 11. Pc over a disk of radius → 0 approaches 0.
 
-**Tier 3 — Against CARA.**
-12. Each published CARA case within stated tolerance.
-13. Anisotropic covariance cases specifically (where a naive isotropic shortcut would pass Tier 2 but fail here).
+**Tier 3 — Against CARA.** *(implemented: `tests/test_tier3_cara_validation.py`)*
+12. Each published CARA case within its stated tolerance: 53 operational events (rtol 1e-6, worst observed 1.5e-8), Alfano 01–11 read from CDM files (CARA's rtol 1e-3), and Omitron Case 1 (rtol 1e-6, observed 1.9e-8).
+13. Anisotropic covariance cases specifically. Every operational event is anisotropic, and a naive isotropic shortcut fails them.
+13a. Every event CARA flags as outside 2D validity is refused by the default gate (zero false negatives). False positives are bounded and listed.
+13b. The Omitron Case 2 difference is explained to 1e-14 by the miss-distance convention.
+13c. The vendored NASA files match their recorded SHA-256.
 
 **Tier 4 — Max Pc and dilution.**
 14. `Pc(k)` is unimodal over a wide `k` sweep for a representative case.
@@ -326,6 +339,8 @@ Work down in order. Each rung fails before the code that satisfies it exists.
 ## 8. Deferred
 
 **3D Nc (numerical collision rate).** The correct method when the linear model fails. Deferred deliberately: implementing it well is a substantial effort, and the project's argument does not require it. Detecting that it is *needed* — the Step 8 gate — is implemented, which is the part that demonstrates judgment. The white paper should state this as a scoping decision with reasoning, not omit it.
+
+**CARA's Pc2D usage-violation algorithm.** `CURVILINEAR_UNCERTAINTY` is a geometric screen whose threshold was calibrated against CARA's published verdicts. CARA's `UsageViolationPc2D` propagates equinoctial covariances along curvilinear trajectories to measure how extended, offset and inaccurate the 2D approximation is. Porting it would replace a calibrated heuristic with the reference algorithm, and it is the natural companion to 3D Nc.
 
 **Covariance realism assessment.** CARA has whole toolsets for judging whether a supplied covariance is trustworthy at all. Sentinel assumes the supplied covariance is what it claims to be and flags dilution downstream of that assumption. Worth naming as a known limitation.
 

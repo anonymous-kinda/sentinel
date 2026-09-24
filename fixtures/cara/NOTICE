@@ -1,0 +1,13 @@
+This directory contains unmodified files from NASA's CARA Analysis Tools
+(https://github.com/nasa/CARA_Analysis_Tools), retrieved at commit
+1c78beb1f7aefc384886c3be1d09e4681acb5d37 on 2026-09-23.
+
+Copyright (c) 2019-2025 United States Government as represented by the
+Administrator of the National Aeronautics and Space Administration.
+All Rights Reserved.
+
+These files are distributed under the NASA Open Source Agreements included
+in ./license/ (NOSA 1.3). They have not been modified; SHA256SUMS records
+their exact content. Sentinel's own code is Apache-2.0 and is a separate
+work that reads these files as test data. Nothing in this repository is
+endorsed by NASA.

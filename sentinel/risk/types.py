@@ -51,6 +51,7 @@ class RefusalReason(enum.Enum):
     ILL_CONDITIONED_COVARIANCE = "ILL_CONDITIONED_COVARIANCE"
     LOW_RELATIVE_VELOCITY = "LOW_RELATIVE_VELOCITY"
     TCA_INCONSISTENT = "TCA_INCONSISTENT"
+    CURVILINEAR_UNCERTAINTY = "CURVILINEAR_UNCERTAINTY"
 
 
 @dataclasses.dataclass(frozen=True, eq=False)
@@ -115,9 +116,20 @@ class AssessmentConfig:
     """
 
     min_relative_speed_m_s: float = 100.0
-    tca_residual_abs_m: float = 1.0
-    tca_residual_rel: float = 0.01
+    # A CDM's TCA is rounded to the millisecond, so refining to the true
+    # closest approach moves the states by at most ~0.5 ms. Anything beyond
+    # max_tca_adjustment_s is not rounding: the states are not at a
+    # closest approach and the message is refused (TCA_INCONSISTENT).
+    refine_tca: bool = True
+    max_tca_adjustment_s: float = 0.01
     max_condition_number: float = 1e12
+    # Along-track uncertainty follows the orbit, which is curved. When the
+    # sagitta of an object's 1-sigma along-track arc, sigma_T^2 / (2 |r|),
+    # exceeds this fraction of the smallest encounter-plane sigma, the
+    # Gaussian-in-a-plane picture the 2D method rests on no longer holds.
+    # Calibrated against NASA CARA's published Pc2D usage-violation flags;
+    # see docs/validation-report.md for the agreement table.
+    max_curvilinear_ratio: float = 0.1
     default_radius_m: float | None = None
     quadrature_panels_cap: int = 4096
 

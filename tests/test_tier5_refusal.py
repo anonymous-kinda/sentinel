@@ -156,3 +156,66 @@ def test_every_refusal_records_the_value_that_tripped_it():
     r = assess(offset)
     assert "tca_residual_m" in r.diagnostics
     assert "threshold" in r.diagnostics
+
+
+# --- TCA refinement --------------------------------------------------------
+def test_millisecond_rounded_tca_is_refined_not_refused():
+    """A CDM's TCA is rounded to the millisecond. Half a millisecond of
+    along-track offset at 15 km/s is 7.5 m - refine it, don't refuse it."""
+    conj = make_conjunction(miss_m=100.0, sigma_m=50.0)
+    rounded = conj.replace(
+        secondary=conj.secondary.replace(
+            position_km=conj.secondary.position_km + np.array([0.0, -0.0075, 0.0])
+        )
+    )
+
+    result = assess(rounded)
+
+    assert result.method is Method.FOSTER_ESTES_2D
+    assert result.diagnostics["tca_adjustment_s"] == pytest.approx(-0.0005, rel=1e-9)
+    assert result.miss_distance_m == pytest.approx(100.0, rel=1e-9)
+    assert result.diagnostics["miss_distance_at_supplied_tca_m"] > 100.0
+    assert result.pc == pytest.approx(assess(conj).pc, rel=1e-12)
+
+
+def test_tca_adjustment_limit_is_configurable():
+    conj = make_conjunction(miss_m=100.0, sigma_m=50.0)
+    offset = conj.replace(
+        secondary=conj.secondary.replace(
+            position_km=conj.secondary.position_km + np.array([0.0, -0.0075, 0.0])
+        )
+    )
+    strict = AssessmentConfig(max_tca_adjustment_s=1e-4)
+    result = assess(offset, strict)
+    assert result.refusal_reason is RefusalReason.TCA_INCONSISTENT
+    assert result.diagnostics["threshold"] == 1e-4
+
+
+# --- curvilinear uncertainty ----------------------------------------------
+def test_long_curved_along_track_uncertainty_is_refused():
+    """300 km of along-track sigma on a 7000 km orbit bends ~6.4 km at one
+    sigma - far larger than a 50 m encounter-plane sigma. The planar
+    Gaussian the 2D method integrates does not describe that object."""
+    conj = make_conjunction(miss_m=100.0, sigma_m=50.0)
+    banana = np.diag([1250.0, 300_000.0**2, 1250.0])
+    curved = conj.replace(secondary=conj.secondary.replace(covariance_rtn_m2=banana))
+
+    result = assess(curved)
+
+    assert result.method is Method.REFUSED
+    assert result.refusal_reason is RefusalReason.CURVILINEAR_UNCERTAINTY
+    d = result.diagnostics
+    radius_m = np.linalg.norm(curved.secondary.position_km) * 1000.0
+    assert d["along_track_sagitta_m"] == pytest.approx(300_000.0**2 / (2 * radius_m))
+    assert d["curvilinear_ratio"] > d["threshold"]
+    assert d["object_id"] == "SECONDARY"
+    assert result.pc is None
+
+
+def test_curvilinear_threshold_is_configurable():
+    conj = make_conjunction(miss_m=100.0, sigma_m=50.0)
+    assert assess(conj).diagnostics["curvilinear_ratio"] < 1e-3
+    assert (
+        assess(conj, AssessmentConfig(max_curvilinear_ratio=1e-9)).refusal_reason
+        is RefusalReason.CURVILINEAR_UNCERTAINTY
+    )

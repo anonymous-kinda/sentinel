@@ -16,7 +16,7 @@ import numpy as np
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from sentinel.risk import assess
-from tests.conftest import make_conjunction
+from sentinel.risk.synthetic import make_conjunction
 
 MISS_M = 1000.0
 RADIUS_M = 0.5  # per object, so HBR = 1 m

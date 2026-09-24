@@ -1,9 +1,9 @@
 """The assessment entry point.
 
-Orchestration only: frame unification, covariance combination, the
-applicability gate, the collision integral, and dilution detection. The
-maths lives in frames.py, geometry.py and integrate.py so each piece can be
-tested on its own.
+Orchestration only: the applicability gate, TCA refinement, the collision
+integral, and dilution detection. The maths lives in frames.py,
+geometry.py, encounter.py and integrate.py so each piece can be tested on
+its own - and so the UI can draw the same encounter plane the engine used.
 
 The gate runs before any probability is returned. Refusing is a feature -
 the engine declines to produce a number the linear encounter model does not
@@ -17,8 +17,13 @@ import math
 
 import numpy as np
 
-from .frames import rotate_covariance_rtn_to_eci
-from .geometry import projection_matrix, tca_residual
+from .encounter import (
+    build_encounter_plane,
+    curvilinear_check,
+    linear_tca_adjustment_s,
+    relative_state,
+)
+from .geometry import tca_residual
 from .integrate import gaussian_mass_over_disk, maximize_pc_over_scale
 from .types import (
     AssessedConjunction,
@@ -28,8 +33,6 @@ from .types import (
     ObjectState,
     RefusalReason,
 )
-
-_KM_TO_M = 1000.0
 
 
 def _resolve_hbr(
@@ -72,10 +75,9 @@ def assess(
 
     # Geometry first: it is derivable without covariance, so it is reported
     # even on refusal.
-    dr = (np.asarray(secondary.position_km, float) - np.asarray(primary.position_km, float)) * _KM_TO_M
-    dv = (np.asarray(secondary.velocity_km_s, float) - np.asarray(primary.velocity_km_s, float)) * _KM_TO_M
-    miss_distance_m = float(np.linalg.norm(dr))
-    relative_speed_m_s = float(np.linalg.norm(dv))
+    rel0 = relative_state(conjunction)
+    miss_distance_m = rel0.miss_distance_m
+    relative_speed_m_s = rel0.speed_m_s
 
     inputs_hash = conjunction.inputs_hash()
     hbr_m, hbr_defaulted = _resolve_hbr(conjunction, config)
@@ -124,13 +126,6 @@ def assess(
                 stage="input_covariance",
             )
 
-    # --- step 1 & 2: unify frames, then combine --------------------------
-    cov_eci = rotate_covariance_rtn_to_eci(
-        primary.covariance_rtn_m2, primary.position_km, primary.velocity_km_s
-    ) + rotate_covariance_rtn_to_eci(
-        secondary.covariance_rtn_m2, secondary.position_km, secondary.velocity_km_s
-    )
-
     # --- gate: relative velocity supports the rectilinear model -----------
     if relative_speed_m_s < config.min_relative_speed_m_s:
         return refuse(
@@ -139,24 +134,23 @@ def assess(
             threshold=config.min_relative_speed_m_s,
         )
 
-    # --- gate: the supplied state really is at closest approach -----------
-    residual_m = tca_residual(dr, dv)
-    residual_threshold = max(
-        config.tca_residual_abs_m, config.tca_residual_rel * miss_distance_m
-    )
-    if abs(residual_m) > residual_threshold:
+    # --- gate: the supplied state is at (rounded) closest approach -------
+    dt_s = linear_tca_adjustment_s(rel0)
+    residual_m = tca_residual(rel0.position_m, rel0.velocity_m_s)
+    if abs(dt_s) > config.max_tca_adjustment_s:
         return refuse(
             RefusalReason.TCA_INCONSISTENT,
+            tca_adjustment_s=dt_s,
             tca_residual_m=residual_m,
-            threshold=residual_threshold,
+            threshold=config.max_tca_adjustment_s,
         )
 
-    # --- step 4: project onto the encounter plane -------------------------
-    projection = projection_matrix(dr, dv)
-    cov_2d = projection @ cov_eci @ projection.T
-    mu = projection @ dr
+    # --- steps 1-4: refine TCA, unify frames, combine, project -----------
+    plane = build_encounter_plane(conjunction, hbr_m, refine_tca=config.refine_tca)
+    cov_2d = plane.cov_2d_m2
+    mu = plane.mu_m
 
-    eigenvalues = np.linalg.eigvalsh(0.5 * (cov_2d + cov_2d.T))
+    eigenvalues = np.linalg.eigvalsh(cov_2d)
     if np.any(eigenvalues <= 0.0):
         return refuse(
             RefusalReason.INVALID_COVARIANCE,
@@ -170,6 +164,19 @@ def assess(
             RefusalReason.ILL_CONDITIONED_COVARIANCE,
             condition_number=condition_number,
             threshold=config.max_condition_number,
+        )
+
+    # --- gate: uncertainty is flat enough for a planar Gaussian ----------
+    curvature = curvilinear_check(conjunction, plane)
+    if curvature.ratio > config.max_curvilinear_ratio:
+        return refuse(
+            RefusalReason.CURVILINEAR_UNCERTAINTY,
+            curvilinear_ratio=curvature.ratio,
+            along_track_sagitta_m=curvature.sagitta_m,
+            encounter_sigma_min_m=curvature.sigma_min_m,
+            object_id=curvature.object_id,
+            threshold=config.max_curvilinear_ratio,
+            requires="3D Nc (curvilinear) assessment; not implemented, see risk-engine-design.md s8",
         )
 
     # --- step 5: integrate ------------------------------------------------
@@ -187,7 +194,7 @@ def assess(
         pc_max=pc_max,
         dilution_flag=bool(diluted),
         dilution_margin=math.log(k_star),
-        miss_distance_m=miss_distance_m,
+        miss_distance_m=plane.relative.miss_distance_m,
         relative_speed_m_s=relative_speed_m_s,
         hbr_m=hbr_m,
         inputs_hash=inputs_hash,
@@ -198,7 +205,10 @@ def assess(
             "k_star_at_search_bound": hit_bound,
             "projected_eigenvalues_m2": eigenvalues.tolist(),
             "condition_number": condition_number,
+            "tca_adjustment_s": plane.tca_adjustment_s,
+            "curvilinear_ratio": curvature.ratio,
             "tca_residual_m": residual_m,
+            "miss_distance_at_supplied_tca_m": miss_distance_m,
             "covariance_asymmetry": max(
                 _asymmetry(primary.covariance_rtn_m2),
                 _asymmetry(secondary.covariance_rtn_m2),
