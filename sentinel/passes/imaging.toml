@@ -1,0 +1,337 @@
+# Sentinel imaging catalog (M3 pass engine). Read by sentinel/passes/catalog.py.
+#
+# Public high-resolution optical (EO) and radar (SAR) imagers. Every
+# norad_id was checked against OBJECT_NAME in the vendored CelesTrak
+# snapshot fixtures/omm/celestrak-resource-20260924.json. `name` is the
+# OBJECT_NAME prefix the matcher expects.
+#
+# Every max_off_nadir_deg is a PLANNING ASSUMPTION from a public spec
+# sheet, rounded, with its source in `basis`. It is not a measured or
+# guaranteed capability. The values err wide: a wider field of regard
+# over-reports observed time and never under-reports a gap.
+#
+# SAR: the maximum incidence angle is recorded as the maximum off-nadir
+# angle. Incidence exceeds the look angle, and the near-nadir blind zone
+# and the look side are ignored, so the SAR entries err wide too.
+#
+# gsd_m is the finest nadir sample distance (EO) or resolution (SAR) the
+# cited source gives. It is informational: no computation uses it.
+#
+# Operational status is not asserted. A catalogued imager that is no
+# longer tasked over-reports observed time.
+#
+# Data class: DERIVED (from public sources).
+
+# ---------------------------------------------------------------- EO, nadir
+
+[[imager]]
+norad_id = 39084
+name = "LANDSAT 8"
+sensor = "EO"
+max_off_nadir_deg = 7.5
+gsd_m = 15.0
+basis = "Planning assumption: nadir-pointing OLI, half its 15 deg field of view (185 km swath, 705 km altitude). 15 m panchromatic. Source: USGS Landsat 8 mission description."
+
+[[imager]]
+norad_id = 49260
+name = "LANDSAT 9"
+sensor = "EO"
+max_off_nadir_deg = 7.5
+gsd_m = 15.0
+basis = "Planning assumption: nadir-pointing OLI-2, same design as Landsat 8, half its 15 deg field of view (185 km swath). 15 m panchromatic. Source: USGS Landsat 9 mission description."
+
+[[imager]]
+norad_id = 40697
+name = "SENTINEL-2A"
+sensor = "EO"
+max_off_nadir_deg = 10.3
+gsd_m = 10.0
+basis = "Planning assumption: nadir-pointing MSI, half its 20.6 deg field of view (290 km swath, 786 km altitude). 10 m visible and near-infrared. Source: ESA Sentinel-2 mission description."
+
+[[imager]]
+norad_id = 42063
+name = "SENTINEL-2B"
+sensor = "EO"
+max_off_nadir_deg = 10.3
+gsd_m = 10.0
+basis = "Planning assumption: nadir-pointing MSI, half its 20.6 deg field of view (290 km swath, 786 km altitude). 10 m visible and near-infrared. Source: ESA Sentinel-2 mission description."
+
+[[imager]]
+norad_id = 60989
+name = "SENTINEL-2C"
+sensor = "EO"
+max_off_nadir_deg = 10.3
+gsd_m = 10.0
+basis = "Planning assumption: nadir-pointing MSI, half its 20.6 deg field of view (290 km swath, 786 km altitude). 10 m visible and near-infrared. Source: ESA Sentinel-2 mission description."
+
+# ---------------------------------------------------------------- EO, agile
+
+[[imager]]
+norad_id = 32060
+name = "WORLDVIEW-1"
+sensor = "EO"
+max_off_nadir_deg = 40.0
+gsd_m = 0.5
+basis = "Planning assumption: +/-40 deg body-pointing range about nadir. 0.50 m panchromatic at nadir. Source: eoPortal, WorldView-1."
+
+[[imager]]
+norad_id = 35946
+name = "WORLDVIEW-2"
+sensor = "EO"
+max_off_nadir_deg = 40.0
+gsd_m = 0.46
+basis = "Planning assumption: +/-40 deg body-pointing range about nadir. 0.46 m panchromatic at nadir. Source: eoPortal, WorldView-2."
+
+[[imager]]
+norad_id = 40115
+name = "WORLDVIEW-3"
+sensor = "EO"
+max_off_nadir_deg = 62.0
+gsd_m = 0.31
+basis = "Planning assumption: the vendor datasheet (Vantor, 2025) gives no maximum off-nadir angle; the vendor has published a WorldView-3 collection at about 62 deg off-nadir, used here. 0.31 m panchromatic at nadir. Source: Vantor WorldView-3 datasheet and off-nadir imagery page."
+
+[[imager]]
+norad_id = 38012
+name = "PLEIADES 1A"
+sensor = "EO"
+max_off_nadir_deg = 47.0
+gsd_m = 0.7
+basis = "Planning assumption: viewing angle standard +/-30 deg, maximum +/-47 deg; the maximum is used. 0.7 m panchromatic at nadir (0.5 m product). Source: Airbus Pleiades Imagery User Guide (2021)."
+
+[[imager]]
+norad_id = 39019
+name = "PLEIADES 1B"
+sensor = "EO"
+max_off_nadir_deg = 47.0
+gsd_m = 0.7
+basis = "Planning assumption: viewing angle standard +/-30 deg, maximum +/-47 deg; the maximum is used. 0.7 m panchromatic at nadir (0.5 m product). Source: Airbus Pleiades Imagery User Guide (2021)."
+
+[[imager]]
+norad_id = 48268
+name = "PLEIADES NEO 3"
+sensor = "EO"
+max_off_nadir_deg = 52.0
+gsd_m = 0.3
+basis = "Planning assumption: oblique viewing up to +/-52 deg. Airbus quotes angles as incidence, which exceeds off-nadir, so reading 52 deg as off-nadir errs wide. 0.3 m panchromatic. Source: ESA Earth Online, Pleiades Neo."
+
+[[imager]]
+norad_id = 49070
+name = "PLEIADES NEO 4"
+sensor = "EO"
+max_off_nadir_deg = 52.0
+gsd_m = 0.3
+basis = "Planning assumption: oblique viewing up to +/-52 deg. Airbus quotes angles as incidence, which exceeds off-nadir, so reading 52 deg as off-nadir errs wide. 0.3 m panchromatic. Source: ESA Earth Online, Pleiades Neo."
+
+[[imager]]
+norad_id = 38755
+name = "SPOT 6"
+sensor = "EO"
+max_off_nadir_deg = 45.0
+gsd_m = 2.0
+basis = "Planning assumption: viewing angle standard +/-30 deg, extended +/-45 deg in roll; the extended range is used. 2 m panchromatic at nadir (1.5 m product). Source: Airbus SPOT 6/7 Imagery User Guide."
+
+[[imager]]
+norad_id = 40053
+name = "SPOT 7"
+sensor = "EO"
+max_off_nadir_deg = 45.0
+gsd_m = 2.0
+basis = "Planning assumption: viewing angle standard +/-30 deg, extended +/-45 deg in roll; the extended range is used. 2 m panchromatic at nadir (1.5 m product). Source: Airbus SPOT 6/7 Imagery User Guide. ESA Earth Online reports SPOT 7 operated until March 2023; kept because it is catalogued, which over-reports observed time."
+
+[[imager]]
+norad_id = 38338
+name = "ARIRANG-3"
+sensor = "EO"
+max_off_nadir_deg = 45.0
+gsd_m = 0.7
+basis = "Planning assumption: KOMPSAT-3 body pointing +/-45 deg in any direction. 0.7 m panchromatic at nadir. Source: eoPortal, KOMPSAT-3."
+
+[[imager]]
+norad_id = 40536
+name = "KOMPSAT-3A"
+sensor = "EO"
+max_off_nadir_deg = 45.0
+gsd_m = 0.55
+basis = "Planning assumption: slew up to +/-45 deg off-nadir. 0.55 m panchromatic at nadir. Source: eoPortal, KOMPSAT-3A."
+
+# SkySat: Planet documents a 30 deg default maximum off-nadir for tasking
+# orders, and its product spec says collections beyond 30 deg exist. No
+# public maximum was found, so 45 deg is assumed (wider errs toward observed).
+
+[[imager]]
+norad_id = 39418
+name = "SKYSAT-A"
+sensor = "EO"
+max_off_nadir_deg = 45.0
+gsd_m = 0.86
+basis = "Planning assumption: 30 deg default tasking maximum (Planet documentation), widened to 45 deg because no public maximum was found. 0.86 m panchromatic, SkySat-1. Source: Planet SkySat Imagery Product Specification (2020)."
+
+[[imager]]
+norad_id = 40072
+name = "SKYSAT-B"
+sensor = "EO"
+max_off_nadir_deg = 45.0
+gsd_m = 0.86
+basis = "Planning assumption: 30 deg default tasking maximum (Planet documentation), widened to 45 deg because no public maximum was found. 0.86 m panchromatic, SkySat-2. Source: Planet SkySat Imagery Product Specification (2020)."
+
+[[imager]]
+norad_id = 41601
+name = "SKYSAT-C1"
+sensor = "EO"
+max_off_nadir_deg = 45.0
+gsd_m = 0.72
+basis = "Planning assumption: 30 deg default tasking maximum (Planet documentation), widened to 45 deg because no public maximum was found. 0.72 m panchromatic, SkySat-3 to -13. Source: Planet SkySat Imagery Product Specification (2020)."
+
+[[imager]]
+norad_id = 41773
+name = "SKYSAT-C2"
+sensor = "EO"
+max_off_nadir_deg = 45.0
+gsd_m = 0.72
+basis = "Planning assumption: 30 deg default tasking maximum (Planet documentation), widened to 45 deg because no public maximum was found. 0.72 m panchromatic, SkySat-3 to -13. Source: Planet SkySat Imagery Product Specification (2020)."
+
+[[imager]]
+norad_id = 41774
+name = "SKYSAT-C3"
+sensor = "EO"
+max_off_nadir_deg = 45.0
+gsd_m = 0.72
+basis = "Planning assumption: 30 deg default tasking maximum (Planet documentation), widened to 45 deg because no public maximum was found. 0.72 m panchromatic, SkySat-3 to -13. Source: Planet SkySat Imagery Product Specification (2020)."
+
+[[imager]]
+norad_id = 41771
+name = "SKYSAT-C4"
+sensor = "EO"
+max_off_nadir_deg = 45.0
+gsd_m = 0.72
+basis = "Planning assumption: 30 deg default tasking maximum (Planet documentation), widened to 45 deg because no public maximum was found. 0.72 m panchromatic, SkySat-3 to -13. Source: Planet SkySat Imagery Product Specification (2020)."
+
+[[imager]]
+norad_id = 41772
+name = "SKYSAT-C5"
+sensor = "EO"
+max_off_nadir_deg = 45.0
+gsd_m = 0.72
+basis = "Planning assumption: 30 deg default tasking maximum (Planet documentation), widened to 45 deg because no public maximum was found. 0.72 m panchromatic, SkySat-3 to -13. Source: Planet SkySat Imagery Product Specification (2020)."
+
+[[imager]]
+norad_id = 42992
+name = "SKYSAT-C6"
+sensor = "EO"
+max_off_nadir_deg = 45.0
+gsd_m = 0.72
+basis = "Planning assumption: 30 deg default tasking maximum (Planet documentation), widened to 45 deg because no public maximum was found. 0.72 m panchromatic, SkySat-3 to -13. Source: Planet SkySat Imagery Product Specification (2020)."
+
+[[imager]]
+norad_id = 42991
+name = "SKYSAT-C7"
+sensor = "EO"
+max_off_nadir_deg = 45.0
+gsd_m = 0.72
+basis = "Planning assumption: 30 deg default tasking maximum (Planet documentation), widened to 45 deg because no public maximum was found. 0.72 m panchromatic, SkySat-3 to -13. Source: Planet SkySat Imagery Product Specification (2020)."
+
+[[imager]]
+norad_id = 42990
+name = "SKYSAT-C8"
+sensor = "EO"
+max_off_nadir_deg = 45.0
+gsd_m = 0.72
+basis = "Planning assumption: 30 deg default tasking maximum (Planet documentation), widened to 45 deg because no public maximum was found. 0.72 m panchromatic, SkySat-3 to -13. Source: Planet SkySat Imagery Product Specification (2020)."
+
+[[imager]]
+norad_id = 42989
+name = "SKYSAT-C9"
+sensor = "EO"
+max_off_nadir_deg = 45.0
+gsd_m = 0.72
+basis = "Planning assumption: 30 deg default tasking maximum (Planet documentation), widened to 45 deg because no public maximum was found. 0.72 m panchromatic, SkySat-3 to -13. Source: Planet SkySat Imagery Product Specification (2020)."
+
+[[imager]]
+norad_id = 42988
+name = "SKYSAT-C10"
+sensor = "EO"
+max_off_nadir_deg = 45.0
+gsd_m = 0.72
+basis = "Planning assumption: 30 deg default tasking maximum (Planet documentation), widened to 45 deg because no public maximum was found. 0.72 m panchromatic, SkySat-3 to -13. Source: Planet SkySat Imagery Product Specification (2020)."
+
+[[imager]]
+norad_id = 42987
+name = "SKYSAT-C11"
+sensor = "EO"
+max_off_nadir_deg = 45.0
+gsd_m = 0.72
+basis = "Planning assumption: 30 deg default tasking maximum (Planet documentation), widened to 45 deg because no public maximum was found. 0.72 m panchromatic, SkySat-3 to -13. Source: Planet SkySat Imagery Product Specification (2020)."
+
+# ---------------------------------------------------------------- SAR
+
+[[imager]]
+norad_id = 39634
+name = "SENTINEL-1A"
+sensor = "SAR"
+max_off_nadir_deg = 47.0
+gsd_m = 5.0
+basis = "Planning assumption: maximum incidence 47.0 deg across the SM, IW and EW modes, read as off-nadir (errs wide). Stripmap about 5 m x 5 m. Source: ESA SentiWiki, Sentinel-1 mission."
+
+[[imager]]
+norad_id = 31698
+name = "TERRASAR-X"
+sensor = "SAR"
+max_off_nadir_deg = 60.0
+gsd_m = 1.0
+basis = "Planning assumption: accessible incidence 15-60 deg, maximum read as off-nadir (errs wide). 1 m High-Resolution SpotLight (Staring SpotLight reaches 0.24 m in azimuth). Source: eoPortal, TerraSAR-X."
+
+[[imager]]
+norad_id = 36605
+name = "TANDEM-X"
+sensor = "SAR"
+max_off_nadir_deg = 60.0
+gsd_m = 1.0
+basis = "Planning assumption: almost identical in design to TerraSAR-X; accessible incidence 15-60 deg, maximum read as off-nadir (errs wide). 1 m High-Resolution SpotLight. Source: eoPortal, TerraSAR-X and TanDEM-X."
+
+[[imager]]
+norad_id = 32382
+name = "RADARSAT-2"
+sensor = "SAR"
+max_off_nadir_deg = 60.0
+gsd_m = 1.0
+basis = "Planning assumption: Extended High beams reach 60 deg incidence, read as off-nadir (errs wide). Spotlight nominal resolution under 1 m (1.6 m x 0.8 m range x azimuth). Source: ESA Earth Online, RADARSAT-2."
+
+[[imager]]
+norad_id = 31598
+name = "COSMO-SKYMED 1"
+sensor = "SAR"
+max_off_nadir_deg = 60.0
+gsd_m = 1.0
+basis = "Planning assumption: right- and left-looking, incidence 20-60 deg, maximum read as off-nadir (errs wide). Spotlight 1 m or finer. Source: ESA Earth Online and eoPortal, COSMO-SkyMed."
+
+[[imager]]
+norad_id = 32376
+name = "COSMO-SKYMED 2"
+sensor = "SAR"
+max_off_nadir_deg = 60.0
+gsd_m = 1.0
+basis = "Planning assumption: right- and left-looking, incidence 20-60 deg, maximum read as off-nadir (errs wide). Spotlight 1 m or finer. Source: ESA Earth Online and eoPortal, COSMO-SkyMed."
+
+[[imager]]
+norad_id = 33412
+name = "COSMO-SKYMED 3"
+sensor = "SAR"
+max_off_nadir_deg = 60.0
+gsd_m = 1.0
+basis = "Planning assumption: right- and left-looking, incidence 20-60 deg, maximum read as off-nadir (errs wide). Spotlight 1 m or finer. Source: ESA Earth Online and eoPortal, COSMO-SkyMed."
+
+[[imager]]
+norad_id = 37216
+name = "COSMO-SKYMED 4"
+sensor = "SAR"
+max_off_nadir_deg = 60.0
+gsd_m = 1.0
+basis = "Planning assumption: right- and left-looking, incidence 20-60 deg, maximum read as off-nadir (errs wide). Spotlight 1 m or finer. Source: ESA Earth Online and eoPortal, COSMO-SkyMed."
+
+[[imager]]
+norad_id = 39227
+name = "ARIRANG-5"
+sensor = "SAR"
+max_off_nadir_deg = 55.0
+gsd_m = 1.0
+basis = "Planning assumption: KOMPSAT-5 incidence 20-45 deg nominal, 45-55 deg extended, left or right looking by body pointing; maximum read as off-nadir (errs wide). 1 m high-resolution mode. Source: eoPortal, KOMPSAT-5."

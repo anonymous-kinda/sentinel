@@ -68,3 +68,9 @@ HOURS ?= 24
 .PHONY: screen
 screen:  ## demonstration mode: approaches to PRIMARY from the public snapshot (geometry only, no Pc)
 	$(UV) run sentinel screen --primary $(PRIMARY) --hours $(HOURS)
+
+# --- M3 pass engine -----------------------------------------------------------
+.PHONY: bench-passes
+bench-passes:  ## time the pass engine: whole imaging catalog, 24 h, exercise unit
+	$(UV) run python scripts/bench_passes.py
+# --- end M3 pass engine -------------------------------------------------------

@@ -79,3 +79,8 @@ ignore = ["E501", "B905", "SIM108"]
 [tool.mypy]
 python_version = "3.11"
 ignore_missing_imports = true
+
+# --- M3 pass engine: ship the imaging catalog inside the wheel --------------
+[tool.setuptools.package-data]
+"sentinel.passes" = ["imaging.toml"]
+# --- end M3 pass engine -------------------------------------------------------

@@ -129,3 +129,16 @@ forbidden_modules =
     sentinel.api
     sentinel.sync
     sentinel.ai
+
+# --- M3 pass engine -----------------------------------------------------------
+[importlinter:contract:passes-offline]
+name = The pass engine computes at the edge: no network, transport or web stack
+type = forbidden
+source_modules =
+    sentinel.passes
+forbidden_modules =
+    httpx
+    nats
+    fastapi
+    uvicorn
+# --- end M3 pass engine -------------------------------------------------------
