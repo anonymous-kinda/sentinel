@@ -23,6 +23,7 @@ from ..ai.assistant import Assistant
 from ..ai.tools import ToolError, ToolRegistry
 from ..audit import AuditLog
 from ..obs import get_logger
+from . import apidoc
 from .identity import operator_of
 
 log = get_logger(__name__)
@@ -67,8 +68,9 @@ def register(app: FastAPI, node) -> None:
     settings = node.settings
     if not settings.ai:
 
-        @app.get("/api/ai/status")
+        @app.get("/api/ai/status", tags=[apidoc.ASSISTANT], summary="Assistant status (disabled on this node)")
         def ai_disabled() -> dict:
+            """The assistant is off on this node (for example the public read-only node)."""
             return {"enabled": False}
 
         return
@@ -95,8 +97,11 @@ def register(app: FastAPI, node) -> None:
     node.extensions["ai"] = assistant
     node.extensions.setdefault("modules", []).append("ai")
 
-    @app.get("/api/ai/status")
+    @app.get("/api/ai/status", tags=[apidoc.ASSISTANT], summary="Assistant tier and why")
     def ai_status() -> dict:
+        """The routing and phrasing tier in force and the reason for it: hosted AI needs an
+        UNCLASSIFIED marking, operator opt-in and a usable measured link. Lists which hosted
+        providers are configured and their pinned models."""
         return {
             "enabled": True,
             "tier": assistant.tier(),
@@ -107,14 +112,36 @@ def register(app: FastAPI, node) -> None:
             "min_confidence": assistant.min_confidence,
         }
 
-    @app.post("/api/ai/ask")
+    @app.post(
+        "/api/ai/ask",
+        tags=[apidoc.ASSISTANT],
+        summary="Ask the assistant",
+        openapi_extra=apidoc.json_body(
+            {"text": apidoc.text(f"1 to {MAX_QUESTION_CHARS} characters")}, required=("text",)
+        ),
+    )
     async def ai_ask(request: Request) -> dict:
+        """An answer phrased from tool facts (every number checked by the grounding guard), a
+        question back when the request is ambiguous, or a draft action that takes effect only
+        on /api/ai/confirm. 422 on an empty or over-long question."""
         text = _question(await request.json())
         answer = await assistant.ask(text, operator_of(request, settings.node_id))
         return answer.to_dict()
 
-    @app.post("/api/ai/confirm", status_code=201)
+    @app.post(
+        "/api/ai/confirm",
+        status_code=201,
+        tags=[apidoc.ASSISTANT],
+        summary="Confirm a drafted decision",
+        openapi_extra=apidoc.json_body(
+            {"draft_id": apidoc.text("from an ask answer"), "rationale": apidoc.text("truncated to 2000 characters")},
+            required=("draft_id",),
+        ),
+    )
     async def ai_confirm(request: Request) -> dict:
+        """The operator confirms a draft once; it becomes a signed DECISION. 404 for an unknown
+        draft, 409 when the event's CDM changed since the draft (stale), 403 on a read-only
+        node."""
         if settings.read_only:
             raise HTTPException(403, "this node is read-only")
         body = await request.json()
@@ -127,10 +154,13 @@ def register(app: FastAPI, node) -> None:
         except ToolError as exc:
             raise HTTPException(CONFIRM_ERRORS.get(exc.code, 422), exc.code) from exc
 
-    @app.get("/api/ai/audit")
+    @app.get("/api/ai/audit", tags=[apidoc.ASSISTANT], summary="Assistant audit record")
     def ai_audit(limit: int = 50) -> list[dict]:
+        """The most recent asks and confirms (`limit` 1 to 500), each hash-chained to the one
+        before."""
         return assistant.audit.entries()[-max(1, min(limit, 500)) :]
 
-    @app.get("/api/ai/audit/verify")
+    @app.get("/api/ai/audit/verify", tags=[apidoc.ASSISTANT], summary="Verify the audit chain")
     def ai_audit_verify() -> dict:
+        """Recomputes the hash chain and reports the first entry that does not link, if any."""
         return dataclasses.asdict(assistant.audit.verify())

@@ -247,7 +247,7 @@ An event stays HUB-ASSERTED until that comparison passes (VERIFIED), and any dis
 
 **Why not a JetStream mirror.** A mirror replicates in stream order. That is exactly the FIFO baseline the LIMITED scenario measures at 3.9× slower for the record that matters in the latest run (`docs/ddil-results.md`).
 
-**Why this also buys modularity.** The pull agent reads only generic fields: id, deadline, consequence and record list. It reaches a mission module only through the `ReferenceRecords` protocol, and `.importlinter` forbids `sync` from importing any mission module. The pass module (M3) does: its element sets travel through the same agent, and `sentinel/sync` is unchanged since M2.
+**Why this also buys modularity.** The pull agent reads only generic fields: id, deadline, consequence and record list. It reaches a mission module only through the `ReferenceRecords` protocol, and `.importlinter` forbids `sync` from importing any mission module. The pass module (M3) does: its element sets travel through the same agent, and it landed with no change to `sentinel/sync`, `bus`, `crdt` or `triage` (`git diff --stat 67199b7 f16e294` over those paths is empty).
 
 **Consequence.** The hub assigns event identity and the identity travels with the record (`Sentinel-Event-Id`). Updates fetched out of order would otherwise split one event into two.
 
@@ -472,7 +472,7 @@ The recorded results of the latest run are generated into `docs/ddil-results.md`
 |---|---|---|
 | This design (`docs/system-design.md`, with the maths in `docs/risk-engine-design.md`) | NASA CARA's published methods and data, CCSDS standards | Self, technical reviewers |
 | Technical guide | This design | Engineers reading the repo |
-| White paper | Technical guide | Acquisition, operational, executive |
+| White paper (`docs/white-paper.md`), quad chart (`docs/quad-chart.md`) | This design and the generated reports | Acquisition, operational, executive |
 | SysML v2 model (`mbse/`) | This design | MBSE demonstration; `docs/traceability.md` is generated from it in CI |
 | OSCAL draft SSP (`compliance/oscal/`, explained in `docs/compliance.md`) | Implementation and CI evidence | Security/ATO reviewers |
 
