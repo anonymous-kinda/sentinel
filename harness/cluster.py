@@ -60,6 +60,25 @@ def leaf_proxy(listen: str, upstream: str) -> dict:
     return {"name": LEAF_PROXY, "listen": listen, "upstream": upstream, "enabled": True}
 
 
+def toxic_spec(toxic: dict) -> dict:
+    """One toxic in a comparable form, whether a preset states it or Toxiproxy reports it."""
+    return {
+        "name": toxic["name"],
+        "type": toxic["type"],
+        "stream": toxic["stream"],
+        "toxicity": float(toxic.get("toxicity", 1.0)),
+        "attributes": toxic.get("attributes", {}),
+    }
+
+
+def preset_toxics(preset: str) -> list[dict]:
+    """The toxics a link preset puts on the leaf connection."""
+    sys.path.insert(0, str(ROOT))
+    from sentinel.linkstate.toxiproxy import PRESETS
+
+    return [toxic_spec(toxic) for toxic in PRESETS[preset]]
+
+
 def allocate_ports(names: list[str]) -> dict[str, int]:
     """Distinct free ports: every socket stays bound until all are chosen,
     so the OS cannot hand the same port out twice."""
@@ -112,9 +131,14 @@ class Cluster:
         hub_port: int | None = None,
         edge_port: int | None = None,
         hub_elements: bool = True,
+        initial_link: str = "CONNECTED",
     ):
+        """`initial_link` is the preset on the leaf connection before either
+        nats-server starts: DENIED keeps the edge from syncing anything until
+        the caller shapes the link, so the first byte crosses a known link."""
         self.sync_mode = sync_mode
         self.hub_elements = hub_elements
+        self.initial_link = initial_link
         self.clock = clock
         self.hub_exercise = hub_exercise
         self.sync_interval_s = sync_interval_s
@@ -196,6 +220,7 @@ class Cluster:
         wait_until(lambda: http("POST", f"{self.toxi}/proxies",
                                 leaf_proxy(f"127.0.0.1:{p['toxi_leaf']}", f"127.0.0.1:{p['hub_leaf']}")),
                    10, what="toxiproxy proxy")
+        self.link(self.initial_link)
 
         self.write_nats_configs()
         self._spawn("nats-hub", [str(TOOLS / "nats-server"), "-c", str(self.dir / HUB_ID / "nats.conf")])
@@ -243,9 +268,20 @@ class Cluster:
 
         return ToxiproxyControl(self.toxi).apply(preset)
 
+    def toxics(self) -> list[dict]:
+        """The toxics on the leaf connection now, as Toxiproxy reports them."""
+        return [toxic_spec(toxic) for toxic in http("GET", f"{self.toxi}/proxies/{LEAF_PROXY}")["toxics"]]
+
+    def leafz(self) -> dict:
+        return json.loads(urllib.request.urlopen(f"http://127.0.0.1:{self.ports['edge_monitor']}/leafz", timeout=3).read())
+
     def leaf_connected(self) -> bool:
-        data = json.loads(urllib.request.urlopen(f"http://127.0.0.1:{self.ports['edge_monitor']}/leafz", timeout=3).read())
-        return bool(data.get("leafnodes"))
+        return bool(self.leafz().get("leafnodes"))
+
+    def leaf_compression(self) -> str | None:
+        """The leaf connection's current compression mode (s2_auto picks it from the measured round trip)."""
+        leafs = self.leafz().get("leafs") or []
+        return leafs[0].get("compression") if leafs else None
 
     def stop(self) -> None:
         for proc in self.procs.values():
