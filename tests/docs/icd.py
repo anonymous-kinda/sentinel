@@ -116,3 +116,82 @@ def function(module: ast.Module, name: str) -> ast.FunctionDef:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name:
             return node
     raise AssertionError(f"no function {name}")
+
+
+def _text(node: ast.AST | None) -> str | None:
+    return node.value if isinstance(node, ast.Constant) and isinstance(node.value, str) else None
+
+
+def keys_read(modules: list[ast.Module], variable: str) -> set[str]:
+    """Constant keys read from a variable: `variable["k"]` and `variable.get("k")`."""
+    found = set()
+    for module in modules:
+        for node in ast.walk(module):
+            if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name) and node.value.id == variable:
+                found.add(_text(node.slice))
+            elif (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "get"
+                and isinstance(node.func.value, ast.Name)
+                and node.func.value.id == variable
+                and node.args
+            ):
+                found.add(_text(node.args[0]))
+    return found - {None}
+
+
+def headers_read(modules: list[ast.Module]) -> set[str]:
+    """Constant names passed to `<anything>.headers.get(...)`."""
+    return {
+        _text(node.args[0])
+        for module in modules
+        for node in ast.walk(module)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "get"
+        and isinstance(node.func.value, ast.Attribute)
+        and node.func.value.attr == "headers"
+        and node.args
+    } - {None}
+
+
+def dict_keys(func: ast.AST) -> set[str]:
+    """Constant keys of every dict literal inside a function."""
+    return {_text(key) for node in ast.walk(func) if isinstance(node, ast.Dict) for key in node.keys} - {None}
+
+
+def dict_values_for(modules: list[ast.Module], key: str) -> set[str]:
+    """Constant values given to `key` in any dict literal."""
+    return {
+        _text(value)
+        for module in modules
+        for node in ast.walk(module)
+        if isinstance(node, ast.Dict)
+        for k, value in zip(node.keys, node.values)
+        if _text(k) == key
+    } - {None}
+
+
+def returned_constants(func: ast.AST) -> set[str]:
+    """String constants a function can return, including either arm of `a if c else b`."""
+    found = set()
+    for node in ast.walk(func):
+        if isinstance(node, ast.Return) and node.value is not None:
+            arms = [node.value.body, node.value.orelse] if isinstance(node.value, ast.IfExp) else [node.value]
+            found |= {_text(arm) for arm in arms}
+    return found - {None}
+
+
+def assigned_constants(modules: list[ast.Module], attribute: str) -> set[str]:
+    """String constants assigned to `<x>.attribute`, or given as a field default."""
+    found = set()
+    for module in modules:
+        for node in ast.walk(module):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Attribute) and target.attr == attribute:
+                        found.add(_text(node.value))
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name) and node.target.id == attribute:
+                found.add(_text(node.value))
+    return found - {None}
