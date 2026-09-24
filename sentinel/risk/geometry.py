@@ -35,7 +35,8 @@ def _any_unit_perpendicular_to(axis: np.ndarray) -> np.ndarray:
     if abs(axis @ seed) > 0.9:
         seed = np.array([0.0, 1.0, 0.0])
     perp = seed - (seed @ axis) * axis
-    return perp / np.linalg.norm(perp)
+    unit: np.ndarray = perp / np.linalg.norm(perp)
+    return unit
 
 
 def encounter_plane_basis(
