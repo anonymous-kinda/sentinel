@@ -41,8 +41,11 @@ an interface changes without its ICD, CI fails.
 - The drift tests read their facts from the code by import or AST, never
   from a copy. Each one is paired with a test showing it fails on a stale
   copy of its document.
-- **A new node-local event** needs its kind registered in `NODE_EVENTS`
-  (`sentinel/bus/subjects.py`; an unregistered kind raises) and its channel
-  and message added to `asyncapi.yaml`.
+- **A new node-local event** needs only its channel and message in
+  `asyncapi.yaml`; the core is not edited. `tests/docs/test_asyncapi.py`
+  finds every kind the code publishes by AST, at the `subjects.local` call
+  sites in `sentinel/` and `harness/`, through the helpers and constants that
+  feed them. It fails on a kind that is not documented, on a documented kind
+  nothing publishes, and on a subject built from a value it cannot read.
 - **A new interface** needs its document, a drift test, and a row in the
   table above. `tests/docs/test_icd_index.py` fails on an unindexed file.

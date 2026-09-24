@@ -1,10 +1,15 @@
 """docs/icd/asyncapi.yaml (AsyncAPI 3.0) against the bus as the code uses it.
 
-Drift. Every subject builder in sentinel/bus/subjects.py and every
-registered node-event kind is a documented channel, and every channel is
-one of them. Every bus header name in sentinel/ is documented, and every
-documented header is in the code. The leaf policy the document states is
-the edge nats-server's, and each channel's crossing claim follows from it.
+Drift. The node-local kinds are discovered from the code, not listed in
+it: AST over sentinel/ and harness/ finds every `subjects.local(...)` call
+(through the helpers and constants that feed it) and every literal
+`node.<id>.<kind>` subject. Each kind is a documented channel, and each
+documented node-local channel is a kind the code publishes. The same goes
+for every `Sentinel-Kind` header value, every bus header name, and every
+subject builder in sentinel/bus/subjects.py. A subject built from a value
+the check cannot read fails it. The core never lists mission names; the
+check reads the call sites. The leaf policy the document states is the
+edge nats-server's, and each channel's crossing claim follows from it.
 
 Behaviour. A hub and an edge run a real sync over a recording bus, and a
 node's API applies a link preset. Every message they send, and every reply,
@@ -21,6 +26,7 @@ their own channel's messages, and every reply resolves.
 
 import asyncio
 import copy
+import dataclasses
 import datetime as dt
 import inspect
 import json
@@ -46,14 +52,26 @@ from sentinel.passes.element_store import ElementStore
 from sentinel.passes.sync_adapter import ElementRecords
 from sentinel.sync import SyncAgent, SyncServer
 
-from .icd import ICD, ROOT, compare, headers_read, nats_list, string_constants, trees
+from .icd import (
+    ICD,
+    ROOT,
+    Found,
+    compare,
+    headers_read,
+    nats_list,
+    node_kinds,
+    sentinel_kinds,
+    sources,
+    string_constants,
+)
 
 ASYNCAPI = ICD / "asyncapi.yaml"
 EDGE_CONF = ROOT / "deploy" / "nats" / "edge.conf.tmpl"
 SNAPSHOT = ROOT / "fixtures" / "omm" / "celestrak-resource-20260924.json"
 HEADER = r"(Sentinel|Nats)-[A-Za-z0-9]+(-[A-Za-z0-9]+)*"
-# Not subject builders: a token sanitiser, the generic node-event builder
-# (covered through NODE_EVENTS) and the console's wildcard subscription.
+NODE_PREFIX = "node.{node_id}."
+# Not subject builders: a token sanitiser, the generic node-local builder
+# (its kinds are found at its call sites) and the console's wildcard.
 NOT_BUILDERS = {"token", "local", "local_all"}
 EPOCH = dt.datetime(2026, 9, 24, 6, 0, tzinfo=dt.UTC)
 
@@ -111,14 +129,28 @@ def family(address: str) -> str:
     return ".".join(tokens)
 
 
-def code_families() -> set[str]:
-    node_events = {f"node.{{node_id}}.{kind}" for kind in subjects.NODE_EVENTS}
-    return {family(template(fn)) for fn in builders().values()} | node_events
+def cross_node_families() -> set[str]:
+    return {f for f in (family(template(fn)) for fn in builders().values()) if not f.startswith(NODE_PREFIX)}
+
+
+@dataclasses.dataclass(frozen=True)
+class CodeFacts:
+    node_kinds: Found
+    sentinel_kinds: Found
+    headers: set[str]
+
+
+def code_facts(scanned=None) -> CodeFacts:
+    """What the code publishes: sentinel/ and harness/ unless told otherwise."""
+    scanned = scanned if scanned is not None else sources("sentinel/**/*.py", "harness/*.py")
+    modules = [source.module for source in scanned]
+    return CodeFacts(
+        node_kinds(scanned), sentinel_kinds(scanned), string_constants(modules, HEADER) | headers_read(modules)
+    )
 
 
 def code_headers() -> set[str]:
-    source = trees("sentinel/**/*.py")
-    return string_constants(source, HEADER) | headers_read(source)
+    return code_facts().headers
 
 
 # ------------------------------------------------------- the document's side
@@ -146,13 +178,16 @@ def kind_of(doc: dict, message: dict) -> str | None:
     return deref(doc, header_schema(doc, message).get("properties", {}).get("Sentinel-Kind", {})).get("const")
 
 
-def node_local_kinds(doc: dict) -> set[str]:
-    return {
-        kind_of(doc, message)
-        for channel in doc["channels"].values()
-        if (channel.get("address") or "").startswith("node.")
-        for message in messages(doc, channel).values()
-    }
+def documented_node_kinds(doc: dict) -> set[str]:
+    return {family(a)[len(NODE_PREFIX) :] for a in addresses(doc).values() if a.startswith(NODE_PREFIX)}
+
+
+def documented_cross_node_families(doc: dict) -> set[str]:
+    return {family(a) for a in addresses(doc).values() if not a.startswith(NODE_PREFIX)}
+
+
+def documented_sentinel_kinds(doc: dict) -> set[str]:
+    return {kind_of(doc, message) for message in all_messages(doc)} - {None}
 
 
 def pattern(address: str) -> str:
@@ -175,16 +210,24 @@ def crossing_problems(doc: dict, deny_exports: set[str], deny_imports: set[str])
     return problems
 
 
-def asyncapi_problems(doc: dict) -> list[str]:
+def unreadable(found: Found, what: str) -> list[str]:
+    return [f"{what} at {where} is built from a value this check cannot read" for where in found.unresolved]
+
+
+def asyncapi_problems(doc: dict, code: CodeFacts | None = None) -> list[str]:
+    code = code or code_facts()
     documented = set(addresses(doc).values())
-    problems = compare({family(a) for a in documented}, code_families(), "subject family")
+    problems = compare(documented_cross_node_families(doc), cross_node_families(), "subject family")
     problems += [
         f"builder {name} gives {template(fn)}, which is no channel's address"
         for name, fn in sorted(builders().items())
         if template(fn) not in documented
     ]
-    problems += compare(node_local_kinds(doc), set(subjects.NODE_EVENTS), "node event kind")
-    problems += compare(documented_headers(doc), code_headers(), "header")
+    problems += compare(documented_node_kinds(doc), code.node_kinds.values, "node event kind")
+    problems += unreadable(code.node_kinds, "a node-local subject")
+    problems += compare(documented_sentinel_kinds(doc), code.sentinel_kinds.values, "Sentinel-Kind")
+    problems += unreadable(code.sentinel_kinds, "a Sentinel-Kind header")
+    problems += compare(documented_headers(doc), code.headers, "header")
     if doc.get("x-sentinel-console-subscription") != template(subjects.local_all):
         problems.append(f"console subscription is not {template(subjects.local_all)}")
     policy = doc["x-sentinel-leaf-policy"]
@@ -413,9 +456,85 @@ def recorded(tmp_path_factory) -> list[tuple[str, Msg]]:
 
 # ------------------------------------------------------------------ tests
 def test_the_code_yields_the_subjects_and_headers_it_is_known_to_use():
-    assert {"node.{node_id}.cdm.accepted", "sync.{hub_id}.fetch"} <= code_families()
-    assert {"Sentinel-Kind", "Sentinel-Event-Id", "Nats-Msg-Id"} <= code_headers()
+    code = code_facts()
+    # One of each route to a kind: a builder's f-string (cdm.accepted), a
+    # literal (ops.changed), a helper's callers (sync.arrival), a module
+    # constant (passes.updated).
+    assert {"cdm.accepted", "ops.changed", "sync.arrival", "passes.updated"} <= code.node_kinds.values
+    assert code.node_kinds.unresolved == [] and code.sentinel_kinds.unresolved == []
+    assert {"record.full", "sync.progress", "passes.updated"} <= code.sentinel_kinds.values
+    assert {"Sentinel-Kind", "Sentinel-Event-Id", "Nats-Msg-Id"} <= code.headers
+    assert "sync.{hub_id}.fetch" in cross_node_families()
     assert template(subjects.cdm_accepted) == "node.{node_id}.cdm.accepted.{event_id}"
+
+
+def test_a_value_becomes_exactly_one_subject_token_as_documented():
+    assert subjects.cdm_accepted("hub a", "X.Y>*") == "node.hub_a.cdm.accepted.X_Y__"
+
+
+UNDOCUMENTED = '''
+from sentinel.bus import subjects
+
+REASON = "made.constant"
+CANARY = "node.edge-x.made.literal"
+
+
+async def direct(bus, node_id):
+    await bus.publish(subjects.local(node_id, "made.direct"), b"{}", {"Sentinel-Kind": "made.direct"})
+
+
+class Module:
+    async def _emit(self, kind):
+        await self.bus.publish(subjects.local(self.node_id, kind), b"{}", {"Sentinel-Kind": kind})
+
+    async def changed(self):
+        await self._emit("made.helper")
+
+    async def constant(self):
+        await self.bus.publish(subjects.local(self.node_id, REASON), b"{}")
+
+    async def computed(self, name):
+        await self.bus.publish(subjects.local(self.node_id, name.lower()), b"{}")
+'''
+
+
+def test_an_undocumented_node_local_kind_fails_the_check(tmp_path):
+    (tmp_path / "module.py").write_text(UNDOCUMENTED)
+    found = code_facts(sources(root=tmp_path))
+    assert found.node_kinds.values == {"made.direct", "made.helper", "made.constant", "made.literal"}
+    assert found.node_kinds.unresolved == ["module.py:23"]
+    assert found.sentinel_kinds.values == {"made.direct", "made.helper"}
+
+    real = code_facts()
+    merged = CodeFacts(
+        Found(real.node_kinds.values | found.node_kinds.values, found.node_kinds.unresolved),
+        Found(real.sentinel_kinds.values | found.sentinel_kinds.values, []),
+        real.headers,
+    )
+    assert asyncapi_problems(load(), merged) == [
+        "node event kind made.constant is not documented",
+        "node event kind made.direct is not documented",
+        "node event kind made.helper is not documented",
+        "node event kind made.literal is not documented",
+        "a node-local subject at module.py:23 is built from a value this check cannot read",
+        "Sentinel-Kind made.direct is not documented",
+        "Sentinel-Kind made.helper is not documented",
+    ]
+
+
+def test_a_documented_kind_the_code_no_longer_publishes_fails_the_check():
+    doc = load()
+    doc["channels"]["retired"] = {
+        **copy.deepcopy(doc["channels"]["cdmRejected"]),
+        "address": "node.{node_id}.retired.kind",
+        "messages": {"retired": {"$ref": "#/components/messages/retired"}},
+    }
+    doc["components"]["messages"]["retired"] = copy.deepcopy(doc["components"]["messages"]["cdmRejected"])
+    doc["components"]["messages"]["retired"]["headers"]["properties"]["Sentinel-Kind"] = {"const": "retired.kind"}
+    assert asyncapi_problems(doc) == [
+        "node event kind retired.kind is documented but not in the code",
+        "Sentinel-Kind retired.kind is documented but not in the code",
+    ]
 
 
 def test_the_document_is_structurally_asyncapi_3():
@@ -441,8 +560,8 @@ def test_a_stale_document_is_caught():
     del stale["channels"]["syncArrival"]
     stale["operations"] = {k: v for k, v in stale["operations"].items() if "syncArrival" not in json.dumps(v)}
     assert asyncapi_problems(stale) == [
-        "subject family node.{node_id}.sync.arrival is not documented",
         "node event kind sync.arrival is not documented",
+        "Sentinel-Kind sync.arrival is not documented",
     ]
     stale = copy.deepcopy(doc)
     stale["components"]["messages"]["cdmRejected"]["headers"]["properties"]["Sentinel-Retired"] = {"type": "string"}

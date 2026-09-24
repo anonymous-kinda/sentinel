@@ -1,9 +1,12 @@
 # Interface control: the Sentinel message bus (AsyncAPI 3.0).
 #
 # Written by hand and held to the code by tests/docs/test_asyncapi.py:
-#   - every subject builder in sentinel/bus/subjects.py and every registered
-#     node-event kind is a channel here, and every channel is one of them;
-#   - every bus header name in sentinel/ is declared here, and vice versa;
+#   - every node-local kind the code publishes (found by AST over sentinel/ and
+#     harness/ at the subjects.local call sites, never listed in the core) and
+#     every subject builder in sentinel/bus/subjects.py is a channel here, and
+#     every channel is one of them;
+#   - every Sentinel-Kind value and bus header name in the code is declared
+#     here, and vice versa;
 #   - the leaf policy below is the edge nats-server's (deploy/nats/edge.conf.tmpl);
 #   - a hub and an edge run over a recording bus, and every message they send
 #     validates against the message this document gives its channel.
