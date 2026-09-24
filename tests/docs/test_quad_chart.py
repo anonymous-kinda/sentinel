@@ -6,7 +6,7 @@ generate or that the allowlist does not explain.
 import re
 import xml.etree.ElementTree as ET
 
-from .doccheck import DOCS, QUAD_CHART_SVG, ROOT, report_values, stated_numbers, svg_texts, value
+from .doccheck import DOCS, QUAD_CHART_SVG, ROOT, generated_text, svg_texts, unsupported_numbers
 
 QUAD_CHART_MD = DOCS / "quad-chart.md"
 QUADRANTS = (
@@ -16,10 +16,11 @@ QUADRANTS = (
     "Evidence and next steps",
 )
 
-# Numbers on the chart that no generated report states: each names the file
-# it comes from and why it is on the chart. Nothing here is estimated.
+# Numbers on the chart that no generated report states. Each names the file
+# it comes from and why it is on the chart; nothing here is estimated.
 ALLOWED = {
     "17.50": ("docs/deploy-aws.md", "the AWS demo hub's monthly cost, as the deploy guide states it"),
+    "37": ("docs/compliance.md", "controls in the tailored baseline; tests/compliance checks the count"),
 }
 
 LETTER_LANDSCAPE_IN = (11.0, 8.5)
@@ -31,9 +32,8 @@ SYSTEM_FONTS = {
 }
 
 
-def chart_number_problems(texts: list[str], known: set[float]) -> list[str]:
-    allowed = {value(n) for n in ALLOWED}
-    return [n for t in texts for n in stated_numbers(t) if value(n) not in known | allowed]
+def chart_number_problems(texts: list[str], evidence: str) -> list[str]:
+    return unsupported_numbers("\n".join(texts), "\n".join([evidence, *ALLOWED]))
 
 
 def font_problems(svg: str) -> list[str]:
@@ -58,8 +58,8 @@ def smallest_point_size(svg: str) -> float:
 
 
 def test_a_number_no_report_states_is_caught():
-    known = {53.0}
-    assert chart_number_problems(["53 events", "about $18.00 a month", "$17.50 a month"], known) == ["18.00"]
+    texts = ["53 events", "about $18.25 a month", "$17.50 a month"]
+    assert chart_number_problems(texts, "53 operational events") == ["18.25"]
 
 
 def test_a_web_font_or_remote_resource_is_caught():
@@ -88,21 +88,21 @@ def test_the_four_quadrant_titles_are_on_the_chart():
 
 
 def test_every_number_on_the_chart_is_generated_or_allowlisted():
-    assert chart_number_problems(svg_texts(QUAD_CHART_SVG), report_values()) == []
+    assert chart_number_problems(svg_texts(QUAD_CHART_SVG), generated_text()) == []
 
 
 def test_every_allowlisted_number_is_in_the_file_it_cites():
     for number, (source, reason) in ALLOWED.items():
         assert reason
-        assert number in (ROOT / source).read_text(), f"{number} is not in {source}"
+        assert number in (ROOT / source).read_text(encoding="utf-8"), f"{number} is not in {source}"
 
 
 def test_letter_size_system_fonts_and_legible_type():
-    svg = QUAD_CHART_SVG.read_text()
+    svg = QUAD_CHART_SVG.read_text(encoding="utf-8")
     assert font_problems(svg) == []
     assert smallest_point_size(svg) >= MIN_POINT_SIZE
 
 
 def test_the_markdown_page_embeds_the_chart_with_alt_text():
-    alt = re.search(r"!\[([^\]]+)\]\(quad-chart\.svg\)", QUAD_CHART_MD.read_text())
+    alt = re.search(r"!\[([^\]]+)\]\(quad-chart\.svg\)", QUAD_CHART_MD.read_text(encoding="utf-8"))
     assert alt and len(alt.group(1).split()) >= 12, "alt text says what the chart shows"

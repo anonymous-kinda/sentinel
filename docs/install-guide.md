@@ -19,6 +19,7 @@ These files cross the gap together, through your site's software approval proces
 | `verify_signature.sh` | The verifier, from `deploy/bundle/verify_signature.sh` |
 | `cosign` | The cosign binary for the host's architecture, pinned in `deploy/tools.lock` |
 | `site.pub` | Only if your site countersigns software with its own key |
+| `elements.json` | Public element sets (CelesTrak OMM JSON), if this node screens or computes passes itself. The bundle does not carry them. |
 
 ## 2. Verify offline, before unpacking anything
 
@@ -71,15 +72,18 @@ Edit `/opt/sentinel/sentinel.env`:
 | `SENTINEL_NODE_ID` | This node's name. The default is the host name. |
 | `SENTINEL_HUB_ID` | On an edge: the hub's node id. |
 | `SENTINEL_MARKING` | Your site's classification marking, exactly as the banner must show it. Any marking that does not start with UNCLASSIFIED blocks hosted AI. |
-| `SENTINEL_READ_ONLY` | `1` for a display-only node: no CDM uploads and no operator writes. |
+| `SENTINEL_READ_ONLY` | `1` for a display-only node: no CDM uploads, no screening, no operator writes. |
 | `SENTINEL_AI` | `0` turns the assistant off. Left on, it runs local rules and templates only. The bundle carries no hosted AI libraries, and `SENTINEL_AI_CLOUD` stays `0`. |
 | `SENTINEL_EXERCISE` | `0` stops the scripted exercise scenario. |
 | `SENTINEL_LIBRARY` | Leave at `1`: it loads NASA's reference events, which the Validation tab and the smoke test use. |
+| `SENTINEL_ELEMENTS` | The path of the element-set file you brought across. A hub or standalone node needs it to screen or compute passes. An edge normally gets its element sets from its hub; an edge with no hub link can be given a file the same way. Without it, the log says `Element snapshot missing` and screening answers `404 UNKNOWN_PRIMARY`. |
+| `SENTINEL_SYNC_ELEMENTS` | On a hub: `catalog` (the default) offers edges only the imaging catalog's element sets that the pass module uses. `all` offers every set it holds and costs link time. |
 
 **Where data comes from.**
 
-- *CDMs:* upload each CCSDS CDM file with `curl -s --data-binary @FILE.cdm http://127.0.0.1:8000/api/ingest/cdm`. The reply is `201` when accepted and `422` when rejected with a named reason. An edge also receives CDMs from its hub.
-- *Element sets:* bring a CelesTrak-format OMM JSON file across like any other data. Screen against it with `sentinel screen --primary NORAD_ID --elements FILE.json`, which gives geometry only and never a Pc. The public snapshot is in the source tree (`fixtures/omm/`), not in the bundle. When the edge-local pass service lands, an edge will also pull element sets from its hub (verify then).
+- *CDMs:* upload each CCSDS CDM file with `curl -s --data-binary @FILE.cdm http://127.0.0.1:8000/api/ingest/cdm`. The reply is `201` when accepted, `200` for a CDM the node already holds, and `422` when rejected with a named reason. An edge also receives CDMs from its hub.
+- *Element sets:* from `SENTINEL_ELEMENTS`, or from the hub. Screening gives geometry only and never a Pc: use the console's API (`POST /api/screening`, see [the screening ICD](icd/screening-api.md)) or `/opt/sentinel/venv/bin/sentinel screen --primary 41599 --elements /opt/sentinel/elements.json`.
+- *A ground unit's position:* set it on the edge that serves the unit, in the Passes tab. It stays on that node, in one file readable only by the service, and is never sent to the hub ([the passes ICD](icd/passes-api.md)).
 
 **Hub and edge.** Each node runs its own `nats-server`. The bundle ships the binary (`/opt/sentinel/bin/nats-server`), but not its configuration or a service unit. Render `deploy/nats/hub.conf.tmpl` or `deploy/nats/edge.conf.tmpl` from the source tree, run it as its own service, and set `SENTINEL_NATS_URL=nats://127.0.0.1:<client port>`. This step is not scripted yet; only the test harness (`harness/cluster.py`) has exercised it. The leaf link is not encrypted: configure TLS in the template before connecting a real link. Each node writes its public key to `/opt/sentinel/var/keys/<node-id>.pub` on first start. Merge every node's key into one JSON file and point `SENTINEL_TRUST_FILE` at it on each node. Without it, a node will not accept another node's decisions.
 

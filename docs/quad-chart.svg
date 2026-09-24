@@ -1,0 +1,164 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="11in" height="8.5in" viewBox="0 0 1100 850" role="img" aria-labelledby="qc-title qc-desc">
+  <title id="qc-title">Sentinel capability quad chart</title>
+  <desc id="qc-desc">One-page chart in four quadrants. Operational capability: a hub and a forward edge node joined by a measured leaf link, each serving its own console. Technical approach and discriminators: open standards at every seam, an honest risk engine, priority sync, AI that cannot compute, and an offline-verifiable supply chain. Status and milestones: what is built, partly built and open. Evidence and next steps: measured results from the generated reports, the commands that reproduce them, what fielding needs, and the demo hub's cost.</desc>
+  <defs>
+    <style>
+      .t { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; fill: #1b1b1b; }
+      .m { font-family: ui-monospace, Menlo, Consolas, 'DejaVu Sans Mono', monospace; font-size: 13px; fill: #1b1b1b; }
+      .title { font-size: 26px; font-weight: 700; }
+      .sub { font-size: 14px; fill: #52514e; }
+      .qt { font-size: 18px; font-weight: 700; fill: #12304f; }
+      .h { font-size: 15px; font-weight: 700; fill: #12304f; }
+      .b { font-size: 14px; }
+      .s { font-size: 13px; fill: #52514e; }
+      .n { font-size: 16px; font-weight: 700; fill: #12304f; }
+      .chip { font-size: 13px; font-weight: 700; }
+      .quad { fill: #ffffff; stroke: #b9b7ae; stroke-width: 1.5; }
+      .band { fill: #e9eef5; }
+      .node { fill: #f4f6f9; stroke: #12304f; stroke-width: 1.5; }
+      .link { stroke: #12304f; stroke-width: 2; fill: none; }
+      .built { fill: #e3f4e3; stroke: #0ca30c; }
+      .built-t { fill: #0b5d0b; }
+      .partial { fill: #fff3d6; stroke: #c98500; }
+      .partial-t { fill: #6b4a00; }
+      .open { fill: #fbe4e4; stroke: #d03b3b; }
+      .open-t { fill: #8a1f1f; }
+    </style>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#12304f"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1100" height="850" fill="#ffffff"/>
+
+  <!-- Header -->
+  <text class="t title" x="24" y="50">Sentinel: conjunction assessment that works when the link does not</text>
+  <text class="t sub" x="24" y="76">Capability quad chart · open-source demonstration, not fielded, accredited or endorsed · exercise and published NASA data only</text>
+
+  <!-- Quadrant 1: operational capability -->
+  <rect class="quad" x="24" y="96" width="520" height="348" rx="6"/>
+  <rect class="band" x="25" y="97" width="518" height="33" rx="5"/>
+  <text class="t qt" x="38" y="119">Operational capability</text>
+
+  <rect class="node" x="44" y="142" width="170" height="72" rx="6"/>
+  <text class="t n" x="129" y="166" text-anchor="middle">HUB</text>
+  <text class="t s" x="129" y="185" text-anchor="middle">operations center</text>
+  <text class="t s" x="129" y="202" text-anchor="middle">own console, own data</text>
+
+  <rect class="node" x="354" y="142" width="170" height="72" rx="6"/>
+  <text class="t n" x="439" y="166" text-anchor="middle">EDGE</text>
+  <text class="t s" x="439" y="185" text-anchor="middle">forward node</text>
+  <text class="t s" x="439" y="202" text-anchor="middle">works while cut off</text>
+
+  <line class="link" x1="216" y1="170" x2="350" y2="170" marker-end="url(#arrow)"/>
+  <text class="t s" x="284" y="161" text-anchor="middle">CDMs, urgent first</text>
+  <line class="link" x1="218" y1="192" x2="350" y2="192" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  <text class="t s" x="284" y="211" text-anchor="middle">signed decisions</text>
+  <text class="t s" x="284" y="238" text-anchor="middle">Leaf link, measured: CONNECTED · DEGRADED · LIMITED · DENIED</text>
+
+  <text class="t h" x="44" y="268">What it does</text>
+  <text class="t b" x="44" y="290">• Decide before the maneuver commit point: maneuver or not.</text>
+  <text class="t b" x="44" y="310">• Refuses a Pc the method cannot support; flags dilution.</text>
+  <text class="t b" x="44" y="330">• Cut off, each node keeps working; urgent data crosses first.</text>
+  <text class="t b" x="44" y="350">• AI routes and phrases; validated code computes; a person decides.</text>
+  <text class="t b" x="44" y="370">• Ground units see when public imagers can observe them,</text>
+  <text class="t b" x="44" y="388">   and the unit's position never leaves its edge node.</text>
+  <text class="t h" x="44" y="414">For</text>
+  <text class="t b" x="80" y="414">satellite operators, space operations cells, S6/G6 staff.</text>
+
+  <!-- Quadrant 2: technical approach and discriminators -->
+  <rect class="quad" x="556" y="96" width="520" height="348" rx="6"/>
+  <rect class="band" x="557" y="97" width="518" height="33" rx="5"/>
+  <text class="t qt" x="570" y="119">Technical approach and discriminators</text>
+
+  <text class="t h" x="570" y="152">Approach</text>
+  <text class="t b" x="570" y="173">• CCSDS standards at every seam: CDM, OMM, OEM.</text>
+  <text class="t b" x="570" y="192">• Foster-Estes 2D Pc ported from NASA CARA, worst-case</text>
+  <text class="t b" x="570" y="210">   Pc and dilution flag; named refusals, never a zero.</text>
+  <text class="t b" x="570" y="229">• NATS leaf links; priority pull, summaries first; operator</text>
+  <text class="t b" x="570" y="247">   data merged without loss; decisions signed, hash-chained.</text>
+  <text class="t b" x="570" y="266">• AI tier set by measured link, marking and opt-in; any</text>
+  <text class="t b" x="570" y="284">   unsupported number withheld; no code path to the maths.</text>
+  <text class="t b" x="570" y="303">• Bundle signed and verified offline before unpacking;</text>
+  <text class="t b" x="570" y="321">   SBOMs; vulnerability gate with reviewed VEX; SLSA Build L2.</text>
+
+  <text class="t h" x="570" y="348">What alternatives often get wrong</text>
+  <text class="t b" x="570" y="369">• A Pc printed from element sets, or a refusal shown as zero.</text>
+  <text class="t b" x="570" y="388">• A low Pc read as safety, even when it is diluted.</text>
+  <text class="t b" x="570" y="407">• Last writer wins: an operator's edit silently lost.</text>
+  <text class="t b" x="570" y="426">• A hosted-only tool, or an AI that states numbers.</text>
+
+  <!-- Quadrant 3: status and milestones -->
+  <rect class="quad" x="24" y="456" width="520" height="348" rx="6"/>
+  <rect class="band" x="25" y="457" width="518" height="33" rx="5"/>
+  <text class="t qt" x="38" y="479">Status and milestones</text>
+
+  <rect class="built" x="38" y="501" width="78" height="21" rx="4"/>
+  <text class="t chip built-t" x="77" y="516" text-anchor="middle">BUILT</text>
+  <text class="t b" x="126" y="516">Risk engine, checked against 53 NASA CARA events</text>
+
+  <rect class="built" x="38" y="529" width="78" height="21" rx="4"/>
+  <text class="t chip built-t" x="77" y="544" text-anchor="middle">BUILT</text>
+  <text class="t b" x="126" y="544">Operator console, offline globe, same-origin policy</text>
+
+  <rect class="built" x="38" y="557" width="78" height="21" rx="4"/>
+  <text class="t chip built-t" x="77" y="572" text-anchor="middle">BUILT</text>
+  <text class="t b" x="126" y="572">Hub/edge sync: 6 DDIL scenarios pass on real processes</text>
+
+  <rect class="built" x="38" y="585" width="78" height="21" rx="4"/>
+  <text class="t chip built-t" x="77" y="600" text-anchor="middle">BUILT</text>
+  <text class="t b" x="126" y="600">AI decision support; routing eval of the local tier</text>
+
+  <rect class="built" x="38" y="613" width="78" height="21" rx="4"/>
+  <text class="t chip built-t" x="77" y="628" text-anchor="middle">BUILT</text>
+  <text class="t b" x="126" y="628">Pass module at the edge; OPSEC scenario 10 of 10</text>
+
+  <rect class="built" x="38" y="641" width="78" height="21" rx="4"/>
+  <text class="t chip built-t" x="77" y="656" text-anchor="middle">BUILT</text>
+  <text class="t b" x="126" y="656">Signed bundle, offline verify, SBOMs, vulnerability gate</text>
+
+  <rect class="partial" x="38" y="669" width="78" height="21" rx="4"/>
+  <text class="t chip partial-t" x="77" y="684" text-anchor="middle">PARTIAL</text>
+  <text class="t b" x="126" y="684">Requirement trace: 53 of 54 verified</text>
+
+  <rect class="partial" x="38" y="697" width="78" height="21" rx="4"/>
+  <text class="t chip partial-t" x="77" y="712" text-anchor="middle">PARTIAL</text>
+  <text class="t b" x="126" y="712">OSCAL: 9 of 37 controls implemented, 28 partial</text>
+
+  <rect class="open" x="38" y="725" width="78" height="21" rx="4"/>
+  <text class="t chip open-t" x="77" y="740" text-anchor="middle">OPEN</text>
+  <text class="t b" x="126" y="740">First signed release; CI on a hosted service</text>
+
+  <rect class="open" x="38" y="753" width="78" height="21" rx="4"/>
+  <text class="t chip open-t" x="77" y="768" text-anchor="middle">OPEN</text>
+  <text class="t b" x="126" y="768">CDM feed, operator login, leaf-link TLS, an ATO</text>
+
+  <!-- Quadrant 4: evidence and next steps (in place of cost) -->
+  <rect class="quad" x="556" y="456" width="520" height="348" rx="6"/>
+  <rect class="band" x="557" y="457" width="518" height="33" rx="5"/>
+  <text class="t qt" x="570" y="479">Evidence and next steps</text>
+
+  <text class="t h" x="570" y="514">Measured, from the generated reports</text>
+  <text class="t b" x="570" y="535">• Pc vs NASA CARA: 53 events, worst relative error 1.5e-8</text>
+  <text class="t b" x="570" y="554">• Refusal gate: all 29 CARA-flagged events refused, 0 missed</text>
+  <text class="t b" x="570" y="573">• Thin link: urgent CDM in 12.1 s by deadline, 46.8 s FIFO</text>
+  <text class="t b" x="570" y="592">• Cut off: edge console p95 2.8 ms; no operator data lost</text>
+  <text class="t b" x="570" y="611">• OPSEC: 179 messages to the hub captured; none held the unit</text>
+
+  <text class="t h" x="570" y="638">Reproduce</text>
+  <text class="m" x="570" y="658">make report</text>
+  <text class="m" x="700" y="658">make ddil</text>
+  <text class="m" x="810" y="658">make opsec</text>
+  <text class="m" x="570" y="677">make airgap-selftest</text>
+  <text class="m" x="760" y="677">make trace</text>
+
+  <text class="t h" x="570" y="704">Next steps to field</text>
+  <text class="t b" x="570" y="724">• Real CDM access; operator authentication (CAC/PIV)</text>
+  <text class="t b" x="570" y="743">• TLS on the leaf link; packaged hub and edge messaging</text>
+  <text class="t b" x="570" y="762">• An authorizing official, a STIG scan, an ATO</text>
+  <text class="t b" x="570" y="786">• Cost: the AWS demo hub, about $17.50/month (docs/deploy-aws.md)</text>
+
+  <!-- Footer -->
+  <text class="t s" x="24" y="826">Every number comes from a generated report in docs/: validation-report.md, ddil-results.md, ai-eval.md and traceability.md.</text>
+  <text class="t s" x="24" y="842">Two exceptions, each with its source: the AWS cost (docs/deploy-aws.md) and the control count (docs/compliance.md).</text>
+</svg>
