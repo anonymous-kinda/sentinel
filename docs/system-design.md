@@ -181,11 +181,11 @@ State-based rather than operation-based CRDTs, because state-based merge tolerat
 
 **Rationale.** Every system claims to prioritise; the question is by what. Ordering by how soon someone has to act, and how badly, is an answer that encodes the mission. Earliest-deadline-first is optimal on a single resource when a feasible schedule exists (Liu & Layland, 1973).
 
-**Answer to the open question.** Summaries measure **≤ 256 bytes** each, asserted in `tests/sync`. At about 8 kbit/s, every event is visible within 3 s.
+**Answer to the open question.** Summaries measure **≤ 256 bytes** each, asserted in `tests/sync`. At about 8 kbit/s, every event was visible as a summary within 5.5 s in the latest run (`docs/ddil-results.md`), with the imaging catalog's element-set summaries sharing the manifest.
 
 Admission control handles the case where the full record can't make it in time. If the link rate measured by the agent cannot deliver a full CDM before its deadline, the event is marked SUMMARY-ONLY rather than spending the link on it. At the bottom of the ladder a summary renders as one voice-readable line.
 
-**Measured.** Same link, same bytes, same 13 records: the most urgent event's full CDM arrives in **5.5 s with EDF vs 38.2 s with FIFO** in the latest run (`docs/ddil-results.md`, generated; about 7× across runs).
+**Measured.** Same link, same bytes, same 13 CDMs: the most urgent event's full CDM arrives in **12.1 s with EDF vs 46.8 s with FIFO** (3.9×) in the latest run (`docs/ddil-results.md`, generated).
 
 ---
 
@@ -245,11 +245,17 @@ Its documented weaknesses are arithmetic, dates and prompt injection, and each i
 
 An event stays HUB-ASSERTED until that comparison passes (VERIFIED), and any disagreement is flagged MISMATCH.
 
-**Why not a JetStream mirror.** A mirror replicates in stream order. That is exactly the FIFO baseline the LIMITED scenario measures at about 7× slower for the record that matters (`docs/ddil-results.md`).
+**Why not a JetStream mirror.** A mirror replicates in stream order. That is exactly the FIFO baseline the LIMITED scenario measures at 3.9× slower for the record that matters in the latest run (`docs/ddil-results.md`).
 
-**Why this also buys modularity.** The pull agent reads only generic fields: id, deadline, consequence and record list. It reaches a mission module only through the `ReferenceRecords` protocol, and `.importlinter` forbids `sync` from importing any mission module. The Army pass module (M3) can reuse it unchanged.
+**Why this also buys modularity.** The pull agent reads only generic fields: id, deadline, consequence and record list. It reaches a mission module only through the `ReferenceRecords` protocol, and `.importlinter` forbids `sync` from importing any mission module. The pass module (M3) does: its element sets travel through the same agent, and `sentinel/sync` is unchanged since M2.
 
 **Consequence.** The hub assigns event identity and the identity travels with the record (`Sentinel-Event-Id`). Updates fetched out of order would otherwise split one event into two.
+
+**Reference data on a thin link (measured in M3).** Sync fetches one record per request/reply, and each record also adds a summary to the priority manifest. In a development run, a hub offering all 167 public element sets it holds pushed DEGRADED convergence past its 180 s bound and LIMITED's FIFO baseline past 200 s.
+
+A hub therefore offers edges only what their missions use: the 38-set imaging catalog (`SENTINEL_SYNC_ELEMENTS=catalog`; `all` to widen). It still holds everything for its own screening.
+
+Even that costs something. In the latest run every event summary arrived at 5.5 s, not sooner, because 38 more summaries ride in the manifest, and the urgent record followed. Two sync changes would remove the cost: batched fetch, and a reference-data class below routine CDMs. They are open question 6, not done, so the generated DDIL numbers describe the code as it is.
 
 ---
 
@@ -279,6 +285,44 @@ The real-process harness surfaced four defaults that would have failed a satelli
 | Ping interval 2 min | A black-holed link took minutes to detect. | `ping_interval: 5s`, `ping_max: 3` |
 
 The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and third fixes were in. It now re-establishes the leaf in about 5 s.
+
+---
+
+### ADR-010 — OPSEC as architecture: a unit's position never leaves its edge node
+
+**Status:** Accepted (2026-09-24).
+
+**Decision.** A ground unit's position, and every pass window and gap computed from it, exist only on the edge node that serves that unit's operator. Four independent layers enforce this:
+1. **Data model.** The unit is not a sync record.
+   - Public element sets flow hub to edge through the unchanged priority agent (ADR-008).
+   - Nothing implements the record interface for the unit or its passes.
+2. **Application.** The only message is the node-scoped `node.<id>.passes.updated`, with no id and no coordinates. The unit is never logged, and error messages never echo a submitted value.
+3. **Storage.** One file, `<var>/unit.json`: mode 0600, replaced atomically, never written to SQLite or the audit log.
+4. **Transport.** The edge's leafnode denies exporting `unit.>`, `passes.>` and `node.>`. So even an application bug stops at the edge's own nats-server.
+
+**Rationale.** The unit's location is the most sensitive fact in the system, and the hub never needs it: pass prediction runs on public element sets the edge already holds. Computing at the edge removes the flow rather than protecting it. The transport permissions make that enforceable as NIST SP 800-53 AC-4 (information flow enforcement).
+
+**Evidence.** The OPSEC scenario in `docs/ddil-results.md` runs real hub and edge processes and captures every message the hub's nats-server carries. It asserts the following:
+- **What the hub never sees:**
+  - No message contains the unit's id or coordinates, in any of the text and binary encodings it checks.
+  - A canary published on `unit.>`, `passes.>` and `node.>` never reaches the hub.
+  - The hub's `/api/passes/unit` is 404.
+  - No hub file holds the unit.
+- **Controls, so none of those negatives is vacuous:**
+  - A harmless canary on an exported subject does reach the hub.
+  - The edge does publish its local event.
+  - The detector does find the unit in the edge's own file.
+- **Element sets did arrive:** they reached the edge through sync.
+
+**Consequences.**
+- A cut-off edge keeps computing from the element sets it holds. As they age the timing pad widens, and after three days they are flagged stale.
+- The hub has no picture of any unit, by design. An aggregate view would need an explicit, reviewed release path.
+- Sharing a unit between edges would need its own decision and a cross-domain guard.
+
+**Rejected.**
+- Computing at the hub and sending windows down: that puts the position on the link and on the hub's disk.
+- Encrypting the position end to end to the hub: the hub still holds it.
+- Leaf permissions alone: they are one configuration line away from a leak.
 
 ---
 
@@ -414,6 +458,7 @@ The recorded output of the Denied scenario is the single most persuasive artifac
 3. Degraded-summary sizing against a realistic link budget (ADR-006).
 4. Whether a local model beats the deterministic floor by enough to justify its footprint at the edge (ADR-007). To be measured with `make ai-eval`, not assumed.
 5. Whether the TraCSS transition changes CDM access mechanics during the build window.
+6. Batched fetch or a reference-data priority class in sync, so public reference data stops competing with urgent CDMs on a thin link (ADR-008). It would be the first change to `sentinel/sync` since M2, made deliberately and measured.
 
 ---
 

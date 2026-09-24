@@ -230,10 +230,6 @@ package SentinelVerification {
     verification <'VC-DDIL-013'> vcNodeLocalEventsStayLocal : SentinelVerification {
         objective { verify nodeLocalEventsStayLocal; }
         @VerificationMethod { kind = VerificationMethodKind::test; }
-        @Planned {
-            milestone = "M3";
-            reason = "leaf permissions deny node.> in deploy/nats/edge.conf.tmpl, but no test yet shows the traffic stays off the link";
-        }
         @Evidence { kind = EvidenceKind::harness; locator = "OPSEC"; }
     }
 
@@ -401,10 +397,6 @@ package SentinelVerification {
     verification <'VC-OPSEC-001'> vcUnitPositionStaysAtEdge : SentinelVerification {
         objective { verify unitPositionStaysAtEdge; }
         @VerificationMethod { kind = VerificationMethodKind::test; }
-        @Planned {
-            milestone = "M3";
-            reason = "leaf permissions deny unit.> and passes.> in deploy/nats/edge.conf.tmpl, but no scenario yet proves the hub never sees them";
-        }
         @Evidence { kind = EvidenceKind::harness; locator = "OPSEC"; }
     }
 
@@ -436,7 +428,6 @@ package SentinelVerification {
     verification <'VC-PASS-004'> vcPassServiceAtEdge : SentinelVerification {
         objective { verify passServiceAtEdge; }
         @VerificationMethod { kind = VerificationMethodKind::test; }
-        @Planned { milestone = "M3"; reason = "the pass service and its edge-local API are not built yet"; }
         @Evidence { kind = EvidenceKind::pytest; locator = "tests/api/test_passes_api.py::test_windows_are_computed_and_served_by_the_edge"; }
     }
 
@@ -464,8 +455,7 @@ package SentinelVerification {
     verification <'VC-SC-003'> vcOscalPackage : SentinelVerification {
         objective { verify oscalPackage; }
         @VerificationMethod { kind = VerificationMethodKind::inspect; }
-        @Planned { milestone = "M4"; reason = "no OSCAL content yet"; }
-        @Evidence { kind = EvidenceKind::ci; locator = "OSCAL validates"; }
+        @Evidence { kind = EvidenceKind::ci; locator = "Test evidence, assessment results and POA&M, trestle validate"; }
     }
 
     verification <'VC-SC-004'> vcReferenceDataUnmodified : SentinelVerification {

@@ -44,4 +44,4 @@ def test_unverified_means_planned_never_forgotten(trace):
 def test_every_area_the_role_names_is_modelled_and_verified_somewhere(trace):
     assert {row.area for row in trace.rows} == AREAS
     verified = {row.area for row in trace.rows if row.status is Status.VERIFIED}
-    assert verified == AREAS - {"OPSEC"}          # OPSEC waits for the M3 harness scenario
+    assert verified == AREAS, "every area has at least one requirement with evidence"

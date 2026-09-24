@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import os
 import pathlib
 import sys
+
+from .passes.element_store import default_snapshot
 
 EXIT_REFUSED = 2
 
@@ -42,12 +43,6 @@ def _exercise_generate(args: argparse.Namespace) -> int:
         (out / item.filename).write_text(item.kvn)
     print(f"wrote {len(generate(epoch))} exercise CDMs to {out}")
     return 0
-
-
-def _default_elements() -> pathlib.Path:
-    """The public CelesTrak snapshot in a source checkout (or under SENTINEL_FIXTURES)."""
-    fixtures = pathlib.Path(os.environ.get("SENTINEL_FIXTURES", pathlib.Path(__file__).resolve().parents[1] / "fixtures"))
-    return fixtures / "omm" / "celestrak-resource-20260924.json"
 
 
 def _utc(text: str) -> dt.datetime:
@@ -107,7 +102,7 @@ def register(sub) -> None:
     s.add_argument("--primary", type=int, required=True, help="NORAD catalog number of the primary")
     s.add_argument("--hours", type=float, default=24.0, help="window length (default 24)")
     s.add_argument("--threshold-km", type=float, default=5.0, help="miss-distance threshold (default 5)")
-    s.add_argument("--elements", default=str(_default_elements()), help="CelesTrak OMM JSON array")
+    s.add_argument("--elements", default=str(default_snapshot()), help="CelesTrak OMM JSON array")
     s.add_argument("--start", default="now", help="ISO-8601 window start, UTC, or 'now'")
     s.add_argument("--out", default=None, help="write each approach as a DERIVED CDM (KVN) into this directory")
     s.set_defaults(func=_screen)
