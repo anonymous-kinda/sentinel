@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+from collections.abc import Awaitable, Callable
 
 from ..clock import Clock
 from ..triage import Consequence
@@ -25,10 +26,13 @@ def item_id(norad_id: int) -> str:
 
 
 class ElementRecords:
-    def __init__(self, store: ElementStore, clock: Clock):
+    def __init__(self, store: ElementStore, clock: Clock, on_accepted: Callable[[], Awaitable[None]] | None = None):
+        """`on_accepted` is awaited after a fetched element set changes the
+        store, so the node can tell its console the pass inputs moved."""
         self.store = store
         self.clock = clock
         self.remote: dict[str, dict] = {}
+        self._on_accepted = on_accepted
 
     def manifest(self) -> list[dict]:
         out = []
@@ -67,4 +71,6 @@ class ElementRecords:
             result = self.store.add(raw, source)
         except ElementRejected as exc:
             return {"status": "rejected", "code": exc.code, "sha256": hashlib.sha256(raw).hexdigest(), "verification": None}
+        if result.status == "accepted" and self._on_accepted is not None:
+            await self._on_accepted()
         return {"status": result.status, "sha256": result.sha256, "verification": None}

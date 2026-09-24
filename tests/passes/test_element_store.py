@@ -12,7 +12,12 @@ import pathlib
 import pytest
 
 from sentinel.clock import FixedClock
-from sentinel.passes.element_store import ElementRejected, ElementStore, canonical_bytes
+from sentinel.passes.element_store import (
+    ElementRejected,
+    ElementStore,
+    canonical_bytes,
+    default_snapshot,
+)
 from sentinel.passes.sync_adapter import ElementRecords
 
 SNAPSHOT = pathlib.Path(__file__).resolve().parents[2] / "fixtures" / "omm" / "celestrak-resource-20260924.json"
@@ -103,3 +108,49 @@ def test_a_rejected_record_is_reported_not_raised_to_the_sync_agent():
     edge = ElementRecords(ElementStore(), FixedClock(NOW))
     outcome = asyncio.run(edge.ingest(b"{}", "hub", "REAL", "omm:1"))
     assert outcome["status"] == "rejected" and outcome["code"] == "MISSING_FIELD"
+
+
+# ------------------------------------------------------- node service support
+def test_the_version_moves_only_when_an_element_set_is_accepted():
+    s = ElementStore()
+    assert s.version == 0
+    obj = wv3_object()
+    s.add(canonical_bytes(obj), "test")
+    assert s.version == 1
+    s.add(canonical_bytes(obj), "test")  # duplicate
+    s.add(canonical_bytes({**obj, "EPOCH": "2026-09-20T00:00:00.000000"}), "test")  # superseded
+    with pytest.raises(ElementRejected):
+        s.add(b"{}", "test")
+    assert s.version == 1, "a cache keyed on the version stays valid until the data changes"
+
+
+def test_loading_a_snapshot_counts_what_was_accepted_and_what_was_rejected(tmp_path):
+    good = json.loads(SNAPSHOT.read_text())
+    bad = {**good[0], "MEAN_MOTION": "fast"}
+    path = tmp_path / "snapshot.json"
+    path.write_text(json.dumps([*good, bad]))
+    loaded = ElementStore().load_snapshot(path, "test")
+    assert (loaded.accepted, loaded.rejected) == (167, 1)
+
+
+def test_the_vendored_snapshot_is_found_in_a_checkout_or_under_sentinel_fixtures(monkeypatch, tmp_path):
+    monkeypatch.delenv("SENTINEL_FIXTURES", raising=False)
+    assert default_snapshot() == SNAPSHOT
+    monkeypatch.setenv("SENTINEL_FIXTURES", str(tmp_path))
+    assert default_snapshot() == tmp_path / "omm" / SNAPSHOT.name
+
+
+def test_an_accepted_record_tells_the_node_and_nothing_else_does(store):
+    calls = []
+
+    async def changed():
+        calls.append("changed")
+
+    hub = ElementRecords(store, FixedClock(NOW))
+    edge = ElementRecords(ElementStore(), FixedClock(NOW), on_accepted=changed)
+    [entry] = [m for m in hub.manifest() if m["e"] == f"omm:{WV3}"]
+    raw, _ = hub.get(entry["c"][0][0])
+    asyncio.run(edge.ingest(raw, "hub", "REAL", f"omm:{WV3}"))
+    asyncio.run(edge.ingest(raw, "hub", "REAL", f"omm:{WV3}"))  # duplicate
+    asyncio.run(edge.ingest(b"{}", "hub", "REAL", "omm:1"))     # rejected
+    assert calls == ["changed"]
