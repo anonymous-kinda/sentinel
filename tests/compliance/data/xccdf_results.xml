@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Shape of the XCCDF results that oscap xccdf eval writes for the DISA SCAP
+     benchmark, cut down to six rules. Rule ids and STIG ids are real (V1R6). -->
+<Benchmark xmlns="http://checklists.nist.gov/xccdf/1.2" id="xccdf_mil.disa.stig_benchmark_CAN_Ubuntu_24-04_STIG" resolved="1" xml:lang="en">
+  <status>accepted</status>
+  <title>Canonical Ubuntu 24.04 LTS Security Technical Implementation Guide</title>
+  <version>005</version>
+  <Rule id="xccdf_mil.disa.stig_rule_SV-270647r1066430_rule" severity="high"><version>UBTU-24-100030</version><title>telnet</title></Rule>
+  <Rule id="xccdf_mil.disa.stig_rule_SV-270667r1067107_rule" severity="medium"><version>UBTU-24-100820</version><title>ciphers</title></Rule>
+  <Rule id="xccdf_mil.disa.stig_rule_SV-270691r1066562_rule" severity="medium"><version>UBTU-24-200640</version><title>banner</title></Rule>
+  <Rule id="xccdf_mil.disa.stig_rule_SV-270713r1066628_rule" severity="high"><version>UBTU-24-300027</version><title>blank passwords</title></Rule>
+  <Rule id="xccdf_mil.disa.stig_rule_SV-270678r1101791_rule" severity="medium"><version>UBTU-24-200020</version><title>graphical lock</title></Rule>
+  <TestResult id="xccdf_org.open-scap_testresult_xccdf_mil.disa.stig_profile_MAC-2_Sensitive" start-time="2026-09-23T10:00:00+00:00" end-time="2026-09-23T10:02:30+00:00" version="005">
+    <benchmark href="#xccdf_mil.disa.stig_benchmark_CAN_Ubuntu_24-04_STIG" id="xccdf_mil.disa.stig_benchmark_CAN_Ubuntu_24-04_STIG"/>
+    <profile idref="xccdf_mil.disa.stig_profile_MAC-2_Sensitive"/>
+    <target>sentinel-hub</target>
+    <rule-result idref="xccdf_mil.disa.stig_rule_SV-270647r1066430_rule" role="full" severity="high" weight="10.0"><result>pass</result></rule-result>
+    <rule-result idref="xccdf_mil.disa.stig_rule_SV-270667r1067107_rule" role="full" severity="medium" weight="10.0"><result>fail</result></rule-result>
+    <rule-result idref="xccdf_mil.disa.stig_rule_SV-270691r1066562_rule" role="full" severity="medium" weight="10.0"><result>fail</result></rule-result>
+    <rule-result idref="xccdf_mil.disa.stig_rule_SV-270713r1066628_rule" role="full" severity="high" weight="10.0"><result>fail</result></rule-result>
+    <rule-result idref="xccdf_mil.disa.stig_rule_SV-270678r1101791_rule" role="full" severity="medium" weight="10.0"><result>notapplicable</result></rule-result>
+    <rule-result idref="xccdf_mil.disa.stig_rule_SV-270746r1155242_rule" role="full" severity="medium" weight="10.0"><result>error</result></rule-result>
+  </TestResult>
+</Benchmark>

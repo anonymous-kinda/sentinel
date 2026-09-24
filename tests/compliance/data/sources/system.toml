@@ -1,0 +1,77 @@
+# Fixture: a two-component system, enough to exercise every builder.
+[document]
+version = "0.1.0"
+last_modified = 2026-09-23T00:00:00Z
+
+[system]
+name = "Sentinel"
+short_name = "sentinel"
+description = "A conjunction assessment decision aid."
+state = "under-development"
+state_remarks = "Draft. No authorization has been sought or granted."
+authorization_boundary = "One node: the software and its host."
+
+[system.impact]
+confidentiality = "fips-199-low"
+integrity = "fips-199-moderate"
+availability = "fips-199-moderate"
+
+[[information_type]]
+title = "Conjunction data"
+description = "CDMs and the assessments computed from them."
+confidentiality = "fips-199-low"
+integrity = "fips-199-moderate"
+availability = "fips-199-moderate"
+
+[[role]]
+id = "maintainer"
+title = "Maintainer"
+
+[[role]]
+id = "operator"
+title = "Operator"
+
+[[party]]
+key = "maintainer"
+type = "organization"
+name = "Sentinel maintainers"
+roles = ["maintainer"]
+
+[[user]]
+key = "operator"
+title = "Satellite operator"
+description = "Triages conjunctions and records decisions."
+roles = ["operator"]
+
+[[component]]
+key = "node"
+type = "software"
+title = "Sentinel node software"
+description = "The node: engine, API, sync."
+state = "under-development"
+
+[[component]]
+key = "host"
+type = "software"
+title = "Node host baseline"
+description = "Ubuntu 24.04 LTS hardened by Ansible."
+state = "under-development"
+
+# The three kinds of evidence the generator reads. Keys are fixed: they name
+# the reader (JUnit XML, harness JSON, XCCDF results) behind each method.
+[[assessment]]
+key = "ladder"
+title = "Test ladder (pytest)"
+description = "The full pytest suite with the network disabled; its JUnit XML is the evidence."
+ci = ["ci.yml#python"]
+
+[[assessment]]
+key = "harness"
+title = "DDIL harness"
+description = "Real two-node scenarios over a shaped link; one JSON result per scenario."
+ci = ["harness.yml#scenario"]
+
+[[assessment]]
+key = "stig-scan"
+title = "OpenSCAP scan against the DISA STIG benchmark"
+description = "Run on the host by the STIG role; XCCDF results."

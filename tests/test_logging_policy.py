@@ -1,4 +1,4 @@
-"""Policy: every log call in sentinel/ uses a constant message.
+"""Policy: every log call in sentinel/ and compliance/ uses a constant message.
 
 Parses the source rather than trusting review. A logging call whose first
 argument is an f-string, a %-format string, a concatenation or a variable
@@ -8,14 +8,15 @@ puts high-cardinality values into the message and fails this test.
 import ast
 import pathlib
 
-SRC = pathlib.Path(__file__).resolve().parent.parent / "sentinel"
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+PACKAGES = (ROOT / "sentinel", ROOT / "compliance")
 LEVELS = {"debug", "info", "warning", "error", "exception", "critical"}
 LOGGER_NAMES = {"log", "logger", "_log"}
 
 
 def offending_calls() -> list[str]:
     found = []
-    for path in SRC.rglob("*.py"):
+    for path in (p for package in PACKAGES for p in package.rglob("*.py")):
         tree = ast.parse(path.read_text(), filename=str(path))
         for node in ast.walk(tree):
             if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
@@ -26,7 +27,7 @@ def offending_calls() -> list[str]:
             first = node.args[0] if node.args else None
             constant = isinstance(first, ast.Constant) and isinstance(first.value, str)
             if not constant or "%" in first.value or len(node.args) > 1:
-                found.append(f"{path.relative_to(SRC.parent)}:{node.lineno}")
+                found.append(f"{path.relative_to(ROOT)}:{node.lineno}")
     return found
 
 

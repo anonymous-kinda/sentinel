@@ -1,0 +1,12 @@
+{
+ "scenario": "DENIED",
+ "passed": true,
+ "assertions": [
+  {"name": "edge console stays available while denied (p95 < 200 ms)", "passed": true, "detail": "p95 2.7 ms over 40 requests"},
+  {"name": "the edge's offline decision is signed and verified at the hub", "passed": true, "detail": ""}
+ ],
+ "metrics": {"edge_api_p95_ms_while_denied": 2.7},
+ "notes": [],
+ "duration_s": 61.2,
+ "ran_at": "2026-09-24T02:39:10.000000+00:00"
+}
