@@ -55,3 +55,9 @@ demo-local: web tools  ## hub on :8000 and edge on :8001 over an emulated link (
 ddil:  ## run all four DDIL scenarios on a real two-node cluster, then write docs/ddil-results.md
 	$(UV) run python -m harness.run all
 	$(UV) run python -m harness.report
+
+# --- M3 pass engine -----------------------------------------------------------
+.PHONY: bench-passes
+bench-passes:  ## time the pass engine: whole imaging catalog, 24 h, exercise unit
+	$(UV) run python scripts/bench_passes.py
+# --- end M3 pass engine -------------------------------------------------------
