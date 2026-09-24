@@ -1,0 +1,2872 @@
+{
+  "plan-of-action-and-milestones": {
+    "uuid": "1890d1e8-ca0f-5bf6-83a3-a4248bf37bb2",
+    "metadata": {
+      "title": "Sentinel plan of action and milestones",
+      "last-modified": "2026-09-24T07:21:40Z",
+      "version": "0.1.0",
+      "oscal-version": "1.2.1"
+    },
+    "import-ssp": {
+      "href": "trestle://system-security-plans/sentinel/system-security-plan.json"
+    },
+    "system-id": {
+      "identifier-type": "https://ietf.org/rfc/rfc4122",
+      "id": "764a4214-80d9-51b6-b147-7e3ea43df167"
+    },
+    "risks": [
+      {
+        "uuid": "88e46d96-1873-56e9-a329-327da89329db",
+        "title": "Host STIG baseline not verified by a scan",
+        "description": "The STIG role applies 55 of the 194 rules in Canonical Ubuntu 24.04 LTS Security Technical Implementation Guide V1R6; 25 are documented deviations and 8 are not applicable. No scan results were supplied, so none of this is verified on a host, and the remaining 106 rules are unassessed.",
+        "statement": "Host hardening is configured as code but not yet shown to be in effect.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "ba2fabb1-cabf-5e71-92a1-221be35afe2c",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Run deploy/ansible/roles/stig with its scan enabled, convert the results to a checklist with the MITRE SAF CLI, and pass the XCCDF results to the generator (--xccdf)."
+          }
+        ]
+      },
+      {
+        "uuid": "41f0e124-fced-5697-bad0-27980a71f097",
+        "title": "AC-2 (Sentinel node software): planned",
+        "description": "Put an authenticating proxy (OIDC, or mTLS with CAC/PIV) in front of every node that sets X-Sentinel-Operator from the verified identity and strips any client-supplied value; manage operator accounts in the organization's identity provider. The current Caddyfile does neither.",
+        "statement": "Stated in the SSP as planned: The node has no user accounts. It records the operator identity that the front proxy asserts in the X-Sentinel-Operator header (sentinel/api/identity.py) and does not authenticate it.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "f7882851-a5c0-5a77-b42e-36e618074618",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Put an authenticating proxy (OIDC, or mTLS with CAC/PIV) in front of every node that sets X-Sentinel-Operator from the verified identity and strips any client-supplied value; manage operator accounts in the organization's identity provider. The current Caddyfile does neither."
+          }
+        ]
+      },
+      {
+        "uuid": "aaa3db08-dcf7-5477-84c2-6d6414c43f2f",
+        "title": "AC-2 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Apply the STIG role to the hub and verify it with the OpenSCAP scan (stig_scan: true).",
+        "statement": "Stated in the SSP as partial: The installer creates a system account, sentinel, with no login shell, and the service runs as it (deploy/bundle/install.sh, deploy/systemd/sentinel.service). Root cannot log in over SSH (baseline role) or directly (STIG role, UBTU-24-400110); accounts are disabled 35 days after password expiry (UBTU-24-200260); each account is limited to 10 sessions (UBTU-24-200000); changes to account files are audited (UBTU-24-200280 to UBTU-24-200320).",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "4b8688e7-e7b7-5295-8c29-dc47104e2543",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Apply the STIG role to the hub and verify it with the OpenSCAP scan (stig_scan: true)."
+          }
+        ]
+      },
+      {
+        "uuid": "d4b85231-abab-5a1a-b28a-b209a52d80c7",
+        "title": "AC-3 (Sentinel node software): partial",
+        "description": "Test the read-only refusal on the decision, note and annotation endpoints; authorize by role once operators are authenticated (IA-2), for example so that only a designated role may record a MANEUVER decision or resolve a conflict.",
+        "statement": "Stated in the SSP as partial: A read-only node (SENTINEL_READ_ONLY, set on the public hub) answers reads and refuses writes with 403: CDM ingest and AI draft confirmation are tested; the decision, note and annotation endpoints call the same guard (sentinel/api/app.py). A replica merges decision-log entries only from nodes in its trust store; others are rejected before merge and recorded. There is no per-operator authorization: any identity the proxy asserts may write.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "59bad9c3-80f1-5984-9502-5884820f553f",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Test the read-only refusal on the decision, note and annotation endpoints; authorize by role once operators are authenticated (IA-2), for example so that only a designated role may record a MANEUVER decision or resolve a conflict."
+          }
+        ]
+      },
+      {
+        "uuid": "6d14a3ba-e082-54bd-8d8e-f46eeb70ed3e",
+        "title": "AC-3 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Verify the sandbox on a deployed host (systemd-analyze security) and apply the STIG role.",
+        "statement": "Stated in the SSP as partial: The service runs sandboxed by systemd: read-only filesystem except its own var directory, no new privileges, no capabilities, restricted address families and system calls, UMask 0077. The node's signing key is written readable only by its owner (mode 0600, sentinel/crdt/signing.py). AppArmor is installed and enabled (STIG role, UBTU-24-100500, UBTU-24-100510).",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "97a3e9c6-4496-5dba-94ea-5dad91d73bab",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Verify the sandbox on a deployed host (systemd-analyze security) and apply the STIG role."
+          }
+        ]
+      },
+      {
+        "uuid": "48adca3c-d5c8-552a-b279-29b2603177ba",
+        "title": "AC-4 (Node message bus (nats-server)): partial",
+        "description": "Add a harness scenario that publishes on unit.> and passes.> at the edge and asserts nothing arrives at the hub, so the denial is shown on a real leaf link and not only in the configuration. The pass module that publishes those subjects is still in development.",
+        "statement": "Stated in the SSP as partial: OPSEC by configuration: the edge's leafnode remote denies exporting unit.>, passes.> and node.>, and denies importing node.> (deploy/nats/edge.conf.tmpl), so a ground unit's position, its pass windows and the edge's console events cannot cross to the hub through the bus. Console events use node-scoped subjects (sentinel/bus/subjects.py, ADR-009). Every DDIL harness scenario runs with this configuration.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "b034878f-16eb-52aa-bae3-05941e950077",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Add a harness scenario that publishes on unit.> and passes.> at the edge and asserts nothing arrives at the hub, so the denial is shown on a real leaf link and not only in the configuration. The pass module that publishes those subjects is still in development."
+          }
+        ]
+      },
+      {
+        "uuid": "b3135456-6fc7-5210-9a17-459e41ed1f61",
+        "title": "AC-6 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Verify on a deployed host; the automation account's NOPASSWD sudo is a STIG deviation (UBTU-24-300020).",
+        "statement": "Stated in the SSP as partial: The node runs as the unprivileged sentinel account with no capabilities and no new privileges, bound to loopback behind Caddy (deploy/systemd/sentinel.service).",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "c7987d97-afa6-5383-b2c3-e54111a29d6d",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Verify on a deployed host; the automation account's NOPASSWD sudo is a STIG deviation (UBTU-24-300020)."
+          }
+        ]
+      },
+      {
+        "uuid": "93e0b1dc-8746-5fb9-b6e3-162c170d0256",
+        "title": "AC-6 (AWS cloud hub infrastructure): partial",
+        "description": "Confirm the deployed role's effective permissions (IAM Access Analyzer) when the hub is deployed.",
+        "statement": "Stated in the SSP as partial: The hub's instance role carries one policy, AmazonSSMManagedInstanceCore (Session Manager): no S3, no secrets, no administrative access.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "8a0f1cff-e027-5d29-b5c9-749e12608976",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Confirm the deployed role's effective permissions (IAM Access Analyzer) when the hub is deployed."
+          }
+        ]
+      },
+      {
+        "uuid": "89a950e3-165f-5f47-a427-dd8397ba6d03",
+        "title": "AC-17 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Apply the STIG role to the hub and verify it with the OpenSCAP scan.",
+        "statement": "Stated in the SSP as partial: SSH accepts public keys only (password and keyboard-interactive authentication off), refuses root, allows three authentication attempts and drops idle sessions after 300 seconds (baseline role). The STIG role restricts SSH to DISA's FIPS 140-3 approved ciphers, MACs and key exchange algorithms (UBTU-24-100820, UBTU-24-100830, UBTU-24-100840) and rate-limits new SSH connections in the host firewall.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "625d01e8-a13d-5544-a0f1-e5b99b276251",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Apply the STIG role to the hub and verify it with the OpenSCAP scan."
+          }
+        ]
+      },
+      {
+        "uuid": "9c0370b7-2cb3-57c6-a05e-a47d808983aa",
+        "title": "AC-17 (AWS cloud hub infrastructure): partial",
+        "description": "Verify the deployed security group and Session Manager configuration when the hub is deployed.",
+        "statement": "Stated in the SSP as partial: SSH (22) is open only to admin_cidr, and the Terraform variable rejects 0.0.0.0/0. AWS Session Manager is the break-glass path; IMDSv2 is required.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "98691164-6e1b-5e3d-a5a0-ac9a39ab45c4",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Verify the deployed security group and Session Manager configuration when the hub is deployed."
+          }
+        ]
+      },
+      {
+        "uuid": "c7a87094-070e-5dc5-b5ed-d2ae093ca08e",
+        "title": "AU-2 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Apply the STIG role and scan; review the selected event types with the ISSO, which AU-2 also asks for.",
+        "statement": "Stated in the SSP as partial: auditd records changes to account files, use of su and sudo, changes to sudoers and kernel module loading and unloading, from boot (audit=1), with the rules immutable until reboot (STIG role; the rules are taken verbatim from DISA's fix text).",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "420729f1-ab57-5043-b278-3cc727557af7",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Apply the STIG role and scan; review the selected event types with the ISSO, which AU-2 also asks for."
+          }
+        ]
+      },
+      {
+        "uuid": "cd24ef20-f96e-5da2-a267-0629fb517bbb",
+        "title": "AU-6 (Sentinel node software): partial",
+        "description": "Forward the structured logs and audit records to a collector when the link allows, and alert on a failed chain verification instead of reporting it only when asked.",
+        "statement": "Stated in the SSP as partial: The node verifies its AI audit chain on request (GET /api/ai/audit/verify) and names the first bad line; it verifies every decision-log signature on merge and shows the result per entry; it surfaces for review what replication cannot decide: concurrent edits (CONFLICT) and decisions made against a CDM that has since been superseded (REVIEW REQUIRED).",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "416eba89-1b48-512c-b346-ced5f18993a9",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Forward the structured logs and audit records to a collector when the link allows, and alert on a failed chain verification instead of reporting it only when asked."
+          }
+        ]
+      },
+      {
+        "uuid": "60342a0e-aa89-5932-a302-13a8fbefc338",
+        "title": "AU-6 (Sentinel program: organizational responsibilities): planned",
+        "description": "Define the review cadence, the reviewers and the reporting path with the ISSO.",
+        "statement": "Stated in the SSP as planned: Who reviews audit records, how often, and to whom findings are reported are not defined.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "afc8f08e-ee5d-58a8-93ae-ff0501dc2b2c",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Define the review cadence, the reviewers and the reporting path with the ISSO."
+          }
+        ]
+      },
+      {
+        "uuid": "c79ae38c-690a-5e04-9b96-4af83522d0b7",
+        "title": "AU-9 (Sentinel node software): partial",
+        "description": "Anchor the AI audit chain's head outside the file (in the signed decision log, or at the hub on reconnect) so truncation is detectable, and alert on a failed verification.",
+        "statement": "Stated in the SSP as partial: The AI audit log is hash-chained: editing or deleting a line is detected at that line. Decision-log entries are Ed25519-signed and hash-chained per node; a tampered entry is rejected before merge, and a replica that sees one dot with two different contents stops rather than choose. A decision made offline at an edge arrives at the hub with a valid signature. Truncating the newest lines of the AI audit log leaves a shorter chain that still verifies.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "3001072c-92f5-5e81-9d0f-1191d833636a",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Anchor the AI audit chain's head outside the file (in the signed decision log, or at the hub on reconnect) so truncation is detectable, and alert on a failed verification."
+          }
+        ]
+      },
+      {
+        "uuid": "e2b69984-889a-575c-8690-0b277e0099d4",
+        "title": "AU-9 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Apply the STIG role and scan; the audit-log file permission rules (UBTU-24-901300 and following) are not yet in the role.",
+        "statement": "Stated in the SSP as partial: Audit rules are immutable once loaded (-e 2, UBTU-24-909000); the service writes its data under UMask 0077 in a directory only it can write (deploy/systemd/sentinel.service).",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "04412af2-47ee-5f49-b55e-885e731a342f",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Apply the STIG role and scan; the audit-log file permission rules (UBTU-24-901300 and following) are not yet in the role."
+          }
+        ]
+      },
+      {
+        "uuid": "14198e28-2877-5867-8cff-223bfe03f5aa",
+        "title": "AU-10 (Sentinel node software): partial",
+        "description": "Bind each entry to an authenticated operator (IA-2), for example with a per-operator signature from a CAC/PIV key alongside the node's.",
+        "statement": "Stated in the SSP as partial: Every decision-log entry is signed with its authoring node's Ed25519 key and verified against the trust store on merge, so no node can alter another's entries or author entries in its name. A confirmed AI draft carries its provenance: router, confidence, model and the audit sequence of the question. The operator identity inside an entry is asserted by the proxy, not authenticated, so non-repudiation holds for the node, not yet for the person.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "06762945-00a7-585a-a115-27aa3e0d7de0",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Bind each entry to an authenticated operator (IA-2), for example with a per-operator signature from a CAC/PIV key alongside the node's."
+          }
+        ]
+      },
+      {
+        "uuid": "20f4a0b4-d667-58a5-9209-d7938145a707",
+        "title": "CA-7 (Sentinel program: organizational responsibilities): planned",
+        "description": "Define the strategy with the ISSO; add scheduled vulnerability scans (RA-5) and periodic STIG scans of deployed hosts, reported through this package's POA&M.",
+        "statement": "Stated in the SSP as planned: A continuous monitoring strategy (metrics, frequencies, who receives the results) is not defined, and nothing monitors a deployed node's security state over time.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "9ed2210d-dad4-54c8-8c58-07e2d4c1cccb",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Define the strategy with the ISSO; add scheduled vulnerability scans (RA-5) and periodic STIG scans of deployed hosts, reported through this package's POA&M."
+          }
+        ]
+      },
+      {
+        "uuid": "1a72f9dd-307e-5acb-9719-cadb55106ffa",
+        "title": "CM-3 (Build, test and release pipeline): partial",
+        "description": "Require the CI checks and one review before merging to main, and record the setting as code.",
+        "statement": "Stated in the SSP as partial: Every change is a git commit, and every push and pull request runs the checks listed under CA-7. Generated documents (the validation report, the AI eval report, this package's authored OSCAL documents) are regenerated and compared in CI, so a change cannot alter them silently. Branch protection and required review are GitHub settings and are not evidenced in the repository.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "725a8d0e-adbb-52a5-8697-658c9271690b",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Require the CI checks and one review before merging to main, and record the setting as code."
+          }
+        ]
+      },
+      {
+        "uuid": "285f8168-e9ef-57c0-865a-44930a1086b2",
+        "title": "CM-3 (Sentinel program: organizational responsibilities): planned",
+        "description": "Name the approver for changes to the risk engine, the sync layer and deployment configuration.",
+        "statement": "Stated in the SSP as planned: Change approval authority and security impact analysis are not defined.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "eaf029d9-e528-580b-a6a4-0638a553c289",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Name the approver for changes to the risk engine, the sync layer and deployment configuration."
+          }
+        ]
+      },
+      {
+        "uuid": "54417768-a804-51f3-9c6a-ec4126ae429c",
+        "title": "CM-6 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Apply the role and run its scan on the hub; convert the results to a checklist (.ckl) with the MITRE SAF CLI and feed them to the generator (--xccdf).",
+        "statement": "Stated in the SSP as partial: The STIG role applies 55 rules of the DISA Ubuntu 24.04 STIG V1R6 as code, records 25 documented deviations and 8 rules not applicable to a headless server (compliance/sources/stig.toml). The values it writes are compared with DISA's text in the tests, and it checks the effective configuration (sshd -T, sysctl) before it finishes.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "7ed292a8-bf56-5640-bc55-12d0eed2f5a9",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Apply the role and run its scan on the hub; convert the results to a checklist (.ckl) with the MITRE SAF CLI and feed them to the generator (--xccdf)."
+          }
+        ]
+      },
+      {
+        "uuid": "e554f823-cbe0-5293-9cb7-06d5fce8a1c1",
+        "title": "CM-7 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Apply the STIG role and scan.",
+        "statement": "Stated in the SSP as partial: The STIG role removes telnetd, rsh-server, the NFS packages and ntp, disables USB mass storage, and denies inbound connections by default except SSH, the console and ACME; the service may use only IPv4, IPv6 and Unix sockets.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "b30f6175-82e2-531c-995c-651863a69381",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Apply the STIG role and scan."
+          }
+        ]
+      },
+      {
+        "uuid": "93b130c8-422e-5b58-bd65-d80b3b240591",
+        "title": "CM-8 (Build, test and release pipeline): partial",
+        "description": "Generate an SBOM (CycloneDX or SPDX) for each release artifact in the release pipeline (docs/supply-chain.md).",
+        "statement": "Stated in the SSP as partial: Software components are inventoried with versions and hashes: uv.lock for Python, web/package-lock.json for the console, deploy/tools.lock for the uv, nats-server and toxiproxy binaries; each bundle carries SHA256SUMS for every file it contains. There is no SBOM in a standard format yet.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "a8179b12-9c6f-51e4-8296-29365436ab6a",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Generate an SBOM (CycloneDX or SPDX) for each release artifact in the release pipeline (docs/supply-chain.md)."
+          }
+        ]
+      },
+      {
+        "uuid": "fc4fff06-db99-5c92-a78b-0687f77066be",
+        "title": "CM-14 (Build, test and release pipeline): planned",
+        "description": "Sign release bundles with cosign in the release pipeline and verify the signature in the sentinel role before unpacking.",
+        "statement": "Stated in the SSP as planned: Release bundles are to be signed with cosign and the signature verified before install (docs/supply-chain.md). Today the bundle is checked only against its published SHA-256 digest, which proves the bytes match the digest, not who published them (deploy/ansible/roles/sentinel/tasks/main.yml).",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "c486a980-74bb-56e8-aa6b-2813b60e7e2b",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Sign release bundles with cosign in the release pipeline and verify the signature in the sentinel role before unpacking."
+          }
+        ]
+      },
+      {
+        "uuid": "3c6d6af8-2a57-529d-b20a-862c9fdddf6a",
+        "title": "CM-14 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Apply the STIG role and scan.",
+        "statement": "Stated in the SSP as partial: APT refuses packages whose signatures it cannot verify (STIG role, UBTU-24-300001).",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "4978f7b7-9962-5365-a9d2-679b3ff190b5",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Apply the STIG role and scan."
+          }
+        ]
+      },
+      {
+        "uuid": "9e7204c8-fbdb-5efc-8009-5837136652c4",
+        "title": "IA-2 (Sentinel node software): planned",
+        "description": "Authenticate operators at the proxy (CAC/PIV mTLS on DoD networks, OIDC elsewhere), set the header from the verified identity and strip any client-supplied value; until then, keep writable nodes off untrusted networks.",
+        "statement": "Stated in the SSP as planned: Operators are not authenticated by the node or by the current front proxy. The node trusts the X-Sentinel-Operator header, and the hub's Caddyfile neither sets nor strips it.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "5eef8a0e-5c85-5c80-ae36-b3ab9d8a73db",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Authenticate operators at the proxy (CAC/PIV mTLS on DoD networks, OIDC elsewhere), set the header from the verified identity and strip any client-supplied value; until then, keep writable nodes off untrusted networks."
+          }
+        ]
+      },
+      {
+        "uuid": "5af87f99-2b54-5757-9add-98a939934d87",
+        "title": "IA-2 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "CAC/PIV logon through SSSD and pam_pkcs11 on a DoD network (stig.toml deviation dod-pki).",
+        "statement": "Stated in the SSP as partial: Administrators authenticate to SSH with public keys only; there is no multifactor authentication (the DoD PKI rules are a documented STIG deviation).",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "869cd93d-79fe-5225-b730-f94cb564da1d",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "CAC/PIV logon through SSSD and pam_pkcs11 on a DoD network (stig.toml deviation dod-pki)."
+          }
+        ]
+      },
+      {
+        "uuid": "c234bd76-c8b2-56e6-badb-4d2e05d9a0b7",
+        "title": "IA-5 (Sentinel node software): partial",
+        "description": "Signed trust-store updates with key rotation and revocation; hardware-backed keys (TPM) on edge hardware.",
+        "statement": "Stated in the SSP as partial: Each node generates its Ed25519 key on first start and stores it readable only by the service account (mode 0600). Other nodes are trusted only through the trust-store file that maps node ids to public keys (SENTINEL_TRUST_FILE). There is no rotation or revocation.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "6288a69c-3a50-57a7-8d4b-7a039639ae1d",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Signed trust-store updates with key rotation and revocation; hardware-backed keys (TPM) on edge hardware."
+          }
+        ]
+      },
+      {
+        "uuid": "eeb2319f-77bd-56c6-bb0a-430a37f57a48",
+        "title": "IA-5 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Apply the STIG role and scan; rotate administrator keys on a defined schedule.",
+        "statement": "Stated in the SSP as partial: Administrator keys are installed by Terraform (aws_key_pair); password authentication is off, and the STIG role fails the play if any account has an empty password (UBTU-24-300027). Credentials are kept out of the repository by gitleaks in CI and in the pre-commit hooks.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "e2869a63-69c8-5f50-9cd8-50f5f9ebf663",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Apply the STIG role and scan; rotate administrator keys on a defined schedule."
+          }
+        ]
+      },
+      {
+        "uuid": "18958f8a-e0d5-5703-9ef0-ae5eb244ff43",
+        "title": "RA-5 (Build, test and release pipeline): partial",
+        "description": "Trivy with VEX on every release and on a schedule; run the STIG scan on the hub.",
+        "statement": "Stated in the SSP as partial: Secret scanning (gitleaks) runs over the full history on every push. Dependency and image vulnerability scanning with Trivy, with VEX statements for triaged findings, is planned in the release pipeline (docs/supply-chain.md). Host compliance scanning with OpenSCAP against the DISA STIG benchmark is defined in the STIG role and has not yet been run; when it is, its failing rules become POA&M items automatically.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "522f66f2-bf3b-5a8b-86b7-d7d4ff4d9da9",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Trivy with VEX on every release and on a schedule; run the STIG scan on the hub."
+          }
+        ]
+      },
+      {
+        "uuid": "7593312c-ed0e-54f1-9bf6-dbe739e27d32",
+        "title": "RA-5 (Sentinel program: organizational responsibilities): planned",
+        "description": "Set remediation timelines by severity with the ISSO and carry them as POA&M deadlines.",
+        "statement": "Stated in the SSP as planned: Remediation timelines by severity are not defined.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "bc2e8c41-5006-5369-8b77-1558e1ec8c3f",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Set remediation timelines by severity with the ISSO and carry them as POA&M deadlines."
+          }
+        ]
+      },
+      {
+        "uuid": "b7a2a8c3-69fd-5403-9086-c8630db308b2",
+        "title": "SC-7 (AWS cloud hub infrastructure): partial",
+        "description": "Verify the deployed security group when the hub is deployed.",
+        "statement": "Stated in the SSP as partial: The hub's security group admits 443 and 80 from anywhere, 22 from admin_cidr only, and 7422 only from allow-listed edge networks (none by default, so the port is closed).",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "843ac013-bc3f-5465-b128-dd6ecef99c8b",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Verify the deployed security group when the hub is deployed."
+          }
+        ]
+      },
+      {
+        "uuid": "ee924c80-d661-5bd5-9d66-d996775fea71",
+        "title": "SC-7 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Apply the STIG role and scan; rate limiting on 443 and 7422 is a documented deviation.",
+        "statement": "Stated in the SSP as partial: The STIG role enables ufw with inbound denied by default: SSH rate-limited, 443 and 80 allowed, 7422 only from stig_leaf_allowed_cidrs (UBTU-24-100300, UBTU-24-100310).",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "784e9f6d-624b-51a3-a8a9-a7151dcb25b4",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Apply the STIG role and scan; rate limiting on 443 and 7422 is a documented deviation."
+          }
+        ]
+      },
+      {
+        "uuid": "fa9a36c1-5cb7-563d-ab79-d1ad15b13839",
+        "title": "SC-8 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Verify TLS on the deployed hub (protocols, ciphers, HSTS) and apply the STIG role.",
+        "statement": "Stated in the SSP as partial: The console and API are served over HTTPS by Caddy with an HSTS header and certificates from Let's Encrypt; the node itself listens only on loopback. SSH uses DISA's FIPS 140-3 approved algorithms (STIG role).",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "1daea08b-958e-5394-9af1-5ff590e1a563",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Verify TLS on the deployed hub (protocols, ciphers, HSTS) and apply the STIG role."
+          }
+        ]
+      },
+      {
+        "uuid": "89aa9f52-f5b9-5943-beda-033581400574",
+        "title": "SC-8 (Node message bus (nats-server)): planned",
+        "description": "Configure leafnode mTLS with per-node certificates, and measure the handshake on the LIMITED link profile before relying on it (the harness has already shown the default leaf timeouts are too short for a thin link).",
+        "statement": "Stated in the SSP as planned: The leafnode link between an edge and its hub is not encrypted: the configuration templates leave a place for TLS (LEAF_TLS, REMOTE_TLS) but none is configured, and the harness runs the link in the clear over loopback.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "7a698aa5-a725-5a9a-9bbf-14ac21d62e0a",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Configure leafnode mTLS with per-node certificates, and measure the handshake on the LIMITED link profile before relying on it (the harness has already shown the default leaf timeouts are too short for a thin link)."
+          }
+        ]
+      },
+      {
+        "uuid": "440869c6-6c7a-5e9c-811c-7f0f890e75d0",
+        "title": "SC-12 (Sentinel node software): partial",
+        "description": "Signed trust-store distribution with rotation and revocation; keys in hardware on edge nodes.",
+        "statement": "Stated in the SSP as partial: Node signing keys are generated on the node and never leave it; trust is established by distributing public keys in a trust-store file. There is no automated distribution, rotation or revocation.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "15c43da9-9118-5fdb-89e2-acb38872acc2",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Signed trust-store distribution with rotation and revocation; keys in hardware on edge nodes."
+          }
+        ]
+      },
+      {
+        "uuid": "11eb6139-5986-5458-8ab0-b429fce1a8c4",
+        "title": "SC-12 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Verify issuance and renewal on the deployed hub; use DoD PKI certificates on DoD networks.",
+        "statement": "Stated in the SSP as partial: Caddy obtains and renews the console's TLS certificates automatically (ACME, Let's Encrypt).",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "19f01d44-eca0-5a7b-a92c-833170eeb8fa",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Verify issuance and renewal on the deployed hub; use DoD PKI certificates on DoD networks."
+          }
+        ]
+      },
+      {
+        "uuid": "a21305bd-639e-5e13-8177-826b7cec5206",
+        "title": "SC-13 (Sentinel node software): partial",
+        "description": "Use a FIPS 140-3 validated cryptographic module for signing and hashing.",
+        "statement": "Stated in the SSP as partial: Ed25519 signs decision-log entries; SHA-256 hashes assessment inputs, the audit chain and bundle files. The implementation is the Python cryptography package, whose bundled OpenSSL is not a FIPS-validated module.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "a1d6619a-5ebc-5108-a580-43cf784168c2",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Use a FIPS 140-3 validated cryptographic module for signing and hashing."
+          }
+        ]
+      },
+      {
+        "uuid": "91599300-0dcb-5c8c-b252-4a61136b5655",
+        "title": "SC-13 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Build the node image with Ubuntu Pro fips-updates.",
+        "statement": "Stated in the SSP as partial: SSH is restricted to DISA's FIPS 140-3 approved algorithms; the host does not run in FIPS mode (STIG deviation fips, UBTU-24-600030).",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "3e3b02d4-e93c-56f9-a55f-2788820a7b25",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Build the node image with Ubuntu Pro fips-updates."
+          }
+        ]
+      },
+      {
+        "uuid": "9d53575b-bcad-5652-b568-d44c2f692f33",
+        "title": "SC-28 (AWS cloud hub infrastructure): partial",
+        "description": "Verify encryption on the deployed volume; consider a customer-managed KMS key.",
+        "statement": "Stated in the SSP as partial: The hub's root volume, its only volume, is encrypted by EBS.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "23199986-6d3d-56cf-bc3e-0287c9d9e493",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Verify encryption on the deployed volume; consider a customer-managed KMS key."
+          }
+        ]
+      },
+      {
+        "uuid": "40325a13-bc4e-5cdf-b484-e8215c65d6aa",
+        "title": "SC-28 (Node host (Ubuntu 24.04 LTS)): planned",
+        "description": "LUKS full-disk encryption when edge hardware is provisioned (STIG deviation data-at-rest, UBTU-24-600090).",
+        "statement": "Stated in the SSP as planned: Edge hosts have no full-disk encryption configured; the node's database is not encrypted by the application, and its signing key is protected only by file permissions.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "cc3ce932-4aab-5f16-881b-164c8d0dcd1c",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "LUKS full-disk encryption when edge hardware is provisioned (STIG deviation data-at-rest, UBTU-24-600090)."
+          }
+        ]
+      },
+      {
+        "uuid": "19aceabd-ee7a-5ce8-bdd2-ee9401235784",
+        "title": "SI-2 (Build, test and release pipeline): partial",
+        "description": "Feed Trivy findings, with VEX, into the POA&M alongside test failures.",
+        "statement": "Stated in the SSP as partial: Every failing test becomes a POA&M item, linked to the controls that cite it, on every CI run (this package); dependency updates go through the lockfile and the full test ladder. Vulnerability-driven updates wait on dependency scanning (RA-5).",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "135c335f-daf0-560e-9578-296620f7c712",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Feed Trivy findings, with VEX, into the POA&M alongside test failures."
+          }
+        ]
+      },
+      {
+        "uuid": "7c12c52d-9b4d-5ea4-b65a-ef2a04803d05",
+        "title": "SI-2 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Apply the STIG role and scan; for air-gapped enclaves, updates arrive with the next signed bundle.",
+        "statement": "Stated in the SSP as partial: Security updates install automatically (unattended-upgrades, baseline role), and superseded packages and kernels are removed (STIG role, UBTU-24-700320).",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "2e77c11f-b971-5dd7-9428-1c88fd5e5f1c",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Apply the STIG role and scan; for air-gapped enclaves, updates arrive with the next signed bundle."
+          }
+        ]
+      },
+      {
+        "uuid": "f0a78292-1cb9-5a4a-a942-19adf7a15385",
+        "title": "SI-2 (Sentinel program: organizational responsibilities): planned",
+        "description": "Define update time frames by severity with the ISSO.",
+        "statement": "Stated in the SSP as planned: Time frames for installing security-relevant updates are not defined.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "8a3a016b-76a9-528c-ab27-b346dacd4e9c",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Define update time frames by severity with the ISSO."
+          }
+        ]
+      },
+      {
+        "uuid": "ca277848-77e4-5283-ab9b-8ca97ac2caea",
+        "title": "SI-4 (Sentinel node software): partial",
+        "description": "Forward logs to a collector when connected and alert on rejected merges and failed chain verification.",
+        "statement": "Stated in the SSP as partial: Each node measures its link to the hub and classifies it (CONNECTED, DEGRADED, LIMITED, DENIED) from measurement, not configuration. Rejected decision-log entries (untrusted node or bad signature) are recorded with the reason, and service events are structured JSON logs ready for collection. Nothing correlates them or raises an alert.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "180e1150-29a8-5ee8-aed2-230f9c75c170",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Forward logs to a collector when connected and alert on rejected merges and failed chain verification."
+          }
+        ]
+      },
+      {
+        "uuid": "a55d4957-dafa-5718-a6d8-dc9689feff99",
+        "title": "SI-4 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Apply the STIG role and scan; route AIDE and audit alerts to the node's alerting path (stig.toml deviation audit-alerts).",
+        "statement": "Stated in the SSP as partial: AIDE checks file integrity daily and auditd records security-relevant events (STIG role).",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "afbf8901-30d6-5d18-b467-8bb6fe0878bd",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Apply the STIG role and scan; route AIDE and audit alerts to the node's alerting path (stig.toml deviation audit-alerts)."
+          }
+        ]
+      },
+      {
+        "uuid": "262c8bc6-5c86-5ed7-b81c-1db296d735d6",
+        "title": "SI-7 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Verify the bundle's cosign signature before the digest (docs/supply-chain.md); run make airgap-verify in CI.",
+        "statement": "Stated in the SSP as partial: Installation verifies before it unpacks: Ansible checks the bundle against its published SHA-256 digest, and install.sh checks every file against SHA256SUMS and installs dependencies offline with --require-hashes. AIDE checks file integrity daily (STIG role). A digest shipped next to the bundle proves the bytes match it, not who published them.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "4a056ba0-329b-589b-87b1-b9e68c2acfdc",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Verify the bundle's cosign signature before the digest (docs/supply-chain.md); run make airgap-verify in CI."
+          }
+        ]
+      },
+      {
+        "uuid": "19f4db29-0369-50f3-b5c1-717306a91b3d",
+        "title": "SI-7 (Build, test and release pipeline): planned",
+        "description": "Sign and attest release artifacts in the release pipeline.",
+        "statement": "Stated in the SSP as planned: Release artifacts are to be signed with cosign and carry SLSA build provenance (docs/supply-chain.md).",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "569579f2-73f1-54fe-a3b4-bcbf0077c254",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Sign and attest release artifacts in the release pipeline."
+          }
+        ]
+      },
+      {
+        "uuid": "30906a7a-2397-53a0-bce1-ceab33d3e9a6",
+        "title": "SR-3 (Build, test and release pipeline): partial",
+        "description": "SBOM, cosign signatures, SLSA provenance and Trivy with VEX in the release pipeline (docs/supply-chain.md).",
+        "statement": "Stated in the SSP as partial: Third-party binaries are pinned by version and SHA-256 (deploy/tools.lock), and a mismatch aborts the download (scripts/fetch_tools.py, run in the harness workflow). Python dependencies are hash-locked and installed offline with --require-hashes. Upstream data (NASA CARA, CelesTrak, NIST, DISA) is vendored unmodified with provenance and checksums that the tests verify. SBOMs, signing, build provenance and vulnerability scanning are planned in the release pipeline.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "5e63845e-5d91-5bc1-bcb5-cae569c8fb1b",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "SBOM, cosign signatures, SLSA provenance and Trivy with VEX in the release pipeline (docs/supply-chain.md)."
+          }
+        ]
+      },
+      {
+        "uuid": "b6432452-6797-52f2-895d-c95efe54fcfa",
+        "title": "SR-4 (Build, test and release pipeline): partial",
+        "description": "SLSA build provenance for every release artifact (docs/supply-chain.md).",
+        "statement": "Stated in the SSP as partial: Provenance is recorded for vendored upstream data (fixtures/cara/PROVENANCE.md, fixtures/omm/PROVENANCE.md, compliance/vendor/nist/PROVENANCE.md, compliance/vendor/disa/PROVENANCE.md) and each NASA CARA test case documents its source and tolerance. Each bundle records its version and per-file hashes. There is no build provenance for release artifacts yet.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "31962890-b748-57ef-86d4-6d7b3bbd82bc",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "SLSA build provenance for every release artifact (docs/supply-chain.md)."
+          }
+        ]
+      },
+      {
+        "uuid": "2d9ef5eb-157a-5174-a6db-0c5a8066d964",
+        "title": "SR-11 (Build, test and release pipeline): partial",
+        "description": "cosign signature verification before install (docs/supply-chain.md).",
+        "statement": "Stated in the SSP as partial: Downloaded tools are accepted only if their SHA-256 matches the pin; the bundle is checked against its digest before install; APT on the host refuses unauthenticated packages (STIG role). Verifying the publisher's signature on Sentinel's own releases (cosign) is planned.",
+        "status": "open",
+        "remediations": [
+          {
+            "uuid": "6110a1b6-034a-5c96-b23a-f69626621df4",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "cosign signature verification before install (docs/supply-chain.md)."
+          }
+        ]
+      },
+      {
+        "uuid": "050f41b5-78bb-5de6-a0af-4c2e4ad80fe9",
+        "title": "STIG deviation: SSH shows the exercise notice, not the DoD Notice and Consent Banner",
+        "description": "The public demonstration node is not a U.S. Government information system. Presenting the USG notice there would misrepresent the system to anyone who connects.",
+        "statement": "2 STIG rules are not met by design: UBTU-24-200640, UBTU-24-200680.",
+        "status": "deviation-requested",
+        "mitigating-factors": [
+          {
+            "uuid": "bc5c0e19-0236-5417-b2c2-26578dd27c5b",
+            "description": "The mechanism is in place: sshd's Banner directive is set, and the node shows an UNCLASSIFIED // EXERCISE authorized-use notice (deploy/ansible/roles/baseline). The DoD text and the acknowledgement prompt are in the role, verbatim from the STIG, behind stig_dod_banner."
+          }
+        ],
+        "remediations": [
+          {
+            "uuid": "27eedcfc-1b7c-5af8-be67-aa4ed4cf1197",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Set stig_dod_banner: true on any deployment that is a U.S. Government information system."
+          }
+        ]
+      },
+      {
+        "uuid": "e5b3ab0a-5646-51cd-9432-941a72c58054",
+        "title": "STIG deviation: Only SSH is rate-limited by the host firewall",
+        "description": "ufw's LIMIT denies a source address after six new connections in thirty seconds. Operators behind one NAT address would share that budget for the console on 443, and an edge's NATS leafnode reconnects every second after a drop (deploy/nats/edge.conf.tmpl, reconnect 1s), so limiting 7422 would block an edge exactly while it recovers from a DDIL outage: the behaviour the RECOVERY harness scenario exists to protect.",
+        "statement": "1 STIG rule is not met by design: UBTU-24-600200.",
+        "status": "deviation-requested",
+        "mitigating-factors": [
+          {
+            "uuid": "cc6d6088-069d-535a-87ec-996e828abe33",
+            "description": "SSH (22) is rate-limited. 7422 accepts only allow-listed edge networks, in ufw (stig_leaf_allowed_cidrs) and in the AWS security group (leaf_allowed_cidrs, empty by default so the port is closed). 443 is served by Caddy in front of a read-only node."
+          }
+        ],
+        "remediations": [
+          {
+            "uuid": "c5b9212b-e7b5-5abf-bae4-7566ec44fa63",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Replace host-level rate limiting on 443 with request limits at the proxy, sized from measured console behaviour, and document the leafnode port's reconnect profile with the ISSO."
+          }
+        ]
+      },
+      {
+        "uuid": "0c696346-1a93-5d07-8551-cb6d15505d60",
+        "title": "STIG deviation: The host does not run in FIPS mode",
+        "description": "FIPS mode needs Ubuntu Pro's FIPS-certified kernel and modules, which the demonstration hub does not carry. Sentinel's own signatures (Ed25519, via the Python cryptography package's bundled OpenSSL) do not use a FIPS-validated module either.",
+        "statement": "1 STIG rule is not met by design: UBTU-24-600030.",
+        "status": "deviation-requested",
+        "mitigating-factors": [
+          {
+            "uuid": "c04051eb-22fa-53eb-8572-3a6c264bd777",
+            "description": "SSH is restricted to the STIG's FIPS 140-3 approved ciphers, MACs and key exchange algorithms (UBTU-24-100820, UBTU-24-100830, UBTU-24-100840, applied)."
+          }
+        ],
+        "remediations": [
+          {
+            "uuid": "7f9697d2-a10d-53d9-baef-7bd2f0d116f9",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Build the node image with Ubuntu Pro fips-updates, and move Sentinel's signing to a FIPS-validated provider (SC-13 in the SSP)."
+          }
+        ]
+      },
+      {
+        "uuid": "de86cf30-8174-584a-a063-6d0743806bb6",
+        "title": "STIG deviation: No CAC/PIV logon and no DoD PKI certificate authorities",
+        "description": "PKI-based multifactor logon needs a DoD PKI (CAC/PIV cards, DoD root CAs, OCSP or CRLs) that the demonstration environment does not have.",
+        "statement": "13 STIG rules are not met by design: UBTU-24-100650, UBTU-24-100660, UBTU-24-100900, UBTU-24-100910, UBTU-24-400020, UBTU-24-400030, UBTU-24-400060, UBTU-24-400340, UBTU-24-400360, UBTU-24-400370, UBTU-24-400375, UBTU-24-400380, UBTU-24-600060.",
+        "status": "deviation-requested",
+        "mitigating-factors": [
+          {
+            "uuid": "54ff365c-38f9-562a-a662-f14dd5c7009d",
+            "description": "Administrative access is SSH public-key only (password and keyboard-interactive authentication off, root login off), from the admin_cidr network only; the AWS variable rejects 0.0.0.0/0. Session Manager is the break-glass path."
+          }
+        ],
+        "remediations": [
+          {
+            "uuid": "3233a87b-f3e5-5785-9050-1869dd4419dd",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "On a DoD network: SSSD with pam_pkcs11 for CAC/PIV logon, the DoD root CAs as the trust anchors, and a local revocation cache for disconnected operation (IA-2 in the SSP)."
+          }
+        ]
+      },
+      {
+        "uuid": "9c7129a9-9b72-5302-bee7-ad0167ab9d43",
+        "title": "STIG deviation: The automation account escalates without a password",
+        "description": "The Ubuntu cloud image's default account has NOPASSWD sudo (/etc/sudoers.d/90-cloud-init-users), and the Ansible playbook depends on it to become root.",
+        "statement": "1 STIG rule is not met by design: UBTU-24-300020.",
+        "status": "deviation-requested",
+        "mitigating-factors": [
+          {
+            "uuid": "caba2ae5-e264-5119-8343-71b6b54fe24d",
+            "description": "The account is reachable only by SSH public key from the admin network; every sudo use is audited (UBTU-24-900170, applied)."
+          }
+        ],
+        "remediations": [
+          {
+            "uuid": "73668b06-4a2f-5491-a67b-57228f86720e",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Give Ansible a become password from a vault, or document the account with the ISSO as an administrative group using MFA, as the rule allows."
+          }
+        ]
+      },
+      {
+        "uuid": "387ec0d4-2419-52fc-aa8d-388b01e67d2f",
+        "title": "STIG deviation: Data at rest is encrypted by the platform, not by the operating system",
+        "description": "The hub's root volume is encrypted by EBS (deploy/aws/terraform/main.tf, encrypted = true), which the operating-system check (every partition in /etc/crypttab) cannot see.",
+        "statement": "1 STIG rule is not met by design: UBTU-24-600090.",
+        "status": "deviation-requested",
+        "mitigating-factors": [
+          {
+            "uuid": "02aa6448-bfaf-5bf1-8e23-c64d4dfe8acd",
+            "description": "EBS encryption with AWS-managed keys covers the hub's only volume."
+          }
+        ],
+        "remediations": [
+          {
+            "uuid": "f90c7d49-3446-5d30-be59-6d46bf07c458",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Edge hardware is provisioned with LUKS full-disk encryption, set up at install time (SC-28 in the SSP)."
+          }
+        ]
+      },
+      {
+        "uuid": "bd4d4d63-f55a-5f61-a2f5-13a813e142c6",
+        "title": "STIG deviation: No boot-loader password",
+        "description": "The hub runs on EC2, where there is no interactive boot console unless EC2 serial console access is enabled, and the Terraform does not enable it.",
+        "statement": "1 STIG rule is not met by design: UBTU-24-102000.",
+        "status": "deviation-requested",
+        "mitigating-factors": [
+          {
+            "uuid": "f091ab33-c5a7-5b60-834e-8c0b6abaa2ef",
+            "description": "Console access to the instance is not configured; administration is SSH and Session Manager."
+          }
+        ],
+        "remediations": [
+          {
+            "uuid": "2654d71b-fad2-5d69-8fc3-cd42098ef80a",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Set a GRUB superuser password, from a managed secret, when edge hardware is provisioned."
+          }
+        ]
+      },
+      {
+        "uuid": "ea1e0c05-8a70-5d3d-bd55-f0925819dc46",
+        "title": "STIG deviation: Audit records stay on the node",
+        "description": "There is no central audit collector in this deployment, and an edge node cannot reach one while its link is denied, which is the condition Sentinel is designed for.",
+        "statement": "2 STIG rules are not met by design: UBTU-24-100450, UBTU-24-900950.",
+        "status": "deviation-requested",
+        "mitigating-factors": [
+          {
+            "uuid": "5c2841b6-f9e6-5cde-b965-e664f66a2ea2",
+            "description": "Audit rules are immutable once loaded (UBTU-24-909000); Sentinel's own decision log is signed and hash-chained per node and replicates to the hub when the link returns."
+          }
+        ],
+        "remediations": [
+          {
+            "uuid": "55da8db3-e750-55a0-b9a2-f6fa17e8ab76",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Offload with audisp-remote to a collector on reconnect; for a standalone edge, a weekly offload to removable media as UBTU-24-900950 describes."
+          }
+        ]
+      },
+      {
+        "uuid": "a6c34368-a3cd-5115-b7eb-a3a281514271",
+        "title": "STIG deviation: The default time source is not a DoD authoritative source",
+        "description": "The AWS hub uses the Amazon Time Sync Service (169.254.169.123), the source it can reach. The role applies the rest of the rule: only the configured sources, polled at least every 24 hours (maxpoll 16), with the Ubuntu pools disabled.",
+        "statement": "1 STIG rule is not met by design: UBTU-24-600160.",
+        "status": "deviation-requested",
+        "mitigating-factors": [
+          {
+            "uuid": "95507dda-62bc-5fe3-a6fd-b97b4e06b310",
+            "description": "Clocks step when more than one second out (UBTU-24-600180, applied) and use UTC (UBTU-24-901220, applied)."
+          }
+        ],
+        "remediations": [
+          {
+            "uuid": "3526ebc7-8113-5e91-8d79-63bf7d94acd1",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Set stig_time_servers to the enclave's authoritative DoD time source on any DoD deployment."
+          }
+        ]
+      },
+      {
+        "uuid": "8125b5ab-036f-5dee-9395-89b87fbafe5f",
+        "title": "STIG deviation: Audit storage and failure alerts are not mailed to the SA and ISSO",
+        "description": "The node has no mail transport, and an edge has no route to a mail relay while disconnected.",
+        "statement": "2 STIG rules are not met by design: UBTU-24-900960, UBTU-24-900980.",
+        "status": "deviation-requested",
+        "mitigating-factors": [
+          {
+            "uuid": "83c6bfcf-7402-5b13-beb2-4a219a0159c4",
+            "description": "In upstream auditd 3.1.2's default configuration, low storage is logged to syslog (space_left_action = SYSLOG); a full or failing disk suspends audit logging (SUSPEND). Neither reaches a person, which is why this is a POA&M item."
+          }
+        ],
+        "remediations": [
+          {
+            "uuid": "67cbd1a3-b508-551f-b51e-c1fa7f7c26bd",
+            "lifecycle": "planned",
+            "title": "Planned remediation",
+            "description": "Raise audit storage and failure alerts through auditd's exec action into the node's own alerting path, which reaches the operator console locally and the hub when connected."
+          }
+        ]
+      }
+    ],
+    "poam-items": [
+      {
+        "uuid": "295c48b0-909d-5f32-87f5-f2a370a5012e",
+        "title": "Host STIG baseline not verified by a scan",
+        "description": "The STIG role applies 55 of the 194 rules in Canonical Ubuntu 24.04 LTS Security Technical Implementation Guide V1R6; 25 are documented deviations and 8 are not applicable. No scan results were supplied, so none of this is verified on a host, and the remaining 106 rules are unassessed.",
+        "props": [
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          }
+        ],
+        "origins": [
+          {
+            "actors": [
+              {
+                "type": "tool",
+                "actor-uuid": "32898f0c-022e-51c7-b2e0-5487f03d2a5d"
+              }
+            ]
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "88e46d96-1873-56e9-a329-327da89329db"
+          }
+        ]
+      },
+      {
+        "uuid": "c99319c6-b924-5099-ad6b-11c71e4dcf82",
+        "title": "AC-2 (Sentinel node software): planned",
+        "description": "Put an authenticating proxy (OIDC, or mTLS with CAC/PIV) in front of every node that sets X-Sentinel-Operator from the verified identity and strips any client-supplied value; manage operator accounts in the organization's identity provider. The current Caddyfile does neither.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "ac-2"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "node"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "planned"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "41f0e124-fced-5697-bad0-27980a71f097"
+          }
+        ]
+      },
+      {
+        "uuid": "b2059c30-81e7-58e7-8ed4-b7d045167543",
+        "title": "AC-2 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Apply the STIG role to the hub and verify it with the OpenSCAP scan (stig_scan: true).",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "ac-2"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "aaa3db08-dcf7-5477-84c2-6d6414c43f2f"
+          }
+        ]
+      },
+      {
+        "uuid": "ffc57a62-7126-5b0e-a9e7-72b9a16a2882",
+        "title": "AC-3 (Sentinel node software): partial",
+        "description": "Test the read-only refusal on the decision, note and annotation endpoints; authorize by role once operators are authenticated (IA-2), for example so that only a designated role may record a MANEUVER decision or resolve a conflict.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "ac-3"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "node"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "d4b85231-abab-5a1a-b28a-b209a52d80c7"
+          }
+        ]
+      },
+      {
+        "uuid": "0b5b2f8d-3d66-552d-99cb-0e377f391a7f",
+        "title": "AC-3 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Verify the sandbox on a deployed host (systemd-analyze security) and apply the STIG role.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "ac-3"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "6d14a3ba-e082-54bd-8d8e-f46eeb70ed3e"
+          }
+        ]
+      },
+      {
+        "uuid": "e418df99-125c-534a-a7d3-34d897cb6f12",
+        "title": "AC-4 (Node message bus (nats-server)): partial",
+        "description": "Add a harness scenario that publishes on unit.> and passes.> at the edge and asserts nothing arrives at the hub, so the denial is shown on a real leaf link and not only in the configuration. The pass module that publishes those subjects is still in development.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "ac-4"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "nats"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "48adca3c-d5c8-552a-b279-29b2603177ba"
+          }
+        ]
+      },
+      {
+        "uuid": "c9c84adb-12f0-5230-b36e-894e08892821",
+        "title": "AC-6 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Verify on a deployed host; the automation account's NOPASSWD sudo is a STIG deviation (UBTU-24-300020).",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "ac-6"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "b3135456-6fc7-5210-9a17-459e41ed1f61"
+          }
+        ]
+      },
+      {
+        "uuid": "f050678a-6dd3-572f-9c51-5bf86382d960",
+        "title": "AC-6 (AWS cloud hub infrastructure): partial",
+        "description": "Confirm the deployed role's effective permissions (IAM Access Analyzer) when the hub is deployed.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "ac-6"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "aws"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "93e0b1dc-8746-5fb9-b6e3-162c170d0256"
+          }
+        ]
+      },
+      {
+        "uuid": "23fd651e-7862-5400-be40-b139ce4a9f1d",
+        "title": "AC-17 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Apply the STIG role to the hub and verify it with the OpenSCAP scan.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "ac-17"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "89a950e3-165f-5f47-a427-dd8397ba6d03"
+          }
+        ]
+      },
+      {
+        "uuid": "8d7f10cc-066b-5821-ae64-0f6933cf7c55",
+        "title": "AC-17 (AWS cloud hub infrastructure): partial",
+        "description": "Verify the deployed security group and Session Manager configuration when the hub is deployed.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "ac-17"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "aws"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "9c0370b7-2cb3-57c6-a05e-a47d808983aa"
+          }
+        ]
+      },
+      {
+        "uuid": "f11703b5-e74a-5ee9-a7af-1aceb508f430",
+        "title": "AU-2 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Apply the STIG role and scan; review the selected event types with the ISSO, which AU-2 also asks for.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "au-2"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "c7a87094-070e-5dc5-b5ed-d2ae093ca08e"
+          }
+        ]
+      },
+      {
+        "uuid": "930788ac-0ecd-594a-a175-3ba36f3d4c96",
+        "title": "AU-6 (Sentinel node software): partial",
+        "description": "Forward the structured logs and audit records to a collector when the link allows, and alert on a failed chain verification instead of reporting it only when asked.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "au-6"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "node"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "cd24ef20-f96e-5da2-a267-0629fb517bbb"
+          }
+        ]
+      },
+      {
+        "uuid": "5b478cbd-f630-54ea-b55c-53bb1fdc0bd0",
+        "title": "AU-6 (Sentinel program: organizational responsibilities): planned",
+        "description": "Define the review cadence, the reviewers and the reporting path with the ISSO.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "au-6"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "program"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "planned"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "60342a0e-aa89-5932-a302-13a8fbefc338"
+          }
+        ]
+      },
+      {
+        "uuid": "f01f6480-c64e-52a6-9ec9-f2c7543a3a77",
+        "title": "AU-9 (Sentinel node software): partial",
+        "description": "Anchor the AI audit chain's head outside the file (in the signed decision log, or at the hub on reconnect) so truncation is detectable, and alert on a failed verification.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "au-9"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "node"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "c79ae38c-690a-5e04-9b96-4af83522d0b7"
+          }
+        ]
+      },
+      {
+        "uuid": "8b5dcb3d-5a8f-5638-a42f-72f95e72bdf2",
+        "title": "AU-9 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Apply the STIG role and scan; the audit-log file permission rules (UBTU-24-901300 and following) are not yet in the role.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "au-9"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "e2b69984-889a-575c-8690-0b277e0099d4"
+          }
+        ]
+      },
+      {
+        "uuid": "9adc1cb2-77fc-51c5-bc6d-af797f9769d8",
+        "title": "AU-10 (Sentinel node software): partial",
+        "description": "Bind each entry to an authenticated operator (IA-2), for example with a per-operator signature from a CAC/PIV key alongside the node's.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "au-10"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "node"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "14198e28-2877-5867-8cff-223bfe03f5aa"
+          }
+        ]
+      },
+      {
+        "uuid": "6b2d5e2c-fe2e-51fe-a9de-c43a97df4fbe",
+        "title": "CA-7 (Sentinel program: organizational responsibilities): planned",
+        "description": "Define the strategy with the ISSO; add scheduled vulnerability scans (RA-5) and periodic STIG scans of deployed hosts, reported through this package's POA&M.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "ca-7"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "program"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "planned"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "20f4a0b4-d667-58a5-9209-d7938145a707"
+          }
+        ]
+      },
+      {
+        "uuid": "16fe871f-c407-5308-99cb-c1540f6bd9d1",
+        "title": "CM-3 (Build, test and release pipeline): partial",
+        "description": "Require the CI checks and one review before merging to main, and record the setting as code.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "cm-3"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "pipeline"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "1a72f9dd-307e-5acb-9719-cadb55106ffa"
+          }
+        ]
+      },
+      {
+        "uuid": "7ef69a76-e44b-53ae-b05d-aa606ff8a477",
+        "title": "CM-3 (Sentinel program: organizational responsibilities): planned",
+        "description": "Name the approver for changes to the risk engine, the sync layer and deployment configuration.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "cm-3"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "program"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "planned"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "285f8168-e9ef-57c0-865a-44930a1086b2"
+          }
+        ]
+      },
+      {
+        "uuid": "f135a724-6b58-5a75-a283-133748189450",
+        "title": "CM-6 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Apply the role and run its scan on the hub; convert the results to a checklist (.ckl) with the MITRE SAF CLI and feed them to the generator (--xccdf).",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "cm-6"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "54417768-a804-51f3-9c6a-ec4126ae429c"
+          }
+        ]
+      },
+      {
+        "uuid": "e5c65f67-9574-583f-81a2-5caaa8328f90",
+        "title": "CM-7 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Apply the STIG role and scan.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "cm-7"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "e554f823-cbe0-5293-9cb7-06d5fce8a1c1"
+          }
+        ]
+      },
+      {
+        "uuid": "50de875b-c27b-5726-8982-a735f4c919f6",
+        "title": "CM-8 (Build, test and release pipeline): partial",
+        "description": "Generate an SBOM (CycloneDX or SPDX) for each release artifact in the release pipeline (docs/supply-chain.md).",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "cm-8"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "pipeline"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          },
+          {
+            "name": "milestone",
+            "ns": "urn:sentinel:oscal",
+            "value": "M4"
+          },
+          {
+            "name": "planned-evidence",
+            "ns": "urn:sentinel:oscal",
+            "value": "docs/supply-chain.md"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "93b130c8-422e-5b58-bd65-d80b3b240591"
+          }
+        ]
+      },
+      {
+        "uuid": "e8aba527-0dd3-5399-93dc-f4d8f3090177",
+        "title": "CM-14 (Build, test and release pipeline): planned",
+        "description": "Sign release bundles with cosign in the release pipeline and verify the signature in the sentinel role before unpacking.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "cm-14"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "pipeline"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "planned"
+          },
+          {
+            "name": "milestone",
+            "ns": "urn:sentinel:oscal",
+            "value": "M4"
+          },
+          {
+            "name": "planned-evidence",
+            "ns": "urn:sentinel:oscal",
+            "value": "docs/supply-chain.md"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "fc4fff06-db99-5c92-a78b-0687f77066be"
+          }
+        ]
+      },
+      {
+        "uuid": "ddb6c357-82f5-5b2c-ac25-805e01e4eecb",
+        "title": "CM-14 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Apply the STIG role and scan.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "cm-14"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "3c6d6af8-2a57-529d-b20a-862c9fdddf6a"
+          }
+        ]
+      },
+      {
+        "uuid": "8e41af36-4e79-51e9-b425-90dc618a29e2",
+        "title": "IA-2 (Sentinel node software): planned",
+        "description": "Authenticate operators at the proxy (CAC/PIV mTLS on DoD networks, OIDC elsewhere), set the header from the verified identity and strip any client-supplied value; until then, keep writable nodes off untrusted networks.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "ia-2"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "node"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "planned"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "9e7204c8-fbdb-5efc-8009-5837136652c4"
+          }
+        ]
+      },
+      {
+        "uuid": "3c99e4e8-0cdf-508d-908d-af3425c46f09",
+        "title": "IA-2 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "CAC/PIV logon through SSSD and pam_pkcs11 on a DoD network (stig.toml deviation dod-pki).",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "ia-2"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "5af87f99-2b54-5757-9add-98a939934d87"
+          }
+        ]
+      },
+      {
+        "uuid": "e188756f-9c48-5a5a-96b1-b4b5ca2d51af",
+        "title": "IA-5 (Sentinel node software): partial",
+        "description": "Signed trust-store updates with key rotation and revocation; hardware-backed keys (TPM) on edge hardware.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "ia-5"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "node"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "c234bd76-c8b2-56e6-badb-4d2e05d9a0b7"
+          }
+        ]
+      },
+      {
+        "uuid": "8644c525-2264-5202-a2ca-eab55e4441c4",
+        "title": "IA-5 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Apply the STIG role and scan; rotate administrator keys on a defined schedule.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "ia-5"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "eeb2319f-77bd-56c6-bb0a-430a37f57a48"
+          }
+        ]
+      },
+      {
+        "uuid": "7ca14933-7acf-5952-8962-83e02c8486ac",
+        "title": "RA-5 (Build, test and release pipeline): partial",
+        "description": "Trivy with VEX on every release and on a schedule; run the STIG scan on the hub.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "ra-5"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "pipeline"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          },
+          {
+            "name": "milestone",
+            "ns": "urn:sentinel:oscal",
+            "value": "M4"
+          },
+          {
+            "name": "planned-evidence",
+            "ns": "urn:sentinel:oscal",
+            "value": "docs/supply-chain.md"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "18958f8a-e0d5-5703-9ef0-ae5eb244ff43"
+          }
+        ]
+      },
+      {
+        "uuid": "659c155a-cee9-5791-9e7d-3c57df02080b",
+        "title": "RA-5 (Sentinel program: organizational responsibilities): planned",
+        "description": "Set remediation timelines by severity with the ISSO and carry them as POA&M deadlines.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "ra-5"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "program"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "planned"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "7593312c-ed0e-54f1-9bf6-dbe739e27d32"
+          }
+        ]
+      },
+      {
+        "uuid": "a4282286-db20-51a5-8bef-cdd805a4cd9b",
+        "title": "SC-7 (AWS cloud hub infrastructure): partial",
+        "description": "Verify the deployed security group when the hub is deployed.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "sc-7"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "aws"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "b7a2a8c3-69fd-5403-9086-c8630db308b2"
+          }
+        ]
+      },
+      {
+        "uuid": "c1c707b8-0526-54fe-8a4e-1a29258637e3",
+        "title": "SC-7 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Apply the STIG role and scan; rate limiting on 443 and 7422 is a documented deviation.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "sc-7"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "ee924c80-d661-5bd5-9d66-d996775fea71"
+          }
+        ]
+      },
+      {
+        "uuid": "97f8267b-ac7d-59ad-ad3e-d1ee6f930ad2",
+        "title": "SC-8 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Verify TLS on the deployed hub (protocols, ciphers, HSTS) and apply the STIG role.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "sc-8"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "fa9a36c1-5cb7-563d-ab79-d1ad15b13839"
+          }
+        ]
+      },
+      {
+        "uuid": "126d7de8-dfb6-55f2-be3e-e10d78f9a8d1",
+        "title": "SC-8 (Node message bus (nats-server)): planned",
+        "description": "Configure leafnode mTLS with per-node certificates, and measure the handshake on the LIMITED link profile before relying on it (the harness has already shown the default leaf timeouts are too short for a thin link).",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "sc-8"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "nats"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "planned"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "89aa9f52-f5b9-5943-beda-033581400574"
+          }
+        ]
+      },
+      {
+        "uuid": "aa5c5699-b151-5afd-a983-05d64cf1c344",
+        "title": "SC-12 (Sentinel node software): partial",
+        "description": "Signed trust-store distribution with rotation and revocation; keys in hardware on edge nodes.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "sc-12"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "node"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "440869c6-6c7a-5e9c-811c-7f0f890e75d0"
+          }
+        ]
+      },
+      {
+        "uuid": "4f55b2ed-946d-5ae6-90e3-b6e24735b6dc",
+        "title": "SC-12 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Verify issuance and renewal on the deployed hub; use DoD PKI certificates on DoD networks.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "sc-12"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "11eb6139-5986-5458-8ab0-b429fce1a8c4"
+          }
+        ]
+      },
+      {
+        "uuid": "248812db-cc51-531d-a712-cf5ac902febb",
+        "title": "SC-13 (Sentinel node software): partial",
+        "description": "Use a FIPS 140-3 validated cryptographic module for signing and hashing.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "sc-13"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "node"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "a21305bd-639e-5e13-8177-826b7cec5206"
+          }
+        ]
+      },
+      {
+        "uuid": "99da1267-db6e-5128-b24a-cecb21f5fc2c",
+        "title": "SC-13 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Build the node image with Ubuntu Pro fips-updates.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "sc-13"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "91599300-0dcb-5c8c-b252-4a61136b5655"
+          }
+        ]
+      },
+      {
+        "uuid": "ce3e5cf8-9061-597a-8ed6-6f64bdd975aa",
+        "title": "SC-28 (AWS cloud hub infrastructure): partial",
+        "description": "Verify encryption on the deployed volume; consider a customer-managed KMS key.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "sc-28"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "aws"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "9d53575b-bcad-5652-b568-d44c2f692f33"
+          }
+        ]
+      },
+      {
+        "uuid": "68d4f124-8cb7-584b-b23b-959ef1e6c0cf",
+        "title": "SC-28 (Node host (Ubuntu 24.04 LTS)): planned",
+        "description": "LUKS full-disk encryption when edge hardware is provisioned (STIG deviation data-at-rest, UBTU-24-600090).",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "sc-28"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "planned"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "40325a13-bc4e-5cdf-b484-e8215c65d6aa"
+          }
+        ]
+      },
+      {
+        "uuid": "3fca7b3f-1af2-589e-b4c4-318b083bb84c",
+        "title": "SI-2 (Build, test and release pipeline): partial",
+        "description": "Feed Trivy findings, with VEX, into the POA&M alongside test failures.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "si-2"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "pipeline"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          },
+          {
+            "name": "milestone",
+            "ns": "urn:sentinel:oscal",
+            "value": "M4"
+          },
+          {
+            "name": "planned-evidence",
+            "ns": "urn:sentinel:oscal",
+            "value": "docs/supply-chain.md"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "19aceabd-ee7a-5ce8-bdd2-ee9401235784"
+          }
+        ]
+      },
+      {
+        "uuid": "d91a5dc1-c80e-5e3e-8f48-4daba873ba37",
+        "title": "SI-2 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Apply the STIG role and scan; for air-gapped enclaves, updates arrive with the next signed bundle.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "si-2"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "7c12c52d-9b4d-5ea4-b65a-ef2a04803d05"
+          }
+        ]
+      },
+      {
+        "uuid": "55aa3205-b5a7-5159-b3c7-410bc6da2ead",
+        "title": "SI-2 (Sentinel program: organizational responsibilities): planned",
+        "description": "Define update time frames by severity with the ISSO.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "si-2"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "program"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "planned"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "f0a78292-1cb9-5a4a-a942-19adf7a15385"
+          }
+        ]
+      },
+      {
+        "uuid": "d360ad00-9ed6-5983-9548-3ea75ceaf545",
+        "title": "SI-4 (Sentinel node software): partial",
+        "description": "Forward logs to a collector when connected and alert on rejected merges and failed chain verification.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "si-4"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "node"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "ca277848-77e4-5283-ab9b-8ca97ac2caea"
+          }
+        ]
+      },
+      {
+        "uuid": "91b35d47-d846-58a1-8422-1c5b40d300b7",
+        "title": "SI-4 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Apply the STIG role and scan; route AIDE and audit alerts to the node's alerting path (stig.toml deviation audit-alerts).",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "si-4"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "a55d4957-dafa-5718-a6d8-dc9689feff99"
+          }
+        ]
+      },
+      {
+        "uuid": "6f253658-7997-53e4-ba01-00f1022b88e6",
+        "title": "SI-7 (Node host (Ubuntu 24.04 LTS)): partial",
+        "description": "Verify the bundle's cosign signature before the digest (docs/supply-chain.md); run make airgap-verify in CI.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "si-7"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "262c8bc6-5c86-5ed7-b81c-1db296d735d6"
+          }
+        ]
+      },
+      {
+        "uuid": "f4b73b89-cca5-5573-bc2e-8ba88b22c696",
+        "title": "SI-7 (Build, test and release pipeline): planned",
+        "description": "Sign and attest release artifacts in the release pipeline.",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "si-7"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "pipeline"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "planned"
+          },
+          {
+            "name": "milestone",
+            "ns": "urn:sentinel:oscal",
+            "value": "M4"
+          },
+          {
+            "name": "planned-evidence",
+            "ns": "urn:sentinel:oscal",
+            "value": "docs/supply-chain.md"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "19f4db29-0369-50f3-b5c1-717306a91b3d"
+          }
+        ]
+      },
+      {
+        "uuid": "c01ca073-9ee3-588a-9f65-76902933b24b",
+        "title": "SR-3 (Build, test and release pipeline): partial",
+        "description": "SBOM, cosign signatures, SLSA provenance and Trivy with VEX in the release pipeline (docs/supply-chain.md).",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "sr-3"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "pipeline"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          },
+          {
+            "name": "milestone",
+            "ns": "urn:sentinel:oscal",
+            "value": "M4"
+          },
+          {
+            "name": "planned-evidence",
+            "ns": "urn:sentinel:oscal",
+            "value": "docs/supply-chain.md"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "30906a7a-2397-53a0-bce1-ceab33d3e9a6"
+          }
+        ]
+      },
+      {
+        "uuid": "067de917-ad9d-5c02-b144-399edc6f8a33",
+        "title": "SR-4 (Build, test and release pipeline): partial",
+        "description": "SLSA build provenance for every release artifact (docs/supply-chain.md).",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "sr-4"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "pipeline"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          },
+          {
+            "name": "milestone",
+            "ns": "urn:sentinel:oscal",
+            "value": "M4"
+          },
+          {
+            "name": "planned-evidence",
+            "ns": "urn:sentinel:oscal",
+            "value": "docs/supply-chain.md"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "b6432452-6797-52f2-895d-c95efe54fcfa"
+          }
+        ]
+      },
+      {
+        "uuid": "60d83d43-4d33-50b0-9d0e-5f514425618d",
+        "title": "SR-11 (Build, test and release pipeline): partial",
+        "description": "cosign signature verification before install (docs/supply-chain.md).",
+        "props": [
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "sr-11"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "pipeline"
+          },
+          {
+            "name": "implementation-status",
+            "ns": "urn:sentinel:oscal",
+            "value": "partial"
+          },
+          {
+            "name": "milestone",
+            "ns": "urn:sentinel:oscal",
+            "value": "M4"
+          },
+          {
+            "name": "planned-evidence",
+            "ns": "urn:sentinel:oscal",
+            "value": "docs/supply-chain.md"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "2d9ef5eb-157a-5174-a6db-0c5a8066d964"
+          }
+        ]
+      },
+      {
+        "uuid": "d5a1bb2f-a432-5773-9b9e-e131e1565037",
+        "title": "STIG deviation: SSH shows the exercise notice, not the DoD Notice and Consent Banner",
+        "description": "The public demonstration node is not a U.S. Government information system. Presenting the USG notice there would misrepresent the system to anyone who connects.",
+        "props": [
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-200640"
+          },
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-200680"
+          },
+          {
+            "name": "stig-severity",
+            "ns": "urn:sentinel:oscal",
+            "value": "medium"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "ac-8"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "050f41b5-78bb-5de6-a0af-4c2e4ad80fe9"
+          }
+        ],
+        "remarks": "UBTU-24-200640 (V-270691, SV-270691r1066562_rule, CAT II): Ubuntu 24.04 LTS must display the Standard Mandatory DOD Notice and Consent Banner before granting access to via an SSH logon.\nUBTU-24-200680 (V-270694, SV-270694r1066571_rule, CAT II): Ubuntu 24.04 LTS must be configured to enforce the acknowledgement of the Standard Mandatory DOD Notice and Consent Banner for all SSH connections."
+      },
+      {
+        "uuid": "58cc8837-a3ad-5a91-a8dc-f334ac579047",
+        "title": "STIG deviation: Only SSH is rate-limited by the host firewall",
+        "description": "ufw's LIMIT denies a source address after six new connections in thirty seconds. Operators behind one NAT address would share that budget for the console on 443, and an edge's NATS leafnode reconnects every second after a drop (deploy/nats/edge.conf.tmpl, reconnect 1s), so limiting 7422 would block an edge exactly while it recovers from a DDIL outage: the behaviour the RECOVERY harness scenario exists to protect.",
+        "props": [
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-600200"
+          },
+          {
+            "name": "stig-severity",
+            "ns": "urn:sentinel:oscal",
+            "value": "medium"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "sc-5"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "e5b3ab0a-5646-51cd-9432-941a72c58054"
+          }
+        ],
+        "remarks": "UBTU-24-600200 (V-270754, SV-270754r1066751_rule, CAT II): Ubuntu 24.04 LTS must configure the uncomplicated firewall to rate-limit impacted network interfaces."
+      },
+      {
+        "uuid": "f58ace1d-d02d-5be4-b8ee-c154599fd741",
+        "title": "STIG deviation: The host does not run in FIPS mode",
+        "description": "FIPS mode needs Ubuntu Pro's FIPS-certified kernel and modules, which the demonstration hub does not carry. Sentinel's own signatures (Ed25519, via the Python cryptography package's bundled OpenSSL) do not use a FIPS-validated module either.",
+        "props": [
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-600030"
+          },
+          {
+            "name": "stig-severity",
+            "ns": "urn:sentinel:oscal",
+            "value": "high"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "sc-13"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "0c696346-1a93-5d07-8551-cb6d15505d60"
+          }
+        ],
+        "remarks": "UBTU-24-600030 (V-270744, SV-270744r1137699_rule, CAT I): Ubuntu 24.04 LTS must implement NIST FIPS-validated cryptography to protect classified information and for the following: To provision digital signatures, to generate cryptographic hashes, and to protect unclassified information requiring confidentiality and cryptographic protection in accordance with applicable federal laws, Executive Orders, directives, policies, regulations, and standards."
+      },
+      {
+        "uuid": "fa3748a0-e9bf-58c9-a33d-df9fbaf9ebff",
+        "title": "STIG deviation: No CAC/PIV logon and no DoD PKI certificate authorities",
+        "description": "PKI-based multifactor logon needs a DoD PKI (CAC/PIV cards, DoD root CAs, OCSP or CRLs) that the demonstration environment does not have.",
+        "props": [
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-100650"
+          },
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-100660"
+          },
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-100900"
+          },
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-100910"
+          },
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-400020"
+          },
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-400030"
+          },
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-400060"
+          },
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-400340"
+          },
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-400360"
+          },
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-400370"
+          },
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-400375"
+          },
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-400380"
+          },
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-600060"
+          },
+          {
+            "name": "stig-severity",
+            "ns": "urn:sentinel:oscal",
+            "value": "high"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "ia-2.1"
+          },
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "ia-2.12"
+          },
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "ia-2.2"
+          },
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "ia-2.6"
+          },
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "ia-5.13"
+          },
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "ia-5.2"
+          },
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "sc-17"
+          },
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "sc-23.5"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "de86cf30-8174-584a-a063-6d0743806bb6"
+          }
+        ],
+        "remarks": "UBTU-24-100650 (V-270662, SV-270662r1067156_rule, CAT II): Ubuntu 24.04 LTS must have the \"SSSD\" package installed.\nUBTU-24-100660 (V-270663, SV-270663r1066478_rule, CAT II): Ubuntu 24.04 LTS must use the \"SSSD\" package for multifactor authentication services.\nUBTU-24-100900 (V-270672, SV-270672r1067161_rule, CAT II): Ubuntu 24.04 LTS must accept Personal Identity Verification (PIV) credentials.\nUBTU-24-100910 (V-270673, SV-270673r1067164_rule, CAT II): Ubuntu 24.04 LTS must accept Personal Identity Verification (PIV) credentials managed through the Privileged Access Management (PAM)  framework.\nUBTU-24-400020 (V-270721, SV-270721r1066652_rule, CAT II): Ubuntu 24.04 LTS must implement smart card logins for multifactor authentication for local and network access to privileged and nonprivileged accounts.\nUBTU-24-400030 (V-270722, SV-270722r1067130_rule, CAT II): Ubuntu 24.04 LTS must implement smart card logins for multifactor authentication for local and network access to privileged and nonprivileged accounts over SSH.\nUBTU-24-400060 (V-270723, SV-270723r1066658_rule, CAT II): Ubuntu 24.04 LTS must electronically verify Personal Identity Verification (PIV) credentials.\nUBTU-24-400340 (V-270734, SV-270734r1155240_rule, CAT III): Ubuntu 24.04 LTS must be configured such that Pluggable Authentication Module (PAM) prohibits the use of cached authentications after one day.\nUBTU-24-400360 (V-270735, SV-270735r1066694_rule, CAT II): Ubuntu 24.04 LTS, for PKI-based authentication, SSSD must validate certificates by constructing a certification path (which includes status information) to an accepted trust anchor.\nUBTU-24-400370 (V-270736, SV-270736r1066697_rule, CAT I): Ubuntu 24.04 LTS must map the authenticated identity to the user or group account for PKI-based authentication.\nUBTU-24-400375 (V-270737, SV-270737r1067178_rule, CAT II): Ubuntu 24.04 LTS, for PKI-based authentication, Privileged Access Management (PAM) must validate certificates by constructing a certification path (which includes status information) to an accepted trust anchor.\nUBTU-24-400380 (V-270738, SV-270738r1066703_rule, CAT II): Ubuntu 24.04 LTS for PKI-based authentication, must implement a local cache of revocation data in case of the inability to access revocation information via the network.\nUBTU-24-600060 (V-270745, SV-270745r1066724_rule, CAT II): Ubuntu 24.04 LTS must use DOD PKI-established certificate authorities (CAs) for verification of the establishment of protected sessions."
+      },
+      {
+        "uuid": "bb21e908-904b-5748-9424-5e35b824811b",
+        "title": "STIG deviation: The automation account escalates without a password",
+        "description": "The Ubuntu cloud image's default account has NOPASSWD sudo (/etc/sudoers.d/90-cloud-init-users), and the Ansible playbook depends on it to become root.",
+        "props": [
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-300020"
+          },
+          {
+            "name": "stig-severity",
+            "ns": "urn:sentinel:oscal",
+            "value": "medium"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "cm-6"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "9c7129a9-9b72-5302-bee7-ad0167ab9d43"
+          }
+        ],
+        "remarks": "UBTU-24-300020 (V-274868, SV-274868r1107313_rule, CAT II): Ubuntu 24.04 LTS must require users to provide a password for privilege escalation."
+      },
+      {
+        "uuid": "2c26f719-fc4d-5cf8-a215-9b829fd5b1e9",
+        "title": "STIG deviation: Data at rest is encrypted by the platform, not by the operating system",
+        "description": "The hub's root volume is encrypted by EBS (deploy/aws/terraform/main.tf, encrypted = true), which the operating-system check (every partition in /etc/crypttab) cannot see.",
+        "props": [
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-600090"
+          },
+          {
+            "name": "stig-severity",
+            "ns": "urn:sentinel:oscal",
+            "value": "medium"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "sc-28"
+          },
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "sc-28.1"
+          },
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "sc-28.3"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "387ec0d4-2419-52fc-aa8d-388b01e67d2f"
+          }
+        ],
+        "remarks": "UBTU-24-600090 (V-270747, SV-270747r1066730_rule, CAT II): Ubuntu 24.04 LTS handling data requiring \"data at rest\" protections must employ cryptographic mechanisms to prevent unauthorized disclosure and modification of the information at rest."
+      },
+      {
+        "uuid": "956218d8-ae17-5b66-af18-7291e0f1c9a1",
+        "title": "STIG deviation: No boot-loader password",
+        "description": "The hub runs on EC2, where there is no interactive boot console unless EC2 serial console access is enabled, and the Terraform does not enable it.",
+        "props": [
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-102000"
+          },
+          {
+            "name": "stig-severity",
+            "ns": "urn:sentinel:oscal",
+            "value": "high"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "ac-3"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "bd4d4d63-f55a-5f61-a2f5-13a813e142c6"
+          }
+        ],
+        "remarks": "UBTU-24-102000 (V-270675, SV-270675r1137691_rule, CAT I): Ubuntu 24.04 LTS when booted must require authentication upon booting into single-user and maintenance modes."
+      },
+      {
+        "uuid": "6241b052-bb18-5514-8483-79b00c88b174",
+        "title": "STIG deviation: Audit records stay on the node",
+        "description": "There is no central audit collector in this deployment, and an edge node cannot reach one while its link is denied, which is the condition Sentinel is designed for.",
+        "props": [
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-100450"
+          },
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-900950"
+          },
+          {
+            "name": "stig-severity",
+            "ns": "urn:sentinel:oscal",
+            "value": "low"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "au-4.1"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "ea1e0c05-8a70-5d3d-bd55-f0925819dc46"
+          }
+        ],
+        "remarks": "UBTU-24-100450 (V-270658, SV-270658r1067151_rule, CAT III): Ubuntu 24.04 LTS audit event multiplexor must be configured to offload audit logs onto a different system or storage media from the system being audited.\nUBTU-24-900950 (V-270817, SV-270817r1066940_rule, CAT III): Ubuntu 24.04 LTS must have a crontab script running weekly to offload audit events of standalone systems."
+      },
+      {
+        "uuid": "6319d894-16ff-5103-84ad-3d6757504ab1",
+        "title": "STIG deviation: The default time source is not a DoD authoritative source",
+        "description": "The AWS hub uses the Amazon Time Sync Service (169.254.169.123), the source it can reach. The role applies the rest of the rule: only the configured sources, polled at least every 24 hours (maxpoll 16), with the Ubuntu pools disabled.",
+        "props": [
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-600160"
+          },
+          {
+            "name": "stig-severity",
+            "ns": "urn:sentinel:oscal",
+            "value": "low"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "sc-45"
+          },
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "sc-45.1"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "a6c34368-a3cd-5115-b7eb-a3a281514271"
+          }
+        ],
+        "remarks": "UBTU-24-600160 (V-270751, SV-270751r1066742_rule, CAT III): Ubuntu 24.04 LTS must compare internal information system clocks at least every 24 hours with an authoritative time server."
+      },
+      {
+        "uuid": "698a68f4-3cb4-5f4e-8033-854796d49843",
+        "title": "STIG deviation: Audit storage and failure alerts are not mailed to the SA and ISSO",
+        "description": "The node has no mail transport, and an edge has no route to a mail relay while disconnected.",
+        "props": [
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-900960"
+          },
+          {
+            "name": "stig-id",
+            "ns": "urn:sentinel:oscal",
+            "value": "UBTU-24-900980"
+          },
+          {
+            "name": "stig-severity",
+            "ns": "urn:sentinel:oscal",
+            "value": "low"
+          },
+          {
+            "name": "component",
+            "ns": "urn:sentinel:oscal",
+            "value": "host"
+          },
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "au-5"
+          },
+          {
+            "name": "related-control",
+            "ns": "urn:sentinel:oscal",
+            "value": "au-5.1"
+          }
+        ],
+        "related-risks": [
+          {
+            "risk-uuid": "8125b5ab-036f-5dee-9395-89b87fbafe5f"
+          }
+        ],
+        "remarks": "UBTU-24-900960 (V-270818, SV-270818r1066943_rule, CAT III): Ubuntu 24.04 LTS must immediately notify the system administrator (SA) and information system security officer (ISSO) (at a minimum) when allocated audit record storage volume reaches 75 percent of the repository maximum audit record storage capacity.\nUBTU-24-900980 (V-270819, SV-270819r1068390_rule, CAT III): Ubuntu 24.04 LTS must alert the system administrator (SA) and information system security officer (ISSO) (at a minimum) in the event of an audit processing failure."
+      }
+    ]
+  }
+}

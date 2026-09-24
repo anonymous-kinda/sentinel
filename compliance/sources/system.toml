@@ -1,0 +1,188 @@
+# The system, its components and how it is assessed. Authored by hand; the
+# SSP, component definition and assessment plan are generated from this file,
+# controls.toml and stig.toml by scripts/oscal_evidence.py.
+#
+# Bump [document] version and last_modified when you change any source file.
+
+[document]
+version = "0.1.0"
+last_modified = 2026-09-23T00:00:00Z
+
+[system]
+name = "Sentinel"
+short_name = "sentinel"
+description = """Sentinel is a conjunction assessment decision aid for satellite operators, built to keep \
+working on cloud, edge and air-gapped networks while the link between them is denied, degraded, \
+intermittent or limited (DDIL). It computes probability of collision (Foster-Estes 2D, validated \
+against NASA CARA's published cases), refuses when the method does not apply, flags dilution, \
+replicates operator decisions as signed CRDTs, and offers AI decision support that never computes \
+a number. It is a demonstration of an architecture, not an operational flight-safety system \
+(docs/system-design.md, Non-goals)."""
+state = "under-development"
+state_remarks = """Draft SSP, generated from compliance/sources. No authorization to operate has been \
+sought or granted: this package is ATO-ready evidence, not an authorization. The security \
+categorization is the maintainer's provisional one and has not been reviewed by an authorizing official."""
+authorization_boundary = """One Sentinel deployment: its hub and edge nodes (the sentinel service and each \
+node's own nats-server), the node hosts (Ubuntu 24.04 LTS, configured by deploy/ansible), the AWS \
+cloud hub infrastructure (deploy/aws/terraform: one VPC, one EC2 instance, its security group and \
+IAM role), and the build and release pipeline that produces the installable bundle \
+(.github/workflows, scripts/build_bundle.py). Outside the boundary: operators' browsers, GitHub, \
+AWS itself, Let's Encrypt, upstream data sources (Space-Track, CelesTrak, NASA CARA's published \
+files) and the hosted AI services (TypeSafe Jev, Anthropic Claude), which a node reaches only with \
+operator opt-in on an UNCLASSIFIED marking."""
+network_architecture = """Each node runs the sentinel service on 127.0.0.1:8000 and its own nats-server on \
+127.0.0.1. On the cloud hub, Caddy terminates TLS on 443 (certificates from Let's Encrypt over \
+HTTP-01 on 80) and proxies to the node; SSH (22) is open only to the admin network; the NATS \
+leafnode port (7422) is closed unless edge networks are allow-listed, and TLS on that link is \
+planned (SC-8). An edge's nats-server holds one leafnode connection to the hub; everything else on \
+an edge is local to it."""
+data_flow = """CDMs enter a node by upload (disabled on the read-only public node) or, on an edge, by pulling \
+them from the hub over the leaf link: manifest, set difference, then fetch in earliest-deadline order. \
+Every CDM passes the admission policy and is re-assessed locally before it is shown as VERIFIED. \
+Operator decisions and annotations are CRDT state, exchanged in both directions by anti-entropy. \
+Node-local events stay on node-scoped subjects, and an edge never exports ground-unit position or \
+pass windows to its hub. Hosted AI requests leave a node only under the tier policy."""
+
+[system.impact]
+confidentiality = "fips-199-moderate"
+integrity = "fips-199-moderate"
+availability = "fips-199-moderate"
+
+[[information_type]]
+title = "Conjunction assessment data"
+description = """CDMs (NASA CARA's published operational events, exercise data marked \
+ORIGINATOR=SENTINEL-EXERCISE) and the assessments computed from them. Provisional impact: \
+confidentiality low (public and exercise data; Space-Track data is not served), integrity moderate \
+(a wrong or unflagged Pc misleads a maneuver decision), availability moderate (the decision is due \
+before the commit point, connected or not)."""
+confidentiality = "fips-199-low"
+integrity = "fips-199-moderate"
+availability = "fips-199-moderate"
+
+[[information_type]]
+title = "Operator decisions and annotations"
+description = """The signed decision log, triage status, notes and the AI interaction audit log. \
+Provisional impact: integrity moderate (decisions must be attributable and tamper-evident), \
+availability moderate (operators decide while disconnected)."""
+confidentiality = "fips-199-low"
+integrity = "fips-199-moderate"
+availability = "fips-199-moderate"
+
+[[information_type]]
+title = "Ground-unit position and pass windows"
+description = """The position of a supported ground unit and the overhead pass windows computed from \
+it (the pass module, in development). Operationally sensitive: it must never leave the edge that \
+holds it. Provisional impact: confidentiality moderate."""
+confidentiality = "fips-199-moderate"
+integrity = "fips-199-moderate"
+availability = "fips-199-low"
+
+[[role]]
+id = "maintainer"
+title = "Maintainer"
+
+[[role]]
+id = "operator"
+title = "Satellite operator"
+
+[[role]]
+id = "administrator"
+title = "Node administrator"
+
+[[party]]
+key = "maintainer"
+type = "organization"
+name = "Sentinel maintainers"
+roles = ["maintainer"]
+
+[[user]]
+key = "operator"
+title = "Satellite operator"
+description = """Triages conjunctions, records decisions and asks the assistant, through a node's \
+console. Identified by the X-Sentinel-Operator header that the front proxy sets; not yet \
+authenticated by the node (IA-2)."""
+roles = ["operator"]
+
+[[user]]
+key = "administrator"
+title = "Node administrator"
+description = """Deploys and configures nodes with Ansible, over SSH with a public key from the admin \
+network, or through AWS Session Manager as the break-glass path."""
+roles = ["administrator"]
+
+[[component]]
+key = "node"
+type = "software"
+title = "Sentinel node software"
+description = """The sentinel Python package and its operator console (web/): CDM codec and admission \
+policy, risk engine, conjunction service and store, sync agent and server, signed CRDT decision \
+log, AI assistant, and the FastAPI node that serves them."""
+state = "under-development"
+
+[[component]]
+key = "nats"
+type = "software"
+title = "Node message bus (nats-server)"
+description = """Each node's own nats-server (2.15.0, pinned in deploy/tools.lock) and its \
+configuration (deploy/nats): the local bus, and the leafnode link from edge to hub with its \
+subject permissions."""
+state = "under-development"
+
+[[component]]
+key = "host"
+type = "software"
+title = "Node host (Ubuntu 24.04 LTS)"
+description = """The operating system a node runs on, configured by deploy/ansible: the baseline role, \
+the offline installer and hardened systemd unit (deploy/bundle, deploy/systemd), Caddy in front of \
+the hub, and the STIG role (DISA Ubuntu 24.04 STIG V1R6 subset)."""
+state = "under-development"
+
+[[component]]
+key = "aws"
+type = "service"
+title = "AWS cloud hub infrastructure"
+description = """The public demonstration hub as code (deploy/aws/terraform): a VPC, one Graviton \
+EC2 instance with an encrypted root volume and IMDSv2 required, its security group, an IAM role \
+limited to Session Manager, and a budget alarm."""
+state = "under-development"
+
+[[component]]
+key = "pipeline"
+type = "process-procedure"
+title = "Build, test and release pipeline"
+description = """The GitHub Actions workflows (.github/workflows), the test ladder and DDIL harness, \
+pinned tools and hash-locked dependencies, the bundle builder, and this compliance package's \
+generator."""
+state = "operational"
+
+[[component]]
+key = "program"
+type = "policy"
+title = "Sentinel program: organizational responsibilities"
+description = """What an owning organization supplies and a repository cannot: review cadences, \
+approval authority, remediation timelines and reporting. Listed so the SSP says where they are \
+missing rather than implying the code covers them."""
+state = "under-development"
+
+# The three kinds of evidence the generator reads. Keys are fixed: each names
+# the reader behind it (JUnit XML, harness JSON, XCCDF results).
+[[assessment]]
+key = "ladder"
+title = "Test ladder (pytest, network disabled)"
+description = """The full pytest suite, run on every push and pull request with sockets disabled. \
+Its JUnit XML is the evidence for every control that cites a test."""
+ci = ["ci.yml#python", "ci.yml#compliance"]
+
+[[assessment]]
+key = "harness"
+title = "DDIL harness"
+description = """Real two-node clusters (two nats-servers joined by a leafnode, Toxiproxy on that TCP \
+link, two Sentinel nodes) driven through DENIED, LIMITED, INTERMITTENT, DEGRADED and RECOVERY. One \
+JSON result per scenario (harness/results)."""
+ci = ["harness.yml#scenario"]
+
+[[assessment]]
+key = "stig-scan"
+title = "OpenSCAP scan against the DISA STIG benchmark"
+description = """Run on a node host by deploy/ansible/roles/stig (stig_scan: true) with the DISA SCAP \
+benchmark; XCCDF results, a DISA checklist (.ckl) via the MITRE SAF CLI. Not yet run."""

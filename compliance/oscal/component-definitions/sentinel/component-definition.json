@@ -1,0 +1,2272 @@
+{
+  "component-definition": {
+    "uuid": "f3e4ea5d-b9e0-51c8-8459-935ab9fb3965",
+    "metadata": {
+      "title": "Sentinel component definition",
+      "last-modified": "2026-09-23T00:00:00Z",
+      "version": "0.1.0",
+      "oscal-version": "1.2.1"
+    },
+    "components": [
+      {
+        "uuid": "cd16ef70-2e73-501e-9c7f-4caa10a38352",
+        "type": "software",
+        "title": "Sentinel node software",
+        "description": "The sentinel Python package and its operator console (web/): CDM codec and admission policy, risk engine, conjunction service and store, sync agent and server, signed CRDT decision log, AI assistant, and the FastAPI node that serves them.",
+        "control-implementations": [
+          {
+            "uuid": "3357c9aa-5fb2-5802-85cf-77588b9b8be0",
+            "source": "trestle://profiles/sentinel/profile.json",
+            "description": "What the Sentinel node software contributes to each control in the Sentinel profile.",
+            "implemented-requirements": [
+              {
+                "uuid": "d6187af3-570c-5b79-bed4-2ed1859720cc",
+                "control-id": "ac-2",
+                "description": "The node has no user accounts. It records the operator identity that the front proxy asserts in the X-Sentinel-Operator header (sentinel/api/identity.py) and does not authenticate it.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "planned"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/api/identity.py"
+                  }
+                ],
+                "remarks": "Plan: Put an authenticating proxy (OIDC, or mTLS with CAC/PIV) in front of every node that sets X-Sentinel-Operator from the verified identity and strips any client-supplied value; manage operator accounts in the organization's identity provider. The current Caddyfile does neither."
+              },
+              {
+                "uuid": "fec5e418-efb2-5dcc-8dd9-5c63136fe67f",
+                "control-id": "ac-3",
+                "description": "A read-only node (SENTINEL_READ_ONLY, set on the public hub) answers reads and refuses writes with 403: CDM ingest and AI draft confirmation are tested; the decision, note and annotation endpoints call the same guard (sentinel/api/app.py). A replica merges decision-log entries only from nodes in its trust store; others are rejected before merge and recorded. There is no per-operator authorization: any identity the proxy asserts may write.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/api/test_api.py::test_read_only_node_refuses_ingest"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/api/test_ai_api.py::test_a_read_only_node_answers_but_never_records"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/property/test_crdt.py::test_untrusted_node_is_rejected"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/api/app.py"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/crdt/log.py"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/sentinel/templates/sentinel.env.j2"
+                  }
+                ],
+                "remarks": "Plan: Test the read-only refusal on the decision, note and annotation endpoints; authorize by role once operators are authenticated (IA-2), for example so that only a designated role may record a MANEUVER decision or resolve a conflict."
+              },
+              {
+                "uuid": "626a37ee-f0a9-5b74-94b3-56f35e100663",
+                "control-id": "ac-4",
+                "description": "The assistant's tier policy is a pure function of the classification marking, operator opt-in (SENTINEL_AI_CLOUD) and the measured link state: hosted AI needs an UNCLASSIFIED marking and opt-in, and a DENIED link or any other marking means local only. With hosted AI not allowed, no request leaves the node.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "implemented"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/ai/test_policy.py::test_tier_table"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/ai/test_assistant.py::test_denied_or_classified_never_calls_a_hosted_service"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/api/test_ai_api.py::test_hosted_providers_are_used_only_with_opt_in"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/ai/policy.py"
+                  }
+                ]
+              },
+              {
+                "uuid": "e804286e-f5ca-58e2-bcce-4978c7e2b3d4",
+                "control-id": "ac-6",
+                "description": "Least privilege between modules is a contract checked in CI: import-linter forbids the AI layer from importing the risk engine, the CDM codec, numpy and scipy, confines the hosted AI SDKs to their two adapter modules, and keeps the bus, sync, CRDT and triage layers free of mission modules (.importlinter).",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "implemented"
+                  },
+                  {
+                    "name": "evidence-ci",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "ci.yml#python"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": ".importlinter"
+                  }
+                ]
+              },
+              {
+                "uuid": "b064d708-223b-5e19-b9b1-cc84be2089a0",
+                "control-id": "au-2",
+                "description": "The node logs: every assistant question and every confirmation, one line each in a hash-chained audit log; every decision, note, resolution and confirmed AI draft, as signed decision-log entries; every CDM admitted or quarantined, with the reason; and service events as structured JSON logs whose messages are constants, so they can be searched and alerted on.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "implemented"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/ai/test_assistant.py::test_every_ask_and_confirm_is_audited_in_a_verifiable_chain"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/api/test_api.py::test_upload_is_idempotent_and_wrong_input_is_quarantined"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_logging_policy.py::test_log_messages_are_constants_with_values_as_fields"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_obs.py::test_json_formatter_emits_one_object_per_line"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/audit/chain.py"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/crdt/log.py"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/obs.py"
+                  }
+                ]
+              },
+              {
+                "uuid": "9be7ce35-3ab8-5ccf-b10b-1f41cb582fe2",
+                "control-id": "au-3",
+                "description": "A decision-log entry records its author (the operator identity the proxy asserts; see IA-2), the authoring node and its sequence (the dot), wall time and Lamport time, the kind and body of the decision, the event and CDM message it was made against, the previous entry's hash and an Ed25519 signature. An AI audit record carries its sequence, time, author, the question, the tier, the chosen route, which narrator phrased the answer, the grounding verdict, any fallback, the answer, a hash of the tool facts and the chain hash. Service logs are JSON with time, level, logger, message and fields.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "implemented"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/ai/test_audit.py::test_records_form_a_chain"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/ai/test_assistant.py::test_a_draft_writes_nothing_until_a_person_confirms_it"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_obs.py::test_message_stays_stable_and_values_become_fields"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_tier6_contract.py::test_result_is_serialisable_for_the_decision_log"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/crdt/log.py"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/ai/assistant.py"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/obs.py"
+                  }
+                ]
+              },
+              {
+                "uuid": "9499f05e-e389-523f-b9df-da61bafa31f8",
+                "control-id": "au-6",
+                "description": "The node verifies its AI audit chain on request (GET /api/ai/audit/verify) and names the first bad line; it verifies every decision-log signature on merge and shows the result per entry; it surfaces for review what replication cannot decide: concurrent edits (CONFLICT) and decisions made against a CDM that has since been superseded (REVIEW REQUIRED).",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/api/test_ai_api.py::test_the_audit_chain_is_served_persisted_and_verifies"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/sync/test_hub_edge.py::test_operator_data_merges_both_ways_and_conflicts_are_kept"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/sync/test_hub_edge.py::test_decision_becomes_review_required_when_its_cdm_is_superseded"
+                  },
+                  {
+                    "name": "evidence-harness",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "denied"
+                  }
+                ],
+                "remarks": "Plan: Forward the structured logs and audit records to a collector when the link allows, and alert on a failed chain verification instead of reporting it only when asked."
+              },
+              {
+                "uuid": "7c07d9f3-3983-5642-a479-7695c260907d",
+                "control-id": "au-9",
+                "description": "The AI audit log is hash-chained: editing or deleting a line is detected at that line. Decision-log entries are Ed25519-signed and hash-chained per node; a tampered entry is rejected before merge, and a replica that sees one dot with two different contents stops rather than choose. A decision made offline at an edge arrives at the hub with a valid signature. Truncating the newest lines of the AI audit log leaves a shorter chain that still verifies.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/ai/test_audit.py::test_editing_a_line_is_detected_at_that_line"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/ai/test_audit.py::test_deleting_a_line_is_detected"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/property/test_crdt.py::test_tampered_entry_is_rejected_not_merged"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/property/test_crdt.py::test_same_dot_with_different_content_raises"
+                  },
+                  {
+                    "name": "evidence-harness",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "denied"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/audit/chain.py"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/crdt/log.py"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/crdt/signing.py"
+                  }
+                ],
+                "remarks": "Plan: Anchor the AI audit chain's head outside the file (in the signed decision log, or at the hub on reconnect) so truncation is detectable, and alert on a failed verification."
+              },
+              {
+                "uuid": "0db696ac-6c9c-5812-b463-2daaa481e526",
+                "control-id": "au-10",
+                "description": "Every decision-log entry is signed with its authoring node's Ed25519 key and verified against the trust store on merge, so no node can alter another's entries or author entries in its name. A confirmed AI draft carries its provenance: router, confidence, model and the audit sequence of the question. The operator identity inside an entry is asserted by the proxy, not authenticated, so non-repudiation holds for the node, not yet for the person.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/property/test_crdt.py::test_tampered_entry_is_rejected_not_merged"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/property/test_crdt.py::test_untrusted_node_is_rejected"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/sync/test_hub_edge.py::test_operator_data_merges_both_ways_and_conflicts_are_kept"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/ai/test_assistant.py::test_a_draft_writes_nothing_until_a_person_confirms_it"
+                  },
+                  {
+                    "name": "evidence-harness",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "denied"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/crdt/signing.py"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/crdt/log.py"
+                  }
+                ],
+                "remarks": "Plan: Bind each entry to an authenticated operator (IA-2), for example with a per-operator signature from a CAC/PIV key alongside the node's."
+              },
+              {
+                "uuid": "136bb390-98f3-53fb-9d15-5ced5ad8a3a4",
+                "control-id": "cm-7",
+                "description": "The public node is read-only and serves only exercise data and NASA's published reference set (deploy/ansible/roles/sentinel/templates/sentinel.env.j2); hosted AI is off unless the operator opts in; the assistant can be switched off entirely; the console's Content-Security-Policy stops the browser from contacting any origin but the node.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "implemented"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/api/test_api.py::test_read_only_node_refuses_ingest"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/api/test_api.py::test_console_is_served_under_a_same_origin_content_security_policy"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/api/test_ai_api.py::test_hosted_providers_are_used_only_with_opt_in"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/api/test_ai_api.py::test_the_assistant_can_be_switched_off"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/sentinel/templates/sentinel.env.j2"
+                  }
+                ]
+              },
+              {
+                "uuid": "0a017295-c9a7-571d-be12-01f5d2f828d6",
+                "control-id": "ia-2",
+                "description": "Operators are not authenticated by the node or by the current front proxy. The node trusts the X-Sentinel-Operator header, and the hub's Caddyfile neither sets nor strips it.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "planned"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/api/identity.py"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/caddy/templates/Caddyfile.j2"
+                  }
+                ],
+                "remarks": "Plan: Authenticate operators at the proxy (CAC/PIV mTLS on DoD networks, OIDC elsewhere), set the header from the verified identity and strip any client-supplied value; until then, keep writable nodes off untrusted networks."
+              },
+              {
+                "uuid": "7ebdc741-55d6-5298-8deb-8ca9cae73162",
+                "control-id": "ia-5",
+                "description": "Each node generates its Ed25519 key on first start and stores it readable only by the service account (mode 0600). Other nodes are trusted only through the trust-store file that maps node ids to public keys (SENTINEL_TRUST_FILE). There is no rotation or revocation.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/property/test_crdt.py::test_untrusted_node_is_rejected"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/crdt/signing.py"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/ops/service.py"
+                  }
+                ],
+                "remarks": "Plan: Signed trust-store updates with key rotation and revocation; hardware-backed keys (TPM) on edge hardware."
+              },
+              {
+                "uuid": "7a30e75a-1e99-5ffb-8919-6471f6056ed6",
+                "control-id": "sc-7",
+                "description": "The service listens on loopback only, behind Caddy; each node's nats-server accepts client connections on loopback only (the hub's leafnode listener is the one exception, governed by SC-7 for the AWS hub and by AC-4); the console's Content-Security-Policy restricts the browser to the node's own origin.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "implemented"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_deploy_conformance.py::test_service_runs_unprivileged_sandboxed_and_on_loopback"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/api/test_api.py::test_console_is_served_under_a_same_origin_content_security_policy"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/systemd/sentinel.service"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/nats/hub.conf.tmpl"
+                  }
+                ]
+              },
+              {
+                "uuid": "6d0bef53-d258-55f9-b90e-0aeb0509446a",
+                "control-id": "sc-12",
+                "description": "Node signing keys are generated on the node and never leave it; trust is established by distributing public keys in a trust-store file. There is no automated distribution, rotation or revocation.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/property/test_crdt.py::test_untrusted_node_is_rejected"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/crdt/signing.py"
+                  }
+                ],
+                "remarks": "Plan: Signed trust-store distribution with rotation and revocation; keys in hardware on edge nodes."
+              },
+              {
+                "uuid": "da64b8c4-8609-593a-9c19-d7ad0222f896",
+                "control-id": "sc-13",
+                "description": "Ed25519 signs decision-log entries; SHA-256 hashes assessment inputs, the audit chain and bundle files. The implementation is the Python cryptography package, whose bundled OpenSSL is not a FIPS-validated module.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/property/test_crdt.py::test_tampered_entry_is_rejected_not_merged"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_tier6_contract.py::test_inputs_hash_changes_when_any_input_changes"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/crdt/signing.py"
+                  }
+                ],
+                "remarks": "Plan: Use a FIPS 140-3 validated cryptographic module for signing and hashing."
+              },
+              {
+                "uuid": "3e7543f8-3bf1-5858-8a3c-41bd169a49ef",
+                "control-id": "si-4",
+                "description": "Each node measures its link to the hub and classifies it (CONNECTED, DEGRADED, LIMITED, DENIED) from measurement, not configuration. Rejected decision-log entries (untrusted node or bad signature) are recorded with the reason, and service events are structured JSON logs ready for collection. Nothing correlates them or raises an alert.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_linkstate.py::test_states_follow_measurements"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/property/test_crdt.py::test_tampered_entry_is_rejected_not_merged"
+                  },
+                  {
+                    "name": "evidence-harness",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "denied"
+                  },
+                  {
+                    "name": "evidence-harness",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "degraded"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/linkstate/monitor.py"
+                  }
+                ],
+                "remarks": "Plan: Forward logs to a collector when connected and alert on rejected merges and failed chain verification."
+              },
+              {
+                "uuid": "695c5ad3-5056-5377-96b4-450763617f3b",
+                "control-id": "si-7",
+                "description": "Decision-log entries are verified (signature and per-node hash chain) before they are merged, and a replica that sees one dot with two contents stops rather than choose. The AI audit chain verifies on demand. Vendored reference data is checked against its SHA-256 sums by the tests.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "implemented"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/property/test_crdt.py::test_tampered_entry_is_rejected_not_merged"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/property/test_crdt.py::test_same_dot_with_different_content_raises"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/ai/test_audit.py::test_editing_a_line_is_detected_at_that_line"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_tier3_cara_validation.py::test_vendored_nasa_files_are_unmodified"
+                  }
+                ]
+              },
+              {
+                "uuid": "f943bc57-030a-508b-9baf-51d54184685d",
+                "control-id": "si-10",
+                "description": "Every CDM passes an admission policy: input that would make the answer wrong (wrong unit labels, a non-inertial frame, a partial covariance, non-finite states, a header miss distance that contradicts the states) is quarantined with a named reason; input that only makes it incomplete (no covariance at all, an anomalous unit on a summary field) is accepted with a recorded warning and degrades to geometry only. Text that is not a CDM is rejected. The risk engine never raises on bad data: it returns REFUSED with the value that tripped the gate. Peer decision-log entries are verified before merge; assistant questions are bounded in size.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "implemented"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_cdm_codec.py::test_wrong_messages_are_rejected_with_a_named_reason"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_cdm_codec.py::test_absent_covariance_degrades_to_geometry_only"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_cdm_codec.py::test_nasa_unit_label_anomaly_is_a_warning_not_a_rejection"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_cdm_codec.py::test_rejects_text_that_is_not_a_cdm"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/api/test_api.py::test_upload_is_idempotent_and_wrong_input_is_quarantined"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_tier1_geometry.py::test_tca_inconsistent_input_is_refused_not_processed"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_tier5_refusal.py::test_every_refusal_records_the_value_that_tripped_it"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/property/test_crdt.py::test_tampered_entry_is_rejected_not_merged"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/api/test_ai_api.py::test_empty_or_oversized_questions_are_rejected"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/cdm/validate.py"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/conjunction/service.py"
+                  }
+                ]
+              },
+              {
+                "uuid": "9ac1da91-6730-570c-bc46-68c55b18f36a",
+                "control-id": "si-15",
+                "description": "Every AI-written answer passes a number-grounding guard: each number, including numbers attached to units, must match a number in the tool results or the question at the precision it is stated. Otherwise the answer is withheld, the deterministic template answer is shown, and the unsupported numbers are named. Template answers pass the same guard. A Pc never leaves the engine, the API or the assistant without its method.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "implemented"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/ai/test_grounding.py::test_an_invented_number_is_caught"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/ai/test_grounding.py::test_precision_must_match_what_the_evidence_supports"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/ai/test_grounding.py::test_numbers_glued_to_units_or_letters_are_still_checked"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/ai/test_assistant.py::test_an_ungrounded_ai_answer_is_withheld_and_the_facts_shown"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/ai/test_narrate.py::test_every_template_answer_passes_the_grounding_guard"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/ai/test_narrate.py::test_a_pc_is_never_stated_without_its_method"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_tier6_contract.py::test_pc_never_travels_without_method"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/api/test_api.py::test_every_pc_travels_with_its_method"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/ai/grounding.py"
+                  }
+                ]
+              },
+              {
+                "uuid": "7706f8e4-7be0-55f4-aa73-6d3a2bd714d6",
+                "control-id": "si-17",
+                "description": "With the link denied, an edge keeps serving its console (2.7 ms p95 while cut off in the last recorded run) and records signed decisions locally; on reconnect nothing is lost, concurrent edits are kept as a CONFLICT, and decisions made against superseded CDMs are flagged REVIEW REQUIRED. Until a CDM has been fetched and re-assessed locally, an edge shows the event as HUB-ASSERTED, never as verified. A failing hosted AI call falls back to the local router or templates within the same answer. The risk engine refuses, with the reason and the tripping value, every event NASA CARA says the 2D method cannot handle.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "implemented"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_tier5_refusal.py::test_low_relative_velocity_is_refused"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_tier5_refusal.py::test_non_positive_definite_covariance_is_refused_not_repaired"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_tier5_refusal.py::test_missing_covariance_is_refused_with_no_fallback"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_tier5_refusal.py::test_long_curved_along_track_uncertainty_is_refused"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_tier3_cara_validation.py::test_gate_refuses_every_event_cara_says_2d_cannot_handle"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/sync/test_hub_edge.py::test_edge_sees_every_event_as_hub_asserted_before_any_cdm_arrives"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/ai/test_assistant.py::test_a_jev_outage_falls_back_to_the_local_router"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/ai/test_assistant.py::test_a_narrator_outage_falls_back_to_templates"
+                  },
+                  {
+                    "name": "evidence-harness",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "denied"
+                  },
+                  {
+                    "name": "evidence-harness",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "intermittent"
+                  },
+                  {
+                    "name": "evidence-harness",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "recovery"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "docs/ddil-results.md"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "uuid": "a0709e7a-2515-5622-bb85-376d91a1b365",
+        "type": "software",
+        "title": "Node message bus (nats-server)",
+        "description": "Each node's own nats-server (2.15.0, pinned in deploy/tools.lock) and its configuration (deploy/nats): the local bus, and the leafnode link from edge to hub with its subject permissions.",
+        "control-implementations": [
+          {
+            "uuid": "300c47d7-92db-54a8-96bd-8f2c957ec94e",
+            "source": "trestle://profiles/sentinel/profile.json",
+            "description": "What the Node message bus (nats-server) contributes to each control in the Sentinel profile.",
+            "implemented-requirements": [
+              {
+                "uuid": "e0756c8e-0bc5-5695-8d43-4d8aa88b3b7f",
+                "control-id": "ac-4",
+                "description": "OPSEC by configuration: the edge's leafnode remote denies exporting unit.>, passes.> and node.>, and denies importing node.> (deploy/nats/edge.conf.tmpl), so a ground unit's position, its pass windows and the edge's console events cannot cross to the hub through the bus. Console events use node-scoped subjects (sentinel/bus/subjects.py, ADR-009). Every DDIL harness scenario runs with this configuration.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_deploy_conformance.py::test_edge_never_exports_unit_passes_or_node_subjects"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/nats/edge.conf.tmpl"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/bus/subjects.py"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "harness/cluster.py"
+                  }
+                ],
+                "remarks": "Plan: Add a harness scenario that publishes on unit.> and passes.> at the edge and asserts nothing arrives at the hub, so the denial is shown on a real leaf link and not only in the configuration. The pass module that publishes those subjects is still in development."
+              },
+              {
+                "uuid": "2fd29aa5-2afa-52b2-81b4-40d9d9fe87fe",
+                "control-id": "cm-6",
+                "description": "The NATS settings that differ from vendor defaults are documented with the measured reason (docs/system-design.md, Findings from the DDIL harness) and guarded by harness scenarios: no_advertise on the hub's leaf listener, a 20-second first-INFO timeout and a 30-second leaf authorization timeout for thin links, and a 5-second ping interval with 3 missed pings to detect a black-holed link.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "implemented"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_deploy_conformance.py::test_nats_settings_carry_the_ddil_fixes"
+                  },
+                  {
+                    "name": "evidence-harness",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "recovery"
+                  },
+                  {
+                    "name": "evidence-harness",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "limited"
+                  },
+                  {
+                    "name": "evidence-harness",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "denied"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/nats/hub.conf.tmpl"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/nats/edge.conf.tmpl"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "docs/system-design.md"
+                  }
+                ]
+              },
+              {
+                "uuid": "534ff64f-5e75-5c22-bdff-0bf19cac893a",
+                "control-id": "sc-8",
+                "description": "The leafnode link between an edge and its hub is not encrypted: the configuration templates leave a place for TLS (LEAF_TLS, REMOTE_TLS) but none is configured, and the harness runs the link in the clear over loopback.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "planned"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/nats/hub.conf.tmpl"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/nats/edge.conf.tmpl"
+                  }
+                ],
+                "remarks": "Plan: Configure leafnode mTLS with per-node certificates, and measure the handshake on the LIMITED link profile before relying on it (the harness has already shown the default leaf timeouts are too short for a thin link)."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "uuid": "7aeb24b9-53ea-5b02-954f-2cb7f448c8d9",
+        "type": "software",
+        "title": "Node host (Ubuntu 24.04 LTS)",
+        "description": "The operating system a node runs on, configured by deploy/ansible: the baseline role, the offline installer and hardened systemd unit (deploy/bundle, deploy/systemd), Caddy in front of the hub, and the STIG role (DISA Ubuntu 24.04 STIG V1R6 subset).",
+        "control-implementations": [
+          {
+            "uuid": "05f34d4d-087a-5ac0-a5a7-c39390e6bde9",
+            "source": "trestle://profiles/sentinel/profile.json",
+            "description": "What the Node host (Ubuntu 24.04 LTS) contributes to each control in the Sentinel profile.",
+            "implemented-requirements": [
+              {
+                "uuid": "7f498441-d776-5c1d-a6d1-513b5e8e7c71",
+                "control-id": "ac-2",
+                "description": "The installer creates a system account, sentinel, with no login shell, and the service runs as it (deploy/bundle/install.sh, deploy/systemd/sentinel.service). Root cannot log in over SSH (baseline role) or directly (STIG role, UBTU-24-400110); accounts are disabled 35 days after password expiry (UBTU-24-200260); each account is limited to 10 sessions (UBTU-24-200000); changes to account files are audited (UBTU-24-200280 to UBTU-24-200320).",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_deploy_conformance.py::test_service_runs_unprivileged_sandboxed_and_on_loopback"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/bundle/install.sh"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/stig/tasks/accounts.yml"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/stig/files/stig.rules"
+                  }
+                ],
+                "remarks": "Plan: Apply the STIG role to the hub and verify it with the OpenSCAP scan (stig_scan: true)."
+              },
+              {
+                "uuid": "04bc9d03-d51d-5545-8d0c-caa3a1536e54",
+                "control-id": "ac-3",
+                "description": "The service runs sandboxed by systemd: read-only filesystem except its own var directory, no new privileges, no capabilities, restricted address families and system calls, UMask 0077. The node's signing key is written readable only by its owner (mode 0600, sentinel/crdt/signing.py). AppArmor is installed and enabled (STIG role, UBTU-24-100500, UBTU-24-100510).",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_deploy_conformance.py::test_service_runs_unprivileged_sandboxed_and_on_loopback"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/systemd/sentinel.service"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/crdt/signing.py"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/stig/tasks/packages.yml"
+                  }
+                ],
+                "remarks": "Plan: Verify the sandbox on a deployed host (systemd-analyze security) and apply the STIG role."
+              },
+              {
+                "uuid": "87a3bea2-3e87-5062-80b5-3bc411813f72",
+                "control-id": "ac-6",
+                "description": "The node runs as the unprivileged sentinel account with no capabilities and no new privileges, bound to loopback behind Caddy (deploy/systemd/sentinel.service).",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_deploy_conformance.py::test_service_runs_unprivileged_sandboxed_and_on_loopback"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/systemd/sentinel.service"
+                  }
+                ],
+                "remarks": "Plan: Verify on a deployed host; the automation account's NOPASSWD sudo is a STIG deviation (UBTU-24-300020)."
+              },
+              {
+                "uuid": "3b569c5e-94ac-537a-82ff-eac1b369eccd",
+                "control-id": "ac-17",
+                "description": "SSH accepts public keys only (password and keyboard-interactive authentication off), refuses root, allows three authentication attempts and drops idle sessions after 300 seconds (baseline role). The STIG role restricts SSH to DISA's FIPS 140-3 approved ciphers, MACs and key exchange algorithms (UBTU-24-100820, UBTU-24-100830, UBTU-24-100840) and rate-limits new SSH connections in the host firewall.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_deploy_conformance.py::test_sshd_baseline_accepts_keys_only_and_times_out_idle_sessions"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_stig_role.py::test_ssh_algorithms_are_exactly_disas"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/baseline/tasks/main.yml"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/stig/tasks/ssh.yml"
+                  }
+                ],
+                "remarks": "Plan: Apply the STIG role to the hub and verify it with the OpenSCAP scan."
+              },
+              {
+                "uuid": "c5bda9e3-6684-5e83-a7be-d6bd84b128ad",
+                "control-id": "au-2",
+                "description": "auditd records changes to account files, use of su and sudo, changes to sudoers and kernel module loading and unloading, from boot (audit=1), with the rules immutable until reboot (STIG role; the rules are taken verbatim from DISA's fix text).",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_stig_role.py::test_audit_rules_are_the_fix_text_rules"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/stig/files/stig.rules"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/stig/tasks/audit.yml"
+                  }
+                ],
+                "remarks": "Plan: Apply the STIG role and scan; review the selected event types with the ISSO, which AU-2 also asks for."
+              },
+              {
+                "uuid": "260935f7-f6ae-53fc-b3b4-f5116e532782",
+                "control-id": "au-9",
+                "description": "Audit rules are immutable once loaded (-e 2, UBTU-24-909000); the service writes its data under UMask 0077 in a directory only it can write (deploy/systemd/sentinel.service).",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_stig_role.py::test_audit_rules_end_immutable"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_deploy_conformance.py::test_service_runs_unprivileged_sandboxed_and_on_loopback"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/stig/files/stig.rules"
+                  }
+                ],
+                "remarks": "Plan: Apply the STIG role and scan; the audit-log file permission rules (UBTU-24-901300 and following) are not yet in the role."
+              },
+              {
+                "uuid": "ce17ab03-e882-58e8-88d3-f17584a52326",
+                "control-id": "cm-6",
+                "description": "The STIG role applies 55 rules of the DISA Ubuntu 24.04 STIG V1R6 as code, records 25 documented deviations and 8 rules not applicable to a headless server (compliance/sources/stig.toml). The values it writes are compared with DISA's text in the tests, and it checks the effective configuration (sshd -T, sysctl) before it finishes.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_stig_role.py::test_every_applied_rule_is_implemented_by_the_role"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_stig_role.py::test_ssh_algorithms_are_exactly_disas"
+                  },
+                  {
+                    "name": "evidence-ci",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "ci.yml#infra"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/stig/tasks/main.yml"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "compliance/sources/stig.toml"
+                  }
+                ],
+                "remarks": "Plan: Apply the role and run its scan on the hub; convert the results to a checklist (.ckl) with the MITRE SAF CLI and feed them to the generator (--xccdf)."
+              },
+              {
+                "uuid": "c80c6b0d-a2af-5c5b-8628-ea2383af1866",
+                "control-id": "cm-7",
+                "description": "The STIG role removes telnetd, rsh-server, the NFS packages and ntp, disables USB mass storage, and denies inbound connections by default except SSH, the console and ACME; the service may use only IPv4, IPv6 and Unix sockets.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_deploy_conformance.py::test_service_runs_unprivileged_sandboxed_and_on_loopback"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/stig/tasks/packages.yml"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/stig/tasks/firewall.yml"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/stig/tasks/kernel.yml"
+                  }
+                ],
+                "remarks": "Plan: Apply the STIG role and scan."
+              },
+              {
+                "uuid": "c7e3a3c1-2adc-5694-85c7-91044451dc5a",
+                "control-id": "cm-14",
+                "description": "APT refuses packages whose signatures it cannot verify (STIG role, UBTU-24-300001).",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_stig_role.py::test_every_applied_rule_is_implemented_by_the_role"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/stig/tasks/packages.yml"
+                  }
+                ],
+                "remarks": "Plan: Apply the STIG role and scan."
+              },
+              {
+                "uuid": "0e4c1dba-0820-56de-94b3-292366425a99",
+                "control-id": "ia-2",
+                "description": "Administrators authenticate to SSH with public keys only; there is no multifactor authentication (the DoD PKI rules are a documented STIG deviation).",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_deploy_conformance.py::test_sshd_baseline_accepts_keys_only_and_times_out_idle_sessions"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/baseline/tasks/main.yml"
+                  }
+                ],
+                "remarks": "Plan: CAC/PIV logon through SSSD and pam_pkcs11 on a DoD network (stig.toml deviation dod-pki)."
+              },
+              {
+                "uuid": "3edff9e3-767b-5972-97a5-5fb5af78992a",
+                "control-id": "ia-5",
+                "description": "Administrator keys are installed by Terraform (aws_key_pair); password authentication is off, and the STIG role fails the play if any account has an empty password (UBTU-24-300027). Credentials are kept out of the repository by gitleaks in CI and in the pre-commit hooks.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-ci",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "ci.yml#secrets"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/aws/terraform/main.tf"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/stig/tasks/verify.yml"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": ".pre-commit-config.yaml"
+                  }
+                ],
+                "remarks": "Plan: Apply the STIG role and scan; rotate administrator keys on a defined schedule."
+              },
+              {
+                "uuid": "5b240e65-d524-51f1-8a4e-2086ad975cb5",
+                "control-id": "sc-7",
+                "description": "The STIG role enables ufw with inbound denied by default: SSH rate-limited, 443 and 80 allowed, 7422 only from stig_leaf_allowed_cidrs (UBTU-24-100300, UBTU-24-100310).",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_stig_role.py::test_every_applied_rule_is_implemented_by_the_role"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/stig/tasks/firewall.yml"
+                  }
+                ],
+                "remarks": "Plan: Apply the STIG role and scan; rate limiting on 443 and 7422 is a documented deviation."
+              },
+              {
+                "uuid": "735265d9-2fe2-5180-a83f-790dbd07c512",
+                "control-id": "sc-8",
+                "description": "The console and API are served over HTTPS by Caddy with an HSTS header and certificates from Let's Encrypt; the node itself listens only on loopback. SSH uses DISA's FIPS 140-3 approved algorithms (STIG role).",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_stig_role.py::test_ssh_algorithms_are_exactly_disas"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/caddy/templates/Caddyfile.j2"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/stig/defaults/main.yml"
+                  }
+                ],
+                "remarks": "Plan: Verify TLS on the deployed hub (protocols, ciphers, HSTS) and apply the STIG role."
+              },
+              {
+                "uuid": "4a660798-6b72-543f-b1f1-dc2fe2c5a101",
+                "control-id": "sc-12",
+                "description": "Caddy obtains and renews the console's TLS certificates automatically (ACME, Let's Encrypt).",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/caddy/templates/Caddyfile.j2"
+                  }
+                ],
+                "remarks": "Plan: Verify issuance and renewal on the deployed hub; use DoD PKI certificates on DoD networks."
+              },
+              {
+                "uuid": "cd306872-364d-5a89-b110-dcca7ba1554b",
+                "control-id": "sc-13",
+                "description": "SSH is restricted to DISA's FIPS 140-3 approved algorithms; the host does not run in FIPS mode (STIG deviation fips, UBTU-24-600030).",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_stig_role.py::test_ssh_algorithms_are_exactly_disas"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/stig/defaults/main.yml"
+                  }
+                ],
+                "remarks": "Plan: Build the node image with Ubuntu Pro fips-updates."
+              },
+              {
+                "uuid": "4f8fde55-8742-583f-9a59-5effe7554a0c",
+                "control-id": "sc-28",
+                "description": "Edge hosts have no full-disk encryption configured; the node's database is not encrypted by the application, and its signing key is protected only by file permissions.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "planned"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "sentinel/crdt/signing.py"
+                  }
+                ],
+                "remarks": "Plan: LUKS full-disk encryption when edge hardware is provisioned (STIG deviation data-at-rest, UBTU-24-600090)."
+              },
+              {
+                "uuid": "0fff2c38-6402-57d3-b201-7d9cf9759c6f",
+                "control-id": "si-2",
+                "description": "Security updates install automatically (unattended-upgrades, baseline role), and superseded packages and kernels are removed (STIG role, UBTU-24-700320).",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_stig_role.py::test_every_applied_rule_is_implemented_by_the_role"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/baseline/tasks/main.yml"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/stig/tasks/packages.yml"
+                  }
+                ],
+                "remarks": "Plan: Apply the STIG role and scan; for air-gapped enclaves, updates arrive with the next signed bundle."
+              },
+              {
+                "uuid": "e444bd22-7e08-5fe2-af26-bff89b67ca41",
+                "control-id": "si-4",
+                "description": "AIDE checks file integrity daily and auditd records security-relevant events (STIG role).",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_stig_role.py::test_audit_rules_are_the_fix_text_rules"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/stig/tasks/integrity.yml"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/stig/files/stig.rules"
+                  }
+                ],
+                "remarks": "Plan: Apply the STIG role and scan; route AIDE and audit alerts to the node's alerting path (stig.toml deviation audit-alerts)."
+              },
+              {
+                "uuid": "63a277e4-bb42-5a33-a6a3-8d9226d62a1c",
+                "control-id": "si-7",
+                "description": "Installation verifies before it unpacks: Ansible checks the bundle against its published SHA-256 digest, and install.sh checks every file against SHA256SUMS and installs dependencies offline with --require-hashes. AIDE checks file integrity daily (STIG role). A digest shipped next to the bundle proves the bytes match it, not who published them.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_stig_role.py::test_every_applied_rule_is_implemented_by_the_role"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/sentinel/tasks/main.yml"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/bundle/install.sh"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/bundle/verify_offline.sh"
+                  }
+                ],
+                "remarks": "Plan: Verify the bundle's cosign signature before the digest (docs/supply-chain.md); run make airgap-verify in CI."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "uuid": "236d5d28-d6f8-565c-9a93-bb2e49b1c0f4",
+        "type": "service",
+        "title": "AWS cloud hub infrastructure",
+        "description": "The public demonstration hub as code (deploy/aws/terraform): a VPC, one Graviton EC2 instance with an encrypted root volume and IMDSv2 required, its security group, an IAM role limited to Session Manager, and a budget alarm.",
+        "control-implementations": [
+          {
+            "uuid": "cbe46ad0-c77a-5e27-953f-9b9925c7b23f",
+            "source": "trestle://profiles/sentinel/profile.json",
+            "description": "What the AWS cloud hub infrastructure contributes to each control in the Sentinel profile.",
+            "implemented-requirements": [
+              {
+                "uuid": "8459072c-a310-50ce-be06-1907e5bc3cb3",
+                "control-id": "ac-6",
+                "description": "The hub's instance role carries one policy, AmazonSSMManagedInstanceCore (Session Manager): no S3, no secrets, no administrative access.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_deploy_conformance.py::test_hub_infrastructure_encrypts_restricts_admin_and_closes_the_leaf_port"
+                  },
+                  {
+                    "name": "evidence-ci",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "ci.yml#infra"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/aws/terraform/main.tf"
+                  }
+                ],
+                "remarks": "Plan: Confirm the deployed role's effective permissions (IAM Access Analyzer) when the hub is deployed."
+              },
+              {
+                "uuid": "f88fdb32-bf94-556d-bc4e-33c2d111f1e0",
+                "control-id": "ac-17",
+                "description": "SSH (22) is open only to admin_cidr, and the Terraform variable rejects 0.0.0.0/0. AWS Session Manager is the break-glass path; IMDSv2 is required.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_deploy_conformance.py::test_hub_infrastructure_encrypts_restricts_admin_and_closes_the_leaf_port"
+                  },
+                  {
+                    "name": "evidence-ci",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "ci.yml#infra"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/aws/terraform/main.tf"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/aws/terraform/variables.tf"
+                  }
+                ],
+                "remarks": "Plan: Verify the deployed security group and Session Manager configuration when the hub is deployed."
+              },
+              {
+                "uuid": "1d68afac-7484-5512-9fcb-6ba78c4ead96",
+                "control-id": "sc-7",
+                "description": "The hub's security group admits 443 and 80 from anywhere, 22 from admin_cidr only, and 7422 only from allow-listed edge networks (none by default, so the port is closed).",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_deploy_conformance.py::test_hub_infrastructure_encrypts_restricts_admin_and_closes_the_leaf_port"
+                  },
+                  {
+                    "name": "evidence-ci",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "ci.yml#infra"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/aws/terraform/main.tf"
+                  }
+                ],
+                "remarks": "Plan: Verify the deployed security group when the hub is deployed."
+              },
+              {
+                "uuid": "1981f39f-2335-560b-b48f-40a63cdf7487",
+                "control-id": "sc-28",
+                "description": "The hub's root volume, its only volume, is encrypted by EBS.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_deploy_conformance.py::test_hub_infrastructure_encrypts_restricts_admin_and_closes_the_leaf_port"
+                  },
+                  {
+                    "name": "evidence-ci",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "ci.yml#infra"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/aws/terraform/main.tf"
+                  }
+                ],
+                "remarks": "Plan: Verify encryption on the deployed volume; consider a customer-managed KMS key."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
+        "type": "process-procedure",
+        "title": "Build, test and release pipeline",
+        "description": "The GitHub Actions workflows (.github/workflows), the test ladder and DDIL harness, pinned tools and hash-locked dependencies, the bundle builder, and this compliance package's generator.",
+        "control-implementations": [
+          {
+            "uuid": "3e9f8640-6517-5c03-9572-62353f2da9f6",
+            "source": "trestle://profiles/sentinel/profile.json",
+            "description": "What the Build, test and release pipeline contributes to each control in the Sentinel profile.",
+            "implemented-requirements": [
+              {
+                "uuid": "7da7becc-fe4a-5771-a9b8-de9e2d547845",
+                "control-id": "ca-7",
+                "description": "Every push and pull request runs the full test ladder with the network disabled, lint, the module-boundary contracts, reproducibility checks of the generated reports, Terraform and Ansible validation, and secret scanning over the full history. The DDIL harness runs on changes to the layers it exercises and nightly with a 15-minute denial. Every CI run regenerates this package's assessment results and POA&M from its own test evidence.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "implemented"
+                  },
+                  {
+                    "name": "evidence-ci",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "ci.yml#python"
+                  },
+                  {
+                    "name": "evidence-ci",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "ci.yml#infra"
+                  },
+                  {
+                    "name": "evidence-ci",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "ci.yml#secrets"
+                  },
+                  {
+                    "name": "evidence-ci",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "ci.yml#compliance"
+                  },
+                  {
+                    "name": "evidence-ci",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "harness.yml#scenario"
+                  }
+                ]
+              },
+              {
+                "uuid": "641f3af6-f7f9-588e-9018-650bb73b9b82",
+                "control-id": "cm-2",
+                "description": "The baseline is code under version control: hash-locked Python dependencies (uv.lock), third-party binaries pinned by version and SHA-256 (deploy/tools.lock), the bundle build (scripts/build_bundle.py), the Ansible roles, the Terraform and the NATS configuration templates. CI checks the Terraform (fmt, validate) and the playbook's syntax on every push.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "implemented"
+                  },
+                  {
+                    "name": "evidence-ci",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "ci.yml#infra"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "uv.lock"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/tools.lock"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "scripts/build_bundle.py"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/site.yml"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/aws/terraform/main.tf"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/nats/edge.conf.tmpl"
+                  }
+                ]
+              },
+              {
+                "uuid": "c216e6b4-732c-5804-8301-ad268eea64b4",
+                "control-id": "cm-3",
+                "description": "Every change is a git commit, and every push and pull request runs the checks listed under CA-7. Generated documents (the validation report, the AI eval report, this package's authored OSCAL documents) are regenerated and compared in CI, so a change cannot alter them silently. Branch protection and required review are GitHub settings and are not evidenced in the repository.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_package_integrity.py::test_committed_documents_are_what_the_sources_generate"
+                  },
+                  {
+                    "name": "evidence-ci",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "ci.yml#python"
+                  },
+                  {
+                    "name": "evidence-ci",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "ci.yml#compliance"
+                  }
+                ],
+                "remarks": "Plan: Require the CI checks and one review before merging to main, and record the setting as code."
+              },
+              {
+                "uuid": "ad54cea9-d10d-5f3a-af9f-664ad17ff5aa",
+                "control-id": "cm-8",
+                "description": "Software components are inventoried with versions and hashes: uv.lock for Python, web/package-lock.json for the console, deploy/tools.lock for the uv, nats-server and toxiproxy binaries; each bundle carries SHA256SUMS for every file it contains. There is no SBOM in a standard format yet.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "uv.lock"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "web/package-lock.json"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/tools.lock"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "scripts/build_bundle.py"
+                  },
+                  {
+                    "name": "planned-evidence",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "docs/supply-chain.md"
+                  },
+                  {
+                    "name": "milestone",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "M4"
+                  }
+                ],
+                "remarks": "Plan: Generate an SBOM (CycloneDX or SPDX) for each release artifact in the release pipeline (docs/supply-chain.md)."
+              },
+              {
+                "uuid": "c141842c-3fb2-53e4-9b51-c0962c62fef6",
+                "control-id": "cm-14",
+                "description": "Release bundles are to be signed with cosign and the signature verified before install (docs/supply-chain.md). Today the bundle is checked only against its published SHA-256 digest, which proves the bytes match the digest, not who published them (deploy/ansible/roles/sentinel/tasks/main.yml).",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "planned"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/sentinel/tasks/main.yml"
+                  },
+                  {
+                    "name": "planned-evidence",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "docs/supply-chain.md"
+                  },
+                  {
+                    "name": "milestone",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "M4"
+                  }
+                ],
+                "remarks": "Plan: Sign release bundles with cosign in the release pipeline and verify the signature in the sentinel role before unpacking."
+              },
+              {
+                "uuid": "a7bb2927-8388-507d-af4b-4930b40328d0",
+                "control-id": "ra-5",
+                "description": "Secret scanning (gitleaks) runs over the full history on every push. Dependency and image vulnerability scanning with Trivy, with VEX statements for triaged findings, is planned in the release pipeline (docs/supply-chain.md). Host compliance scanning with OpenSCAP against the DISA STIG benchmark is defined in the STIG role and has not yet been run; when it is, its failing rules become POA&M items automatically.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_assessment.py::test_scan_results_are_triaged_against_the_stig_decisions"
+                  },
+                  {
+                    "name": "evidence-ci",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "ci.yml#secrets"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/stig/tasks/scan.yml"
+                  },
+                  {
+                    "name": "planned-evidence",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "docs/supply-chain.md"
+                  },
+                  {
+                    "name": "milestone",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "M4"
+                  }
+                ],
+                "remarks": "Plan: Trivy with VEX on every release and on a schedule; run the STIG scan on the hub."
+              },
+              {
+                "uuid": "2b83a6a1-73c6-5b58-ae78-42d7915513b4",
+                "control-id": "sa-10",
+                "description": "Every change is a git commit; dependencies and tools are pinned by hash; generated artifacts are regenerated and compared in CI; vendored upstream data (NASA CARA, CelesTrak, NIST, DISA) carries provenance and checksums that the tests verify; module boundaries are contracts checked in CI.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "implemented"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_tier3_cara_validation.py::test_vendored_nasa_files_are_unmodified"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_package_integrity.py::test_vendored_upstream_files_are_unmodified"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_package_integrity.py::test_committed_documents_are_what_the_sources_generate"
+                  },
+                  {
+                    "name": "evidence-ci",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "ci.yml#python"
+                  }
+                ]
+              },
+              {
+                "uuid": "383da020-df9f-599d-a479-b8412afc9237",
+                "control-id": "sa-11",
+                "description": "Developer testing is a ladder of pytest markers run in CI with the network disabled: geometry, integration against closed forms and an independent quadrature, agreement with NASA CARA's published values for 53 operational conjunctions and its benchmark cases, maximum Pc and dilution, every refusal gate, and the output contract. CRDT convergence is property-tested (Hypothesis); the DDIL harness runs real processes over a shaped link; the assistant's routing is scored on a labelled set. Every CI run turns its JUnit evidence into assessment results and a POA&M (this package).",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "implemented"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_tier3_cara_validation.py::test_pc2d_matches_published_cara_value"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_tier3_cara_validation.py::test_gate_refuses_every_event_cara_says_2d_cannot_handle"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_tier2_integration.py::test_agrees_with_independent_numerical_oracle"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_tier4_dilution.py::test_dilution_boundary_sits_at_sigma_equals_miss_over_root_two"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/property/test_crdt.py::TestDDILNetwork"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/ai/test_evaluation.py::test_the_summary_separates_routing_accuracy_coverage_and_calibration"
+                  },
+                  {
+                    "name": "evidence-harness",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "denied"
+                  },
+                  {
+                    "name": "evidence-harness",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "limited"
+                  },
+                  {
+                    "name": "evidence-harness",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "intermittent"
+                  },
+                  {
+                    "name": "evidence-harness",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "degraded"
+                  },
+                  {
+                    "name": "evidence-harness",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "recovery"
+                  },
+                  {
+                    "name": "evidence-ci",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "ci.yml#python"
+                  },
+                  {
+                    "name": "evidence-ci",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "harness.yml#scenario"
+                  },
+                  {
+                    "name": "evidence-ci",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "ci.yml#compliance"
+                  }
+                ]
+              },
+              {
+                "uuid": "52c36cee-b969-5712-b805-b4ab23c3f52a",
+                "control-id": "sa-15",
+                "description": "The development process is written down and enforced by tools: test-first development and architecture decision records (docs/system-design.md), ruff and import-linter in CI, a test that forbids interpolated log messages, pre-commit hooks for ruff and gitleaks, and pinned tool versions.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "implemented"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_logging_policy.py::test_log_messages_are_constants_with_values_as_fields"
+                  },
+                  {
+                    "name": "evidence-ci",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "ci.yml#python"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "docs/system-design.md"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": ".pre-commit-config.yaml"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": ".importlinter"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "pyproject.toml"
+                  }
+                ]
+              },
+              {
+                "uuid": "a59acc82-e339-5ca0-b32c-e68e8842b3fc",
+                "control-id": "si-2",
+                "description": "Every failing test becomes a POA&M item, linked to the controls that cite it, on every CI run (this package); dependency updates go through the lockfile and the full test ladder. Vulnerability-driven updates wait on dependency scanning (RA-5).",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_assessment.py::test_every_failing_test_is_an_open_item_linked_to_its_controls"
+                  },
+                  {
+                    "name": "evidence-ci",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "ci.yml#compliance"
+                  },
+                  {
+                    "name": "planned-evidence",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "docs/supply-chain.md"
+                  },
+                  {
+                    "name": "milestone",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "M4"
+                  }
+                ],
+                "remarks": "Plan: Feed Trivy findings, with VEX, into the POA&M alongside test failures."
+              },
+              {
+                "uuid": "3aff920e-9486-5313-9fcd-7cf44845647b",
+                "control-id": "si-7",
+                "description": "Release artifacts are to be signed with cosign and carry SLSA build provenance (docs/supply-chain.md).",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "planned"
+                  },
+                  {
+                    "name": "planned-evidence",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "docs/supply-chain.md"
+                  },
+                  {
+                    "name": "milestone",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "M4"
+                  }
+                ],
+                "remarks": "Plan: Sign and attest release artifacts in the release pipeline."
+              },
+              {
+                "uuid": "ef7b3436-5300-55c0-8a02-1ab6071c0e99",
+                "control-id": "sr-3",
+                "description": "Third-party binaries are pinned by version and SHA-256 (deploy/tools.lock), and a mismatch aborts the download (scripts/fetch_tools.py, run in the harness workflow). Python dependencies are hash-locked and installed offline with --require-hashes. Upstream data (NASA CARA, CelesTrak, NIST, DISA) is vendored unmodified with provenance and checksums that the tests verify. SBOMs, signing, build provenance and vulnerability scanning are planned in the release pipeline.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_tier3_cara_validation.py::test_vendored_nasa_files_are_unmodified"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/compliance/test_package_integrity.py::test_vendored_upstream_files_are_unmodified"
+                  },
+                  {
+                    "name": "evidence-ci",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "harness.yml#scenario"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/tools.lock"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "scripts/fetch_tools.py"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/bundle/install.sh"
+                  },
+                  {
+                    "name": "planned-evidence",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "docs/supply-chain.md"
+                  },
+                  {
+                    "name": "milestone",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "M4"
+                  }
+                ],
+                "remarks": "Plan: SBOM, cosign signatures, SLSA provenance and Trivy with VEX in the release pipeline (docs/supply-chain.md)."
+              },
+              {
+                "uuid": "92a9f11a-1d27-5a2e-878c-9d0e994ebf07",
+                "control-id": "sr-4",
+                "description": "Provenance is recorded for vendored upstream data (fixtures/cara/PROVENANCE.md, fixtures/omm/PROVENANCE.md, compliance/vendor/nist/PROVENANCE.md, compliance/vendor/disa/PROVENANCE.md) and each NASA CARA test case documents its source and tolerance. Each bundle records its version and per-file hashes. There is no build provenance for release artifacts yet.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/test_tier3_cara_validation.py::test_every_case_documents_provenance_and_tolerance"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "fixtures/cara/PROVENANCE.md"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "fixtures/omm/PROVENANCE.md"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "compliance/vendor/nist/PROVENANCE.md"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "compliance/vendor/disa/PROVENANCE.md"
+                  },
+                  {
+                    "name": "planned-evidence",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "docs/supply-chain.md"
+                  },
+                  {
+                    "name": "milestone",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "M4"
+                  }
+                ],
+                "remarks": "Plan: SLSA build provenance for every release artifact (docs/supply-chain.md)."
+              },
+              {
+                "uuid": "943f7b42-3fea-5408-bcae-0927265928d8",
+                "control-id": "sr-11",
+                "description": "Downloaded tools are accepted only if their SHA-256 matches the pin; the bundle is checked against its digest before install; APT on the host refuses unauthenticated packages (STIG role). Verifying the publisher's signature on Sentinel's own releases (cosign) is planned.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "partial"
+                  },
+                  {
+                    "name": "evidence-ci",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "harness.yml#scenario"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "scripts/fetch_tools.py"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/tools.lock"
+                  },
+                  {
+                    "name": "evidence-file",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "deploy/ansible/roles/stig/tasks/packages.yml"
+                  },
+                  {
+                    "name": "planned-evidence",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "docs/supply-chain.md"
+                  },
+                  {
+                    "name": "milestone",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "M4"
+                  }
+                ],
+                "remarks": "Plan: cosign signature verification before install (docs/supply-chain.md)."
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "uuid": "669681fa-43f9-5be0-a52e-58ffe5630af5",
+        "type": "policy",
+        "title": "Sentinel program: organizational responsibilities",
+        "description": "What an owning organization supplies and a repository cannot: review cadences, approval authority, remediation timelines and reporting. Listed so the SSP says where they are missing rather than implying the code covers them.",
+        "control-implementations": [
+          {
+            "uuid": "4aeb04c9-e73a-5f0b-a523-ad9e60b1955b",
+            "source": "trestle://profiles/sentinel/profile.json",
+            "description": "What the Sentinel program: organizational responsibilities contributes to each control in the Sentinel profile.",
+            "implemented-requirements": [
+              {
+                "uuid": "9b79e0c7-aafe-515f-943d-aa3a31f63eb7",
+                "control-id": "au-6",
+                "description": "Who reviews audit records, how often, and to whom findings are reported are not defined.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "planned"
+                  }
+                ],
+                "remarks": "Plan: Define the review cadence, the reviewers and the reporting path with the ISSO."
+              },
+              {
+                "uuid": "dd3f030a-1783-5234-a56d-e5afcbe398c4",
+                "control-id": "ca-7",
+                "description": "A continuous monitoring strategy (metrics, frequencies, who receives the results) is not defined, and nothing monitors a deployed node's security state over time.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "planned"
+                  }
+                ],
+                "remarks": "Plan: Define the strategy with the ISSO; add scheduled vulnerability scans (RA-5) and periodic STIG scans of deployed hosts, reported through this package's POA&M."
+              },
+              {
+                "uuid": "cbfbe983-77b4-5926-ab5c-28205a87255e",
+                "control-id": "cm-3",
+                "description": "Change approval authority and security impact analysis are not defined.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "planned"
+                  }
+                ],
+                "remarks": "Plan: Name the approver for changes to the risk engine, the sync layer and deployment configuration."
+              },
+              {
+                "uuid": "ce82e971-7751-528c-a3f5-aadae75fad21",
+                "control-id": "ra-5",
+                "description": "Remediation timelines by severity are not defined.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "planned"
+                  }
+                ],
+                "remarks": "Plan: Set remediation timelines by severity with the ISSO and carry them as POA&M deadlines."
+              },
+              {
+                "uuid": "1624ba8c-711a-58c1-b711-9a2f03258d15",
+                "control-id": "si-2",
+                "description": "Time frames for installing security-relevant updates are not defined.",
+                "props": [
+                  {
+                    "name": "implementation-status",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "planned"
+                  }
+                ],
+                "remarks": "Plan: Define update time frames by severity with the ISSO."
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

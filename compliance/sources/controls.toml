@@ -1,0 +1,978 @@
+# Sentinel's tailored NIST SP 800-53 Rev 5 baseline: why each control is in
+# it, and what each component does about it.
+#
+# Rules (enforced by compliance/sources.py and tests/compliance/):
+#   * status "implemented" needs automated evidence: tests (pytest node ids),
+#     harness scenarios, or CI jobs (workflow.yml#job). Files alone are not
+#     enough: a file shows intent, a check shows it holds.
+#   * "partial" and "planned" need a plan; each becomes a POA&M item.
+#   * every cited test, file, job and scenario must exist (checked on every
+#     run); planned_evidence names what does not exist yet.
+#   * a statement claims only what its evidence shows.
+#
+# Components: node, nats, host, aws, pipeline, program (system.toml).
+
+# ============================================================== ACCESS CONTROL
+[[control]]
+id = "ac-2"
+rationale = "Operators record decisions that must be attributable, and administrators hold root on nodes."
+
+[[control.by]]
+component = "node"
+status = "planned"
+statement = """The node has no user accounts. It records the operator identity that the front proxy \
+asserts in the X-Sentinel-Operator header (sentinel/api/identity.py) and does not authenticate it."""
+files = ["sentinel/api/identity.py"]
+plan = """Put an authenticating proxy (OIDC, or mTLS with CAC/PIV) in front of every node that sets \
+X-Sentinel-Operator from the verified identity and strips any client-supplied value; manage operator \
+accounts in the organization's identity provider. The current Caddyfile does neither."""
+
+[[control.by]]
+component = "host"
+status = "partial"
+statement = """The installer creates a system account, sentinel, with no login shell, and the service \
+runs as it (deploy/bundle/install.sh, deploy/systemd/sentinel.service). Root cannot log in over SSH \
+(baseline role) or directly (STIG role, UBTU-24-400110); accounts are disabled 35 days after password \
+expiry (UBTU-24-200260); each account is limited to 10 sessions (UBTU-24-200000); changes to account \
+files are audited (UBTU-24-200280 to UBTU-24-200320)."""
+tests = ["tests/compliance/test_deploy_conformance.py::test_service_runs_unprivileged_sandboxed_and_on_loopback"]
+files = ["deploy/bundle/install.sh", "deploy/ansible/roles/stig/tasks/accounts.yml", "deploy/ansible/roles/stig/files/stig.rules"]
+plan = "Apply the STIG role to the hub and verify it with the OpenSCAP scan (stig_scan: true)."
+
+[[control]]
+id = "ac-3"
+rationale = "A public node must refuse writes, and replicas must accept decisions only from trusted nodes."
+
+[[control.by]]
+component = "node"
+status = "partial"
+statement = """A read-only node (SENTINEL_READ_ONLY, set on the public hub) answers reads and refuses \
+writes with 403: CDM ingest and AI draft confirmation are tested; the decision, note and annotation \
+endpoints call the same guard (sentinel/api/app.py). A replica merges decision-log entries only from \
+nodes in its trust store; others are rejected before merge and recorded. There is no per-operator \
+authorization: any identity the proxy asserts may write."""
+tests = [
+    "tests/api/test_api.py::test_read_only_node_refuses_ingest",
+    "tests/api/test_ai_api.py::test_a_read_only_node_answers_but_never_records",
+    "tests/property/test_crdt.py::test_untrusted_node_is_rejected",
+]
+files = ["sentinel/api/app.py", "sentinel/crdt/log.py", "deploy/ansible/roles/sentinel/templates/sentinel.env.j2"]
+plan = """Test the read-only refusal on the decision, note and annotation endpoints; authorize by role \
+once operators are authenticated (IA-2), for example so that only a designated role may record a \
+MANEUVER decision or resolve a conflict."""
+
+[[control.by]]
+component = "host"
+status = "partial"
+statement = """The service runs sandboxed by systemd: read-only filesystem except its own var \
+directory, no new privileges, no capabilities, restricted address families and system calls, UMask \
+0077. The node's signing key is written readable only by its owner (mode 0600, \
+sentinel/crdt/signing.py). AppArmor is installed and enabled (STIG role, UBTU-24-100500, UBTU-24-100510)."""
+tests = ["tests/compliance/test_deploy_conformance.py::test_service_runs_unprivileged_sandboxed_and_on_loopback"]
+files = ["deploy/systemd/sentinel.service", "sentinel/crdt/signing.py", "deploy/ansible/roles/stig/tasks/packages.yml"]
+plan = "Verify the sandbox on a deployed host (systemd-analyze security) and apply the STIG role."
+
+[[control]]
+id = "ac-4"
+rationale = """A ground unit's position and its pass windows must never leave the edge that holds them, \
+and nothing leaves a node for a hosted AI service unless policy allows it."""
+params = { "ac-04_odp" = """Leafnode subject permissions: an edge never exports unit.>, passes.> or node.> \
+to its hub and never imports node.>; console events are published only on node-scoped subjects \
+(node.<id>.>); requests leave a node for a hosted AI service only with an UNCLASSIFIED marking, \
+operator opt-in and a usable measured link.""" }
+
+[[control.by]]
+component = "nats"
+status = "partial"
+statement = """OPSEC by configuration: the edge's leafnode remote denies exporting unit.>, passes.> \
+and node.>, and denies importing node.> (deploy/nats/edge.conf.tmpl), so a ground unit's position, \
+its pass windows and the edge's console events cannot cross to the hub through the bus. Console \
+events use node-scoped subjects (sentinel/bus/subjects.py, ADR-009). Every DDIL harness scenario \
+runs with this configuration."""
+tests = ["tests/compliance/test_deploy_conformance.py::test_edge_never_exports_unit_passes_or_node_subjects"]
+files = ["deploy/nats/edge.conf.tmpl", "sentinel/bus/subjects.py", "harness/cluster.py"]
+plan = """Add a harness scenario that publishes on unit.> and passes.> at the edge and asserts nothing \
+arrives at the hub, so the denial is shown on a real leaf link and not only in the configuration. \
+The pass module that publishes those subjects is still in development."""
+
+[[control.by]]
+component = "node"
+status = "implemented"
+statement = """The assistant's tier policy is a pure function of the classification marking, operator \
+opt-in (SENTINEL_AI_CLOUD) and the measured link state: hosted AI needs an UNCLASSIFIED marking and \
+opt-in, and a DENIED link or any other marking means local only. With hosted AI not allowed, no \
+request leaves the node."""
+tests = [
+    "tests/ai/test_policy.py::test_tier_table",
+    "tests/ai/test_assistant.py::test_denied_or_classified_never_calls_a_hosted_service",
+    "tests/api/test_ai_api.py::test_hosted_providers_are_used_only_with_opt_in",
+]
+files = ["sentinel/ai/policy.py"]
+
+[[control]]
+id = "ac-6"
+rationale = "The AI layer must have no path to the maths, and the service and hub need no more privilege than they use."
+
+[[control.by]]
+component = "node"
+status = "implemented"
+statement = """Least privilege between modules is a contract checked in CI: import-linter forbids the AI \
+layer from importing the risk engine, the CDM codec, numpy and scipy, confines the hosted AI SDKs to \
+their two adapter modules, and keeps the bus, sync, CRDT and triage layers free of mission modules \
+(.importlinter)."""
+ci = ["ci.yml#python"]
+files = [".importlinter"]
+
+[[control.by]]
+component = "host"
+status = "partial"
+statement = """The node runs as the unprivileged sentinel account with no capabilities and no new \
+privileges, bound to loopback behind Caddy (deploy/systemd/sentinel.service)."""
+tests = ["tests/compliance/test_deploy_conformance.py::test_service_runs_unprivileged_sandboxed_and_on_loopback"]
+files = ["deploy/systemd/sentinel.service"]
+plan = "Verify on a deployed host; the automation account's NOPASSWD sudo is a STIG deviation (UBTU-24-300020)."
+
+[[control.by]]
+component = "aws"
+status = "partial"
+statement = """The hub's instance role carries one policy, AmazonSSMManagedInstanceCore (Session \
+Manager): no S3, no secrets, no administrative access."""
+tests = ["tests/compliance/test_deploy_conformance.py::test_hub_infrastructure_encrypts_restricts_admin_and_closes_the_leaf_port"]
+ci = ["ci.yml#infra"]
+files = ["deploy/aws/terraform/main.tf"]
+plan = "Confirm the deployed role's effective permissions (IAM Access Analyzer) when the hub is deployed."
+
+[[control]]
+id = "ac-17"
+rationale = "Administrators reach nodes remotely; the path must be narrow and strongly protected. The STIG's SSH rules map here (DISA CCI list)."
+
+[[control.by]]
+component = "host"
+status = "partial"
+statement = """SSH accepts public keys only (password and keyboard-interactive authentication off), \
+refuses root, allows three authentication attempts and drops idle sessions after 300 seconds \
+(baseline role). The STIG role restricts SSH to DISA's FIPS 140-3 approved ciphers, MACs and key \
+exchange algorithms (UBTU-24-100820, UBTU-24-100830, UBTU-24-100840) and rate-limits new SSH \
+connections in the host firewall."""
+tests = [
+    "tests/compliance/test_deploy_conformance.py::test_sshd_baseline_accepts_keys_only_and_times_out_idle_sessions",
+    "tests/compliance/test_stig_role.py::test_ssh_algorithms_are_exactly_disas",
+]
+files = ["deploy/ansible/roles/baseline/tasks/main.yml", "deploy/ansible/roles/stig/tasks/ssh.yml"]
+plan = "Apply the STIG role to the hub and verify it with the OpenSCAP scan."
+
+[[control.by]]
+component = "aws"
+status = "partial"
+statement = """SSH (22) is open only to admin_cidr, and the Terraform variable rejects 0.0.0.0/0. AWS \
+Session Manager is the break-glass path; IMDSv2 is required."""
+tests = ["tests/compliance/test_deploy_conformance.py::test_hub_infrastructure_encrypts_restricts_admin_and_closes_the_leaf_port"]
+ci = ["ci.yml#infra"]
+files = ["deploy/aws/terraform/main.tf", "deploy/aws/terraform/variables.tf"]
+plan = "Verify the deployed security group and Session Manager configuration when the hub is deployed."
+
+# ================================================== AUDIT AND ACCOUNTABILITY
+[[control]]
+id = "au-2"
+rationale = "Decisions, AI interactions and rejected input must be reconstructable after the fact."
+
+[[control.by]]
+component = "node"
+status = "implemented"
+statement = """The node logs: every assistant question and every confirmation, one line each in a \
+hash-chained audit log; every decision, note, resolution and confirmed AI draft, as signed \
+decision-log entries; every CDM admitted or quarantined, with the reason; and service events as \
+structured JSON logs whose messages are constants, so they can be searched and alerted on."""
+tests = [
+    "tests/ai/test_assistant.py::test_every_ask_and_confirm_is_audited_in_a_verifiable_chain",
+    "tests/api/test_api.py::test_upload_is_idempotent_and_wrong_input_is_quarantined",
+    "tests/test_logging_policy.py::test_log_messages_are_constants_with_values_as_fields",
+    "tests/test_obs.py::test_json_formatter_emits_one_object_per_line",
+]
+files = ["sentinel/audit/chain.py", "sentinel/crdt/log.py", "sentinel/obs.py"]
+
+[[control.by]]
+component = "host"
+status = "partial"
+statement = """auditd records changes to account files, use of su and sudo, changes to sudoers and \
+kernel module loading and unloading, from boot (audit=1), with the rules immutable until reboot \
+(STIG role; the rules are taken verbatim from DISA's fix text)."""
+tests = ["tests/compliance/test_stig_role.py::test_audit_rules_are_the_fix_text_rules"]
+files = ["deploy/ansible/roles/stig/files/stig.rules", "deploy/ansible/roles/stig/tasks/audit.yml"]
+plan = """Apply the STIG role and scan; review the selected event types with the ISSO, which AU-2 \
+also asks for."""
+
+[[control]]
+id = "au-3"
+rationale = "A decision record is useful only if it says who, what, when, where and against which data."
+
+[[control.by]]
+component = "node"
+status = "implemented"
+statement = """A decision-log entry records its author (the operator identity the proxy asserts; see \
+IA-2), the authoring node and its sequence (the dot), wall time and Lamport time, the kind and body \
+of the decision, the event and CDM message it was made against, the previous entry's hash and an \
+Ed25519 signature. An AI audit record carries its sequence, time, author, the question, the tier, \
+the chosen route, which narrator phrased the answer, the grounding verdict, any fallback, the \
+answer, a hash of the tool facts and the chain hash. Service logs are JSON with time, level, logger, \
+message and fields."""
+tests = [
+    "tests/ai/test_audit.py::test_records_form_a_chain",
+    "tests/ai/test_assistant.py::test_a_draft_writes_nothing_until_a_person_confirms_it",
+    "tests/test_obs.py::test_message_stays_stable_and_values_become_fields",
+    "tests/test_tier6_contract.py::test_result_is_serialisable_for_the_decision_log",
+]
+files = ["sentinel/crdt/log.py", "sentinel/ai/assistant.py", "sentinel/obs.py"]
+
+[[control]]
+id = "au-6"
+rationale = "Tamper evidence is worth little unless someone checks it and acts on what it shows."
+
+[[control.by]]
+component = "node"
+status = "partial"
+statement = """The node verifies its AI audit chain on request (GET /api/ai/audit/verify) and names the \
+first bad line; it verifies every decision-log signature on merge and shows the result per entry; \
+it surfaces for review what replication cannot decide: concurrent edits (CONFLICT) and decisions \
+made against a CDM that has since been superseded (REVIEW REQUIRED)."""
+tests = [
+    "tests/api/test_ai_api.py::test_the_audit_chain_is_served_persisted_and_verifies",
+    "tests/sync/test_hub_edge.py::test_operator_data_merges_both_ways_and_conflicts_are_kept",
+    "tests/sync/test_hub_edge.py::test_decision_becomes_review_required_when_its_cdm_is_superseded",
+]
+harness = ["denied"]
+plan = """Forward the structured logs and audit records to a collector when the link allows, and \
+alert on a failed chain verification instead of reporting it only when asked."""
+
+[[control.by]]
+component = "program"
+status = "planned"
+statement = "Who reviews audit records, how often, and to whom findings are reported are not defined."
+plan = "Define the review cadence, the reviewers and the reporting path with the ISSO."
+
+[[control]]
+id = "au-9"
+rationale = "The decision log is the record of what operators decided; it must be tamper-evident on every node."
+
+[[control.by]]
+component = "node"
+status = "partial"
+statement = """The AI audit log is hash-chained: editing or deleting a line is detected at that line. \
+Decision-log entries are Ed25519-signed and hash-chained per node; a tampered entry is rejected \
+before merge, and a replica that sees one dot with two different contents stops rather than choose. \
+A decision made offline at an edge arrives at the hub with a valid signature. Truncating the newest \
+lines of the AI audit log leaves a shorter chain that still verifies."""
+tests = [
+    "tests/ai/test_audit.py::test_editing_a_line_is_detected_at_that_line",
+    "tests/ai/test_audit.py::test_deleting_a_line_is_detected",
+    "tests/property/test_crdt.py::test_tampered_entry_is_rejected_not_merged",
+    "tests/property/test_crdt.py::test_same_dot_with_different_content_raises",
+]
+harness = ["denied"]
+files = ["sentinel/audit/chain.py", "sentinel/crdt/log.py", "sentinel/crdt/signing.py"]
+plan = """Anchor the AI audit chain's head outside the file (in the signed decision log, or at the \
+hub on reconnect) so truncation is detectable, and alert on a failed verification."""
+
+[[control.by]]
+component = "host"
+status = "partial"
+statement = """Audit rules are immutable once loaded (-e 2, UBTU-24-909000); the service writes its \
+data under UMask 0077 in a directory only it can write (deploy/systemd/sentinel.service)."""
+tests = [
+    "tests/compliance/test_stig_role.py::test_audit_rules_end_immutable",
+    "tests/compliance/test_deploy_conformance.py::test_service_runs_unprivileged_sandboxed_and_on_loopback",
+]
+files = ["deploy/ansible/roles/stig/files/stig.rules"]
+plan = "Apply the STIG role and scan; the audit-log file permission rules (UBTU-24-901300 and following) are not yet in the role."
+
+[[control]]
+id = "au-10"
+rationale = "Signed decisions: a decision cannot later be disowned or attributed to another node."
+
+[[control.by]]
+component = "node"
+status = "partial"
+statement = """Every decision-log entry is signed with its authoring node's Ed25519 key and verified \
+against the trust store on merge, so no node can alter another's entries or author entries in its \
+name. A confirmed AI draft carries its provenance: router, confidence, model and the audit \
+sequence of the question. The operator identity inside an entry is asserted by the proxy, not \
+authenticated, so non-repudiation holds for the node, not yet for the person."""
+tests = [
+    "tests/property/test_crdt.py::test_tampered_entry_is_rejected_not_merged",
+    "tests/property/test_crdt.py::test_untrusted_node_is_rejected",
+    "tests/sync/test_hub_edge.py::test_operator_data_merges_both_ways_and_conflicts_are_kept",
+    "tests/ai/test_assistant.py::test_a_draft_writes_nothing_until_a_person_confirms_it",
+]
+harness = ["denied"]
+files = ["sentinel/crdt/signing.py", "sentinel/crdt/log.py"]
+plan = """Bind each entry to an authenticated operator (IA-2), for example with a per-operator \
+signature from a CAC/PIV key alongside the node's."""
+
+# ================================================ ASSESSMENT AND AUTHORIZATION
+[[control]]
+id = "ca-7"
+rationale = "Evidence is regenerated on every change, not collected once for an assessment."
+
+[[control.by]]
+component = "pipeline"
+status = "implemented"
+statement = """Every push and pull request runs the full test ladder with the network disabled, lint, \
+the module-boundary contracts, reproducibility checks of the generated reports, Terraform and \
+Ansible validation, and secret scanning over the full history. The DDIL harness runs on changes to \
+the layers it exercises and nightly with a 15-minute denial. Every CI run regenerates this \
+package's assessment results and POA&M from its own test evidence."""
+ci = ["ci.yml#python", "ci.yml#infra", "ci.yml#secrets", "ci.yml#compliance", "harness.yml#scenario"]
+
+[[control.by]]
+component = "program"
+status = "planned"
+statement = """A continuous monitoring strategy (metrics, frequencies, who receives the results) is not \
+defined, and nothing monitors a deployed node's security state over time."""
+plan = """Define the strategy with the ISSO; add scheduled vulnerability scans (RA-5) and periodic STIG \
+scans of deployed hosts, reported through this package's POA&M."""
+
+# ================================================== CONFIGURATION MANAGEMENT
+[[control]]
+id = "cm-2"
+rationale = "A node installs identically in the cloud, at the edge and in an air-gapped enclave only if its baseline is code."
+
+[[control.by]]
+component = "pipeline"
+status = "implemented"
+statement = """The baseline is code under version control: hash-locked Python dependencies (uv.lock), \
+third-party binaries pinned by version and SHA-256 (deploy/tools.lock), the bundle build \
+(scripts/build_bundle.py), the Ansible roles, the Terraform and the NATS configuration templates. \
+CI checks the Terraform (fmt, validate) and the playbook's syntax on every push."""
+ci = ["ci.yml#infra"]
+files = ["uv.lock", "deploy/tools.lock", "scripts/build_bundle.py", "deploy/ansible/site.yml", "deploy/aws/terraform/main.tf", "deploy/nats/edge.conf.tmpl"]
+
+[[control]]
+id = "cm-3"
+rationale = "A change to the engine or the sync layer changes what operators are told; it must be tested and traceable."
+
+[[control.by]]
+component = "pipeline"
+status = "partial"
+statement = """Every change is a git commit, and every push and pull request runs the checks listed \
+under CA-7. Generated documents (the validation report, the AI eval report, this package's authored \
+OSCAL documents) are regenerated and compared in CI, so a change cannot alter them silently. Branch \
+protection and required review are GitHub settings and are not evidenced in the repository."""
+tests = ["tests/compliance/test_package_integrity.py::test_committed_documents_are_what_the_sources_generate"]
+ci = ["ci.yml#python", "ci.yml#compliance"]
+plan = "Require the CI checks and one review before merging to main, and record the setting as code."
+
+[[control.by]]
+component = "program"
+status = "planned"
+statement = "Change approval authority and security impact analysis are not defined."
+plan = "Name the approver for changes to the risk engine, the sync layer and deployment configuration."
+
+[[control]]
+id = "cm-6"
+rationale = "Vendor defaults assumed a LAN and would have broken a satellite-linked edge; settings must be deliberate and documented."
+
+[[control.by]]
+component = "nats"
+status = "implemented"
+statement = """The NATS settings that differ from vendor defaults are documented with the measured \
+reason (docs/system-design.md, Findings from the DDIL harness) and guarded by harness scenarios: \
+no_advertise on the hub's leaf listener, a 20-second first-INFO timeout and a 30-second leaf \
+authorization timeout for thin links, and a 5-second ping interval with 3 missed pings to detect a \
+black-holed link."""
+tests = ["tests/compliance/test_deploy_conformance.py::test_nats_settings_carry_the_ddil_fixes"]
+harness = ["recovery", "limited", "denied"]
+files = ["deploy/nats/hub.conf.tmpl", "deploy/nats/edge.conf.tmpl", "docs/system-design.md"]
+
+[[control.by]]
+component = "host"
+status = "partial"
+statement = """The STIG role applies 55 rules of the DISA Ubuntu 24.04 STIG V1R6 as code, records 25 \
+documented deviations and 8 rules not applicable to a headless server (compliance/sources/stig.toml). \
+The values it writes are compared with DISA's text in the tests, and it checks the effective \
+configuration (sshd -T, sysctl) before it finishes."""
+tests = [
+    "tests/compliance/test_stig_role.py::test_every_applied_rule_is_implemented_by_the_role",
+    "tests/compliance/test_stig_role.py::test_ssh_algorithms_are_exactly_disas",
+]
+ci = ["ci.yml#infra"]
+files = ["deploy/ansible/roles/stig/tasks/main.yml", "compliance/sources/stig.toml"]
+plan = """Apply the role and run its scan on the hub; convert the results to a checklist (.ckl) with \
+the MITRE SAF CLI and feed them to the generator (--xccdf)."""
+
+[[control]]
+id = "cm-7"
+rationale = "A field node should do one job; everything else is attack surface."
+
+[[control.by]]
+component = "node"
+status = "implemented"
+statement = """The public node is read-only and serves only exercise data and NASA's published reference \
+set (deploy/ansible/roles/sentinel/templates/sentinel.env.j2); hosted AI is off unless the operator \
+opts in; the assistant can be switched off entirely; the console's Content-Security-Policy stops the \
+browser from contacting any origin but the node."""
+tests = [
+    "tests/api/test_api.py::test_read_only_node_refuses_ingest",
+    "tests/api/test_api.py::test_console_is_served_under_a_same_origin_content_security_policy",
+    "tests/api/test_ai_api.py::test_hosted_providers_are_used_only_with_opt_in",
+    "tests/api/test_ai_api.py::test_the_assistant_can_be_switched_off",
+]
+files = ["deploy/ansible/roles/sentinel/templates/sentinel.env.j2"]
+
+[[control.by]]
+component = "host"
+status = "partial"
+statement = """The STIG role removes telnetd, rsh-server, the NFS packages and ntp, disables USB mass \
+storage, and denies inbound connections by default except SSH, the console and ACME; the service \
+may use only IPv4, IPv6 and Unix sockets."""
+tests = ["tests/compliance/test_deploy_conformance.py::test_service_runs_unprivileged_sandboxed_and_on_loopback"]
+files = ["deploy/ansible/roles/stig/tasks/packages.yml", "deploy/ansible/roles/stig/tasks/firewall.yml", "deploy/ansible/roles/stig/tasks/kernel.yml"]
+plan = "Apply the STIG role and scan."
+
+[[control]]
+id = "cm-8"
+rationale = "An air-gapped enclave must know exactly what it installed."
+
+[[control.by]]
+component = "pipeline"
+status = "partial"
+statement = """Software components are inventoried with versions and hashes: uv.lock for Python, \
+web/package-lock.json for the console, deploy/tools.lock for the uv, nats-server and toxiproxy \
+binaries; each bundle carries SHA256SUMS for every file it contains. There is no SBOM in a \
+standard format yet."""
+files = ["uv.lock", "web/package-lock.json", "deploy/tools.lock", "scripts/build_bundle.py"]
+planned_evidence = ["docs/supply-chain.md"]
+plan = "Generate an SBOM (CycloneDX or SPDX) for each release artifact in the release pipeline (docs/supply-chain.md)."
+milestone = "M4"
+
+[[control]]
+id = "cm-14"
+rationale = "A node must refuse to install software it cannot attribute to its publisher."
+
+[[control.by]]
+component = "pipeline"
+status = "planned"
+statement = """Release bundles are to be signed with cosign and the signature verified before install \
+(docs/supply-chain.md). Today the bundle is checked only against its published SHA-256 digest, \
+which proves the bytes match the digest, not who published them \
+(deploy/ansible/roles/sentinel/tasks/main.yml)."""
+files = ["deploy/ansible/roles/sentinel/tasks/main.yml"]
+planned_evidence = ["docs/supply-chain.md"]
+plan = "Sign release bundles with cosign in the release pipeline and verify the signature in the sentinel role before unpacking."
+milestone = "M4"
+
+[[control.by]]
+component = "host"
+status = "partial"
+statement = "APT refuses packages whose signatures it cannot verify (STIG role, UBTU-24-300001)."
+files = ["deploy/ansible/roles/stig/tasks/packages.yml"]
+tests = ["tests/compliance/test_stig_role.py::test_every_applied_rule_is_implemented_by_the_role"]
+plan = "Apply the STIG role and scan."
+
+# ============================================ IDENTIFICATION AND AUTHENTICATION
+[[control]]
+id = "ia-2"
+rationale = "Decisions are attributed to people; today the node takes the proxy's word for who they are."
+
+[[control.by]]
+component = "node"
+status = "planned"
+statement = """Operators are not authenticated by the node or by the current front proxy. The node \
+trusts the X-Sentinel-Operator header, and the hub's Caddyfile neither sets nor strips it."""
+files = ["sentinel/api/identity.py", "deploy/ansible/roles/caddy/templates/Caddyfile.j2"]
+plan = """Authenticate operators at the proxy (CAC/PIV mTLS on DoD networks, OIDC elsewhere), set the \
+header from the verified identity and strip any client-supplied value; until then, keep writable \
+nodes off untrusted networks."""
+
+[[control.by]]
+component = "host"
+status = "partial"
+statement = """Administrators authenticate to SSH with public keys only; there is no multifactor \
+authentication (the DoD PKI rules are a documented STIG deviation)."""
+tests = ["tests/compliance/test_deploy_conformance.py::test_sshd_baseline_accepts_keys_only_and_times_out_idle_sessions"]
+files = ["deploy/ansible/roles/baseline/tasks/main.yml"]
+plan = "CAC/PIV logon through SSSD and pam_pkcs11 on a DoD network (stig.toml deviation dod-pki)."
+
+[[control]]
+id = "ia-5"
+rationale = "Node signing keys and administrator keys are the authenticators everything else trusts."
+
+[[control.by]]
+component = "node"
+status = "partial"
+statement = """Each node generates its Ed25519 key on first start and stores it readable only by the \
+service account (mode 0600). Other nodes are trusted only through the trust-store file that maps \
+node ids to public keys (SENTINEL_TRUST_FILE). There is no rotation or revocation."""
+tests = ["tests/property/test_crdt.py::test_untrusted_node_is_rejected"]
+files = ["sentinel/crdt/signing.py", "sentinel/ops/service.py"]
+plan = """Signed trust-store updates with key rotation and revocation; hardware-backed keys (TPM) on edge \
+hardware."""
+
+[[control.by]]
+component = "host"
+status = "partial"
+statement = """Administrator keys are installed by Terraform (aws_key_pair); password authentication is \
+off, and the STIG role fails the play if any account has an empty password (UBTU-24-300027). \
+Credentials are kept out of the repository by gitleaks in CI and in the pre-commit hooks."""
+ci = ["ci.yml#secrets"]
+files = ["deploy/aws/terraform/main.tf", "deploy/ansible/roles/stig/tasks/verify.yml", ".pre-commit-config.yaml"]
+plan = "Apply the STIG role and scan; rotate administrator keys on a defined schedule."
+
+# ============================================================ RISK ASSESSMENT
+[[control]]
+id = "ra-5"
+rationale = "Dependencies and host configuration drift; both must be scanned, and findings must land in the POA&M."
+
+[[control.by]]
+component = "pipeline"
+status = "partial"
+statement = """Secret scanning (gitleaks) runs over the full history on every push. Dependency and image \
+vulnerability scanning with Trivy, with VEX statements for triaged findings, is planned in the \
+release pipeline (docs/supply-chain.md). Host compliance scanning with OpenSCAP against the DISA \
+STIG benchmark is defined in the STIG role and has not yet been run; when it is, its failing rules \
+become POA&M items automatically."""
+tests = ["tests/compliance/test_assessment.py::test_scan_results_are_triaged_against_the_stig_decisions"]
+ci = ["ci.yml#secrets"]
+files = ["deploy/ansible/roles/stig/tasks/scan.yml"]
+planned_evidence = ["docs/supply-chain.md"]
+plan = "Trivy with VEX on every release and on a schedule; run the STIG scan on the hub."
+milestone = "M4"
+
+[[control.by]]
+component = "program"
+status = "planned"
+statement = "Remediation timelines by severity are not defined."
+plan = "Set remediation timelines by severity with the ISSO and carry them as POA&M deadlines."
+
+# ============================================== SYSTEM AND SERVICES ACQUISITION
+[[control]]
+id = "sa-10"
+rationale = "The evidence is only as good as the control over the code and data it came from."
+
+[[control.by]]
+component = "pipeline"
+status = "implemented"
+statement = """Every change is a git commit; dependencies and tools are pinned by hash; generated \
+artifacts are regenerated and compared in CI; vendored upstream data (NASA CARA, CelesTrak, NIST, \
+DISA) carries provenance and checksums that the tests verify; module boundaries are contracts \
+checked in CI."""
+tests = [
+    "tests/test_tier3_cara_validation.py::test_vendored_nasa_files_are_unmodified",
+    "tests/compliance/test_package_integrity.py::test_vendored_upstream_files_are_unmodified",
+    "tests/compliance/test_package_integrity.py::test_committed_documents_are_what_the_sources_generate",
+]
+ci = ["ci.yml#python"]
+
+[[control]]
+id = "sa-11"
+rationale = "The risk engine's numbers decide whether propellant is spent; they must be proven against an independent reference."
+
+[[control.by]]
+component = "pipeline"
+status = "implemented"
+statement = """Developer testing is a ladder of pytest markers run in CI with the network disabled: \
+geometry, integration against closed forms and an independent quadrature, agreement with NASA \
+CARA's published values for 53 operational conjunctions and its benchmark cases, maximum Pc and \
+dilution, every refusal gate, and the output contract. CRDT convergence is property-tested \
+(Hypothesis); the DDIL harness runs real processes over a shaped link; the assistant's routing is \
+scored on a labelled set. Every CI run turns its JUnit evidence into assessment results and a \
+POA&M (this package)."""
+tests = [
+    "tests/test_tier3_cara_validation.py::test_pc2d_matches_published_cara_value",
+    "tests/test_tier3_cara_validation.py::test_gate_refuses_every_event_cara_says_2d_cannot_handle",
+    "tests/test_tier2_integration.py::test_agrees_with_independent_numerical_oracle",
+    "tests/test_tier4_dilution.py::test_dilution_boundary_sits_at_sigma_equals_miss_over_root_two",
+    "tests/property/test_crdt.py::TestDDILNetwork",
+    "tests/ai/test_evaluation.py::test_the_summary_separates_routing_accuracy_coverage_and_calibration",
+]
+harness = ["denied", "limited", "intermittent", "degraded", "recovery"]
+ci = ["ci.yml#python", "harness.yml#scenario", "ci.yml#compliance"]
+
+[[control]]
+id = "sa-15"
+rationale = "The process that produces the code is part of the evidence."
+
+[[control.by]]
+component = "pipeline"
+status = "implemented"
+statement = """The development process is written down and enforced by tools: test-first development \
+and architecture decision records (docs/system-design.md), ruff and import-linter in CI, a test that \
+forbids interpolated log messages, pre-commit hooks for ruff and gitleaks, and pinned tool versions."""
+tests = ["tests/test_logging_policy.py::test_log_messages_are_constants_with_values_as_fields"]
+ci = ["ci.yml#python"]
+files = ["docs/system-design.md", ".pre-commit-config.yaml", ".importlinter", "pyproject.toml"]
+
+# ======================================== SYSTEM AND COMMUNICATIONS PROTECTION
+[[control]]
+id = "sc-7"
+rationale = "The hub faces the internet; edges face contested links."
+
+[[control.by]]
+component = "node"
+status = "implemented"
+statement = """The service listens on loopback only, behind Caddy; each node's nats-server accepts client \
+connections on loopback only (the hub's leafnode listener is the one exception, governed by SC-7 for \
+the AWS hub and by AC-4); the console's Content-Security-Policy restricts the browser to the node's \
+own origin."""
+tests = [
+    "tests/compliance/test_deploy_conformance.py::test_service_runs_unprivileged_sandboxed_and_on_loopback",
+    "tests/api/test_api.py::test_console_is_served_under_a_same_origin_content_security_policy",
+]
+files = ["deploy/systemd/sentinel.service", "deploy/nats/hub.conf.tmpl"]
+
+[[control.by]]
+component = "aws"
+status = "partial"
+statement = """The hub's security group admits 443 and 80 from anywhere, 22 from admin_cidr only, and \
+7422 only from allow-listed edge networks (none by default, so the port is closed)."""
+tests = ["tests/compliance/test_deploy_conformance.py::test_hub_infrastructure_encrypts_restricts_admin_and_closes_the_leaf_port"]
+ci = ["ci.yml#infra"]
+files = ["deploy/aws/terraform/main.tf"]
+plan = "Verify the deployed security group when the hub is deployed."
+
+[[control.by]]
+component = "host"
+status = "partial"
+statement = """The STIG role enables ufw with inbound denied by default: SSH rate-limited, 443 and 80 \
+allowed, 7422 only from stig_leaf_allowed_cidrs (UBTU-24-100300, UBTU-24-100310)."""
+files = ["deploy/ansible/roles/stig/tasks/firewall.yml"]
+tests = ["tests/compliance/test_stig_role.py::test_every_applied_rule_is_implemented_by_the_role"]
+plan = "Apply the STIG role and scan; rate limiting on 443 and 7422 is a documented deviation."
+
+[[control]]
+id = "sc-8"
+rationale = "Console sessions cross the internet and the edge link crosses contested networks."
+
+[[control.by]]
+component = "host"
+status = "partial"
+statement = """The console and API are served over HTTPS by Caddy with an HSTS header and certificates \
+from Let's Encrypt; the node itself listens only on loopback. SSH uses DISA's FIPS 140-3 approved \
+algorithms (STIG role)."""
+files = ["deploy/ansible/roles/caddy/templates/Caddyfile.j2", "deploy/ansible/roles/stig/defaults/main.yml"]
+tests = ["tests/compliance/test_stig_role.py::test_ssh_algorithms_are_exactly_disas"]
+plan = "Verify TLS on the deployed hub (protocols, ciphers, HSTS) and apply the STIG role."
+
+[[control.by]]
+component = "nats"
+status = "planned"
+statement = """The leafnode link between an edge and its hub is not encrypted: the configuration \
+templates leave a place for TLS (LEAF_TLS, REMOTE_TLS) but none is configured, and the harness \
+runs the link in the clear over loopback."""
+files = ["deploy/nats/hub.conf.tmpl", "deploy/nats/edge.conf.tmpl"]
+plan = """Configure leafnode mTLS with per-node certificates, and measure the handshake on the LIMITED \
+link profile before relying on it (the harness has already shown the default leaf timeouts are \
+too short for a thin link)."""
+
+[[control]]
+id = "sc-12"
+rationale = "Signatures are only as trustworthy as the way keys are made and distributed."
+
+[[control.by]]
+component = "node"
+status = "partial"
+statement = """Node signing keys are generated on the node and never leave it; trust is established by \
+distributing public keys in a trust-store file. There is no automated distribution, rotation or \
+revocation."""
+tests = ["tests/property/test_crdt.py::test_untrusted_node_is_rejected"]
+files = ["sentinel/crdt/signing.py"]
+plan = "Signed trust-store distribution with rotation and revocation; keys in hardware on edge nodes."
+
+[[control.by]]
+component = "host"
+status = "partial"
+statement = "Caddy obtains and renews the console's TLS certificates automatically (ACME, Let's Encrypt)."
+files = ["deploy/ansible/roles/caddy/templates/Caddyfile.j2"]
+plan = "Verify issuance and renewal on the deployed hub; use DoD PKI certificates on DoD networks."
+
+[[control]]
+id = "sc-13"
+rationale = "Signatures and hashes carry the integrity claims; the algorithms and modules must be named."
+params = { "sc-13_odp.01" = """Signing operator decision-log entries; hashing assessment inputs, audit \
+records and release files; protecting console sessions (TLS) and administrative sessions (SSH).""", "sc-13_odp.02" = """Ed25519 signatures; \
+SHA-256; TLS as negotiated by Caddy; SSH restricted to the DISA STIG's FIPS 140-3 approved ciphers, \
+MACs and key exchange algorithms.""" }
+
+[[control.by]]
+component = "node"
+status = "partial"
+statement = """Ed25519 signs decision-log entries; SHA-256 hashes assessment inputs, the audit chain \
+and bundle files. The implementation is the Python cryptography package, whose bundled OpenSSL is \
+not a FIPS-validated module."""
+tests = [
+    "tests/property/test_crdt.py::test_tampered_entry_is_rejected_not_merged",
+    "tests/test_tier6_contract.py::test_inputs_hash_changes_when_any_input_changes",
+]
+files = ["sentinel/crdt/signing.py"]
+plan = "Use a FIPS 140-3 validated cryptographic module for signing and hashing."
+
+[[control.by]]
+component = "host"
+status = "partial"
+statement = """SSH is restricted to DISA's FIPS 140-3 approved algorithms; the host does not run in FIPS \
+mode (STIG deviation fips, UBTU-24-600030)."""
+tests = ["tests/compliance/test_stig_role.py::test_ssh_algorithms_are_exactly_disas"]
+files = ["deploy/ansible/roles/stig/defaults/main.yml"]
+plan = "Build the node image with Ubuntu Pro fips-updates."
+
+[[control]]
+id = "sc-28"
+rationale = "Edges are deployed where hardware can be lost; the hub holds every node's replicated decisions."
+
+[[control.by]]
+component = "aws"
+status = "partial"
+statement = "The hub's root volume, its only volume, is encrypted by EBS."
+tests = ["tests/compliance/test_deploy_conformance.py::test_hub_infrastructure_encrypts_restricts_admin_and_closes_the_leaf_port"]
+ci = ["ci.yml#infra"]
+files = ["deploy/aws/terraform/main.tf"]
+plan = "Verify encryption on the deployed volume; consider a customer-managed KMS key."
+
+[[control.by]]
+component = "host"
+status = "planned"
+statement = """Edge hosts have no full-disk encryption configured; the node's database is not encrypted \
+by the application, and its signing key is protected only by file permissions."""
+files = ["sentinel/crdt/signing.py"]
+plan = "LUKS full-disk encryption when edge hardware is provisioned (STIG deviation data-at-rest, UBTU-24-600090)."
+
+# ============================================ SYSTEM AND INFORMATION INTEGRITY
+[[control]]
+id = "si-2"
+rationale = "Flaws found by tests, scans and updates must be tracked to closure."
+
+[[control.by]]
+component = "pipeline"
+status = "partial"
+statement = """Every failing test becomes a POA&M item, linked to the controls that cite it, on every CI \
+run (this package); dependency updates go through the lockfile and the full test ladder. \
+Vulnerability-driven updates wait on dependency scanning (RA-5)."""
+tests = ["tests/compliance/test_assessment.py::test_every_failing_test_is_an_open_item_linked_to_its_controls"]
+ci = ["ci.yml#compliance"]
+planned_evidence = ["docs/supply-chain.md"]
+plan = "Feed Trivy findings, with VEX, into the POA&M alongside test failures."
+milestone = "M4"
+
+[[control.by]]
+component = "host"
+status = "partial"
+statement = """Security updates install automatically (unattended-upgrades, baseline role), and \
+superseded packages and kernels are removed (STIG role, UBTU-24-700320)."""
+files = ["deploy/ansible/roles/baseline/tasks/main.yml", "deploy/ansible/roles/stig/tasks/packages.yml"]
+tests = ["tests/compliance/test_stig_role.py::test_every_applied_rule_is_implemented_by_the_role"]
+plan = "Apply the STIG role and scan; for air-gapped enclaves, updates arrive with the next signed bundle."
+
+[[control.by]]
+component = "program"
+status = "planned"
+statement = "Time frames for installing security-relevant updates are not defined."
+plan = "Define update time frames by severity with the ISSO."
+
+[[control]]
+id = "si-4"
+rationale = "At the edge, knowing the state of the link is part of knowing the state of the system."
+
+[[control.by]]
+component = "node"
+status = "partial"
+statement = """Each node measures its link to the hub and classifies it (CONNECTED, DEGRADED, LIMITED, \
+DENIED) from measurement, not configuration. Rejected decision-log entries (untrusted node or bad \
+signature) are recorded with the reason, and service events are structured JSON logs ready for \
+collection. Nothing correlates them or raises an alert."""
+tests = [
+    "tests/test_linkstate.py::test_states_follow_measurements",
+    "tests/property/test_crdt.py::test_tampered_entry_is_rejected_not_merged",
+]
+harness = ["denied", "degraded"]
+files = ["sentinel/linkstate/monitor.py"]
+plan = "Forward logs to a collector when connected and alert on rejected merges and failed chain verification."
+
+[[control.by]]
+component = "host"
+status = "partial"
+statement = "AIDE checks file integrity daily and auditd records security-relevant events (STIG role)."
+files = ["deploy/ansible/roles/stig/tasks/integrity.yml", "deploy/ansible/roles/stig/files/stig.rules"]
+tests = ["tests/compliance/test_stig_role.py::test_audit_rules_are_the_fix_text_rules"]
+plan = "Apply the STIG role and scan; route AIDE and audit alerts to the node's alerting path (stig.toml deviation audit-alerts)."
+
+[[control]]
+id = "si-7"
+rationale = "Verify before install, verify before merge: nothing is trusted because of where it came from."
+
+[[control.by]]
+component = "node"
+status = "implemented"
+statement = """Decision-log entries are verified (signature and per-node hash chain) before they are \
+merged, and a replica that sees one dot with two contents stops rather than choose. The AI audit \
+chain verifies on demand. Vendored reference data is checked against its SHA-256 sums by the tests."""
+tests = [
+    "tests/property/test_crdt.py::test_tampered_entry_is_rejected_not_merged",
+    "tests/property/test_crdt.py::test_same_dot_with_different_content_raises",
+    "tests/ai/test_audit.py::test_editing_a_line_is_detected_at_that_line",
+    "tests/test_tier3_cara_validation.py::test_vendored_nasa_files_are_unmodified",
+]
+
+[[control.by]]
+component = "host"
+status = "partial"
+statement = """Installation verifies before it unpacks: Ansible checks the bundle against its published \
+SHA-256 digest, and install.sh checks every file against SHA256SUMS and installs dependencies \
+offline with --require-hashes. AIDE checks file integrity daily (STIG role). A digest shipped next \
+to the bundle proves the bytes match it, not who published them."""
+files = ["deploy/ansible/roles/sentinel/tasks/main.yml", "deploy/bundle/install.sh", "deploy/bundle/verify_offline.sh"]
+tests = ["tests/compliance/test_stig_role.py::test_every_applied_rule_is_implemented_by_the_role"]
+plan = "Verify the bundle's cosign signature before the digest (docs/supply-chain.md); run make airgap-verify in CI."
+
+[[control.by]]
+component = "pipeline"
+status = "planned"
+statement = "Release artifacts are to be signed with cosign and carry SLSA build provenance (docs/supply-chain.md)."
+planned_evidence = ["docs/supply-chain.md"]
+plan = "Sign and attest release artifacts in the release pipeline."
+milestone = "M4"
+
+[[control]]
+id = "si-10"
+rationale = """The engine's answer is only as good as its input: a CDM in the wrong units or frame produces \
+a confident, wrong Pc."""
+params = { "si-10_odp" = """Conjunction Data Messages (CCSDS 508.0-B-1 KVN) submitted for ingest or \
+fetched from a hub; decision-log entries received from peer nodes; operator questions to the assistant.""" }
+
+[[control.by]]
+component = "node"
+status = "implemented"
+statement = """Every CDM passes an admission policy: input that would make the answer wrong (wrong unit \
+labels, a non-inertial frame, a partial covariance, non-finite states, a header miss distance that \
+contradicts the states) is quarantined with a named reason; input that only makes it incomplete (no \
+covariance at all, an anomalous unit on a summary field) is accepted with a recorded warning and \
+degrades to geometry only. Text that is not a CDM is rejected. The risk engine never raises on bad \
+data: it returns REFUSED with the value that tripped the gate. Peer decision-log entries are \
+verified before merge; assistant questions are bounded in size."""
+tests = [
+    "tests/test_cdm_codec.py::test_wrong_messages_are_rejected_with_a_named_reason",
+    "tests/test_cdm_codec.py::test_absent_covariance_degrades_to_geometry_only",
+    "tests/test_cdm_codec.py::test_nasa_unit_label_anomaly_is_a_warning_not_a_rejection",
+    "tests/test_cdm_codec.py::test_rejects_text_that_is_not_a_cdm",
+    "tests/api/test_api.py::test_upload_is_idempotent_and_wrong_input_is_quarantined",
+    "tests/test_tier1_geometry.py::test_tca_inconsistent_input_is_refused_not_processed",
+    "tests/test_tier5_refusal.py::test_every_refusal_records_the_value_that_tripped_it",
+    "tests/property/test_crdt.py::test_tampered_entry_is_rejected_not_merged",
+    "tests/api/test_ai_api.py::test_empty_or_oversized_questions_are_rejected",
+]
+files = ["sentinel/cdm/validate.py", "sentinel/conjunction/service.py"]
+
+[[control]]
+id = "si-15"
+rationale = "A language model may phrase an answer; it must not be able to put an unsupported number in front of an operator."
+params = { "si-15_odp" = """The AI assistant's narrated answers, whose numbers must each appear, at the \
+stated precision, in the tool results or the operator's question; and every probability of \
+collision the API or console shows, which must carry its method.""" }
+
+[[control.by]]
+component = "node"
+status = "implemented"
+statement = """Every AI-written answer passes a number-grounding guard: each number, including numbers \
+attached to units, must match a number in the tool results or the question at the precision it is \
+stated. Otherwise the answer is withheld, the deterministic template answer is shown, and the \
+unsupported numbers are named. Template answers pass the same guard. A Pc never leaves the engine, \
+the API or the assistant without its method."""
+tests = [
+    "tests/ai/test_grounding.py::test_an_invented_number_is_caught",
+    "tests/ai/test_grounding.py::test_precision_must_match_what_the_evidence_supports",
+    "tests/ai/test_grounding.py::test_numbers_glued_to_units_or_letters_are_still_checked",
+    "tests/ai/test_assistant.py::test_an_ungrounded_ai_answer_is_withheld_and_the_facts_shown",
+    "tests/ai/test_narrate.py::test_every_template_answer_passes_the_grounding_guard",
+    "tests/ai/test_narrate.py::test_a_pc_is_never_stated_without_its_method",
+    "tests/test_tier6_contract.py::test_pc_never_travels_without_method",
+    "tests/api/test_api.py::test_every_pc_travels_with_its_method",
+]
+files = ["sentinel/ai/grounding.py"]
+
+[[control]]
+id = "si-17"
+rationale = """The two failures Sentinel is built for are losing the link and receiving input the method \
+cannot handle; in both it must fail to a known, honest state."""
+params = { "si-17_odp.02" = """Loss or degradation of the link to the hub (DENIED, DEGRADED, INTERMITTENT, \
+LIMITED); a hosted AI service failing or unreachable; conjunction inputs outside the 2D Pc method's \
+validity (low relative velocity, curvilinear uncertainty, absent or non-positive-definite covariance).""", "si-17_odp.01" = """The node keeps \
+serving its console and recording signed decisions on local data, and reconciles when the link \
+returns; the assistant falls back to its local router and templates within the same answer and says \
+so; the risk engine returns REFUSED with the reason and the value that tripped the gate instead of a Pc.""" }
+
+[[control.by]]
+component = "node"
+status = "implemented"
+statement = """With the link denied, an edge keeps serving its console (2.7 ms p95 while cut off in the \
+last recorded run) and records signed decisions locally; on reconnect nothing is lost, concurrent \
+edits are kept as a CONFLICT, and decisions made against superseded CDMs are flagged REVIEW \
+REQUIRED. Until a CDM has been fetched and re-assessed locally, an edge shows the event as \
+HUB-ASSERTED, never as verified. A failing hosted AI call falls back to the local router or \
+templates within the same answer. The risk engine refuses, with the reason and the tripping value, \
+every event NASA CARA says the 2D method cannot handle."""
+tests = [
+    "tests/test_tier5_refusal.py::test_low_relative_velocity_is_refused",
+    "tests/test_tier5_refusal.py::test_non_positive_definite_covariance_is_refused_not_repaired",
+    "tests/test_tier5_refusal.py::test_missing_covariance_is_refused_with_no_fallback",
+    "tests/test_tier5_refusal.py::test_long_curved_along_track_uncertainty_is_refused",
+    "tests/test_tier3_cara_validation.py::test_gate_refuses_every_event_cara_says_2d_cannot_handle",
+    "tests/sync/test_hub_edge.py::test_edge_sees_every_event_as_hub_asserted_before_any_cdm_arrives",
+    "tests/ai/test_assistant.py::test_a_jev_outage_falls_back_to_the_local_router",
+    "tests/ai/test_assistant.py::test_a_narrator_outage_falls_back_to_templates",
+]
+harness = ["denied", "intermittent", "recovery"]
+files = ["docs/ddil-results.md"]
+
+# ================================================= SUPPLY CHAIN RISK MANAGEMENT
+[[control]]
+id = "sr-3"
+rationale = "The same bundle installs in an air-gapped enclave; everything in it must be pinned and checked."
+
+[[control.by]]
+component = "pipeline"
+status = "partial"
+statement = """Third-party binaries are pinned by version and SHA-256 (deploy/tools.lock), and a mismatch \
+aborts the download (scripts/fetch_tools.py, run in the harness workflow). Python dependencies are \
+hash-locked and installed offline with --require-hashes. Upstream data (NASA CARA, CelesTrak, NIST, \
+DISA) is vendored unmodified with provenance and checksums that the tests verify. SBOMs, signing, \
+build provenance and vulnerability scanning are planned in the release pipeline."""
+tests = [
+    "tests/test_tier3_cara_validation.py::test_vendored_nasa_files_are_unmodified",
+    "tests/compliance/test_package_integrity.py::test_vendored_upstream_files_are_unmodified",
+]
+ci = ["harness.yml#scenario"]
+files = ["deploy/tools.lock", "scripts/fetch_tools.py", "deploy/bundle/install.sh"]
+planned_evidence = ["docs/supply-chain.md"]
+plan = "SBOM, cosign signatures, SLSA provenance and Trivy with VEX in the release pipeline (docs/supply-chain.md)."
+milestone = "M4"
+
+[[control]]
+id = "sr-4"
+rationale = "Every number Sentinel shows traces to its inputs; every input should trace to its origin."
+
+[[control.by]]
+component = "pipeline"
+status = "partial"
+statement = """Provenance is recorded for vendored upstream data (fixtures/cara/PROVENANCE.md, \
+fixtures/omm/PROVENANCE.md, compliance/vendor/nist/PROVENANCE.md, compliance/vendor/disa/PROVENANCE.md) \
+and each NASA CARA test case documents its source and tolerance. Each bundle records its version and \
+per-file hashes. There is no build provenance for release artifacts yet."""
+tests = ["tests/test_tier3_cara_validation.py::test_every_case_documents_provenance_and_tolerance"]
+files = ["fixtures/cara/PROVENANCE.md", "fixtures/omm/PROVENANCE.md", "compliance/vendor/nist/PROVENANCE.md", "compliance/vendor/disa/PROVENANCE.md"]
+planned_evidence = ["docs/supply-chain.md"]
+plan = "SLSA build provenance for every release artifact (docs/supply-chain.md)."
+milestone = "M4"
+
+[[control]]
+id = "sr-11"
+rationale = "Counterfeit or tampered components must be refused before they run."
+
+[[control.by]]
+component = "pipeline"
+status = "partial"
+statement = """Downloaded tools are accepted only if their SHA-256 matches the pin; the bundle is checked \
+against its digest before install; APT on the host refuses unauthenticated packages (STIG role). \
+Verifying the publisher's signature on Sentinel's own releases (cosign) is planned."""
+ci = ["harness.yml#scenario"]
+files = ["scripts/fetch_tools.py", "deploy/tools.lock", "deploy/ansible/roles/stig/tasks/packages.yml"]
+planned_evidence = ["docs/supply-chain.md"]
+plan = "cosign signature verification before install (docs/supply-chain.md)."
+milestone = "M4"

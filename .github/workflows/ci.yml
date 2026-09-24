@@ -80,3 +80,41 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # >>> compliance (M4) >>>
+  # OSCAL package (compliance/, docs/compliance.md): this run's pytest JUnit
+  # evidence becomes assessment results and a POA&M, then trestle validates
+  # every document. A failing test is recorded in the POA&M before the job
+  # fails, so the artifacts always describe the run.
+  compliance:
+    name: OSCAL package from test evidence (trestle validate)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: "3.12"
+          activate-environment: true
+      - name: Install
+        run: uv pip install -e ".[dev]"
+      - name: Test evidence, assessment results and POA&M, trestle validate
+        run: make compliance
+      - name: OSCAL documents and evidence
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: oscal-${{ github.sha }}
+          path: |
+            compliance/oscal/profiles/
+            compliance/oscal/component-definitions/
+            compliance/oscal/system-security-plans/
+            compliance/oscal/assessment-plans/
+            compliance/oscal/assessment-results/
+            compliance/oscal/plan-of-action-and-milestones/
+            build/compliance/junit.xml
+  # <<< compliance (M4) <<<

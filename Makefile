@@ -55,3 +55,26 @@ demo-local: web tools  ## hub on :8000 and edge on :8001 over an emulated link (
 ddil:  ## run all four DDIL scenarios on a real two-node cluster, then write docs/ddil-results.md
 	$(UV) run python -m harness.run all
 	$(UV) run python -m harness.report
+
+# >>> compliance (M4) >>>
+# OSCAL package (compliance/, docs/compliance.md): test evidence in, assessment
+# results and POA&M out, then trestle validates the whole workspace. A failing
+# test still produces its POA&M item; the target fails afterwards.
+TRESTLE ?= uvx --from compliance-trestle==5.1.0 trestle
+COMPLIANCE_BUILD ?= build/compliance
+XCCDF ?=
+.PHONY: compliance compliance-catalog
+
+compliance: compliance-catalog  ## OSCAL package: pytest evidence -> assessment results + POA&M, trestle validate -a (XCCDF=scan results)
+	mkdir -p $(COMPLIANCE_BUILD)
+	$(UV) run pytest -q --junitxml=$(COMPLIANCE_BUILD)/junit.xml; echo $$? > $(COMPLIANCE_BUILD)/pytest.status
+	$(UV) run python scripts/oscal_evidence.py --junit $(COMPLIANCE_BUILD)/junit.xml \
+		$(if $(wildcard harness/results/*.json),--harness harness/results) $(if $(XCCDF),--xccdf $(XCCDF))
+	cd compliance/oscal && $(TRESTLE) validate -a
+	@test "$$(cat $(COMPLIANCE_BUILD)/pytest.status)" = 0 || { echo "pytest failed: the failures are in the POA&M"; exit 1; }
+
+compliance-catalog:  ## verify the vendored NIST SP 800-53 Rev 5 catalog, then import it into the trestle workspace
+	cd compliance/vendor/nist && sha256sum --strict -c SHA256SUMS
+	rm -rf compliance/oscal/catalogs/nist-800-53-rev5
+	cd compliance/oscal && $(TRESTLE) import -f ../vendor/nist/NIST_SP-800-53_rev5_catalog-min.json -o nist-800-53-rev5
+# <<< compliance (M4) <<<

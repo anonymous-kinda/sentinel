@@ -1,0 +1,251 @@
+{
+  "assessment-plan": {
+    "uuid": "a0bfd568-b5ce-5f29-b439-574c7bcafb21",
+    "metadata": {
+      "title": "Sentinel automated assessment plan",
+      "last-modified": "2026-09-23T00:00:00Z",
+      "version": "0.1.0",
+      "oscal-version": "1.2.1"
+    },
+    "import-ssp": {
+      "href": "trestle://system-security-plans/sentinel/system-security-plan.json"
+    },
+    "reviewed-controls": {
+      "control-selections": [
+        {
+          "include-controls": [
+            {
+              "control-id": "ac-2"
+            },
+            {
+              "control-id": "ac-3"
+            },
+            {
+              "control-id": "ac-4"
+            },
+            {
+              "control-id": "ac-6"
+            },
+            {
+              "control-id": "ac-17"
+            },
+            {
+              "control-id": "au-2"
+            },
+            {
+              "control-id": "au-3"
+            },
+            {
+              "control-id": "au-6"
+            },
+            {
+              "control-id": "au-9"
+            },
+            {
+              "control-id": "au-10"
+            },
+            {
+              "control-id": "ca-7"
+            },
+            {
+              "control-id": "cm-2"
+            },
+            {
+              "control-id": "cm-3"
+            },
+            {
+              "control-id": "cm-6"
+            },
+            {
+              "control-id": "cm-7"
+            },
+            {
+              "control-id": "cm-8"
+            },
+            {
+              "control-id": "cm-14"
+            },
+            {
+              "control-id": "ia-2"
+            },
+            {
+              "control-id": "ia-5"
+            },
+            {
+              "control-id": "ra-5"
+            },
+            {
+              "control-id": "sa-10"
+            },
+            {
+              "control-id": "sa-11"
+            },
+            {
+              "control-id": "sa-15"
+            },
+            {
+              "control-id": "sc-7"
+            },
+            {
+              "control-id": "sc-8"
+            },
+            {
+              "control-id": "sc-12"
+            },
+            {
+              "control-id": "sc-13"
+            },
+            {
+              "control-id": "sc-28"
+            },
+            {
+              "control-id": "si-2"
+            },
+            {
+              "control-id": "si-4"
+            },
+            {
+              "control-id": "si-7"
+            },
+            {
+              "control-id": "si-10"
+            },
+            {
+              "control-id": "si-15"
+            },
+            {
+              "control-id": "si-17"
+            },
+            {
+              "control-id": "sr-3"
+            },
+            {
+              "control-id": "sr-4"
+            },
+            {
+              "control-id": "sr-11"
+            }
+          ]
+        }
+      ]
+    },
+    "assessment-subjects": [
+      {
+        "type": "component",
+        "include-subjects": [
+          {
+            "subject-uuid": "cd16ef70-2e73-501e-9c7f-4caa10a38352",
+            "type": "component"
+          },
+          {
+            "subject-uuid": "a0709e7a-2515-5622-bb85-376d91a1b365",
+            "type": "component"
+          },
+          {
+            "subject-uuid": "7aeb24b9-53ea-5b02-954f-2cb7f448c8d9",
+            "type": "component"
+          },
+          {
+            "subject-uuid": "236d5d28-d6f8-565c-9a93-bb2e49b1c0f4",
+            "type": "component"
+          },
+          {
+            "subject-uuid": "442fd7f6-eeb6-5cae-b96d-41fcdb12bc12",
+            "type": "component"
+          },
+          {
+            "subject-uuid": "669681fa-43f9-5be0-a52e-58ffe5630af5",
+            "type": "component"
+          }
+        ]
+      }
+    ],
+    "assessment-assets": {
+      "components": [
+        {
+          "uuid": "0dfbb68e-410b-5aba-afb5-b15a1e2bc183",
+          "type": "software",
+          "title": "Test ladder (pytest, network disabled)",
+          "description": "The full pytest suite, run on every push and pull request with sockets disabled. Its JUnit XML is the evidence for every control that cites a test.",
+          "status": {
+            "state": "operational"
+          }
+        },
+        {
+          "uuid": "8b7d72d9-4ee7-5864-971e-cc7e1842aeac",
+          "type": "software",
+          "title": "DDIL harness",
+          "description": "Real two-node clusters (two nats-servers joined by a leafnode, Toxiproxy on that TCP link, two Sentinel nodes) driven through DENIED, LIMITED, INTERMITTENT, DEGRADED and RECOVERY. One JSON result per scenario (harness/results).",
+          "status": {
+            "state": "operational"
+          }
+        },
+        {
+          "uuid": "32898f0c-022e-51c7-b2e0-5487f03d2a5d",
+          "type": "software",
+          "title": "OpenSCAP scan against the DISA STIG benchmark",
+          "description": "Run on a node host by deploy/ansible/roles/stig (stig_scan: true) with the DISA SCAP benchmark; XCCDF results, a DISA checklist (.ckl) via the MITRE SAF CLI. Not yet run.",
+          "status": {
+            "state": "operational"
+          }
+        }
+      ],
+      "assessment-platforms": [
+        {
+          "uuid": "aea5f20c-4f51-50eb-951b-00d963c039c1",
+          "title": "CI runner (GitHub Actions, ubuntu-24.04) and the hosts the STIG role manages",
+          "uses-components": [
+            {
+              "component-uuid": "0dfbb68e-410b-5aba-afb5-b15a1e2bc183"
+            },
+            {
+              "component-uuid": "8b7d72d9-4ee7-5864-971e-cc7e1842aeac"
+            },
+            {
+              "component-uuid": "32898f0c-022e-51c7-b2e0-5487f03d2a5d"
+            }
+          ]
+        }
+      ]
+    },
+    "tasks": [
+      {
+        "uuid": "164a8f90-536f-5377-9273-3d17807c0a1e",
+        "type": "action",
+        "title": "Test ladder (pytest, network disabled)",
+        "description": "The full pytest suite, run on every push and pull request with sockets disabled. Its JUnit XML is the evidence for every control that cites a test.",
+        "props": [
+          {
+            "name": "evidence-ci",
+            "ns": "urn:sentinel:oscal",
+            "value": "ci.yml#python"
+          },
+          {
+            "name": "evidence-ci",
+            "ns": "urn:sentinel:oscal",
+            "value": "ci.yml#compliance"
+          }
+        ]
+      },
+      {
+        "uuid": "1ade981b-7830-5a16-9433-ecb3b0d5dab9",
+        "type": "action",
+        "title": "DDIL harness",
+        "description": "Real two-node clusters (two nats-servers joined by a leafnode, Toxiproxy on that TCP link, two Sentinel nodes) driven through DENIED, LIMITED, INTERMITTENT, DEGRADED and RECOVERY. One JSON result per scenario (harness/results).",
+        "props": [
+          {
+            "name": "evidence-ci",
+            "ns": "urn:sentinel:oscal",
+            "value": "harness.yml#scenario"
+          }
+        ]
+      },
+      {
+        "uuid": "5c0061c8-568c-527d-88c2-8ed75ddbf75e",
+        "type": "action",
+        "title": "OpenSCAP scan against the DISA STIG benchmark",
+        "description": "Run on a node host by deploy/ansible/roles/stig (stig_scan: true) with the DISA SCAP benchmark; XCCDF results, a DISA checklist (.ckl) via the MITRE SAF CLI. Not yet run."
+      }
+    ]
+  }
+}
