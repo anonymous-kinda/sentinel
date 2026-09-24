@@ -1,9 +1,15 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AnswerCard, ProbabilityBars, commandFor } from "../components/AssistantPanel";
+import { HttpError } from "../api/client";
+import { AnswerCard, AssistantPanel, ProbabilityBars, commandFor } from "../components/AssistantPanel";
 import type { AiAnswer } from "../api/types";
+import { mockApi, ok } from "./fixtures/api";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 const tier = { router: "jev", narrator: "claude", reason: "Link CONNECTED", link_state: "CONNECTED", marking: "UNCLASSIFIED" } as const;
 const base: AiAnswer = {
@@ -85,6 +91,34 @@ describe("AnswerCard", () => {
     render(<AnswerCard answer={clarify} onAsk={onAsk} onConfirm={async () => ({})} />);
     fireEvent.click(screen.getByRole("button", { name: /EX-DEB 412/ }));
     expect(onAsk).toHaveBeenCalledWith("/assess 99412");
+  });
+});
+
+describe("the server's reason, not a bare status", () => {
+  it("shows why the assistant refused a question, and logs it", async () => {
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockApi({
+      "GET /api/ai/status": ok({ enabled: true, tier, link_source: "measured", cloud_opt_in: true, min_confidence: 0.6 }),
+      "GET /api/ai/audit/verify": ok({ ok: true, count: 0 }),
+      "POST /api/ai/ask": { status: 503, body: { detail: "the assistant is busy; try again" } },
+    });
+    render(<AssistantPanel version={0} />);
+    fireEvent.change(screen.getByRole("textbox", { name: "question" }), { target: { value: "How is the link?" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ask" }));
+    expect(await screen.findByText("the assistant is busy; try again")).toBeTruthy();
+    expect(screen.queryByText(/HTTP 503/)).toBeNull();
+    expect(consoleError).toHaveBeenCalledWith("Assistant question failed", expect.objectContaining({ status: 503 }));
+  });
+
+  it("shows why a draft could not be confirmed", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const onConfirm = vi.fn(async () => {
+      throw new HttpError("/api/ai/confirm", 409, { detail: "stale_draft" });
+    });
+    render(<AnswerCard answer={{ ...base, status: "draft", draft_id: "d1" }} onAsk={() => {}} onConfirm={onConfirm} />);
+    fireEvent.click(screen.getByRole("button", { name: /confirm/i }));
+    expect(await screen.findByText("stale_draft")).toBeTruthy();
+    expect(screen.queryByText(/HTTP 409/)).toBeNull();
   });
 });
 

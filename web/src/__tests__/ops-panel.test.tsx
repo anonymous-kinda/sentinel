@@ -97,6 +97,21 @@ describe("OpsPanel - the decision log", () => {
     consoleError.mockRestore();
   });
 
+  it("keeps the operator's rationale when the node refuses the decision", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mockApi({
+      [OPS]: ok(view([])),
+      [`POST /api/events/${EVENT}/decision`]: { status: 409, body: { detail: "the CDM changed; review before deciding" } },
+    });
+    render(<OpsPanel eventId={EVENT} version={0} readOnly={false} />);
+    const rationale = (await screen.findByRole("textbox", { name: "Rationale" })) as HTMLInputElement;
+    fireEvent.change(rationale, { target: { value: "miss distance grows over three updates" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record decision" }));
+    expect(await screen.findByText("the CDM changed; review before deciding")).toBeTruthy();
+    expect(rationale.value).toBe("miss distance grows over three updates");
+    vi.restoreAllMocks();
+  });
+
   it("treats every string in a RESOLUTION as text, whoever wrote it", async () => {
     const { container } = await renderEntries([
       {

@@ -1,8 +1,8 @@
 import { useId, useState } from "react";
 import type { LogEntryView, OpsView, ResolutionBody } from "../api/types";
-import { HttpError, apiErrorMessage, postJSON, useResource } from "../api/client";
+import { postJSON, useResource } from "../api/client";
 import { dtg } from "../lib/format";
-import { log } from "../lib/log";
+import { useAction } from "../lib/useAction";
 
 const STATUSES = ["NEW", "WATCH", "MANEUVER_PLANNING", "NO_ACTION", "CLOSED"];
 
@@ -27,26 +27,17 @@ export function OpsPanel({ eventId, version, readOnly }: { eventId: string; vers
   const { data } = useResource<OpsView>(`/api/events/${encodeURIComponent(eventId)}/ops`, version + local);
   const [decision, setDecision] = useState("MONITOR");
   const [rationale, setRationale] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const { busy, error, run } = useAction();
 
   if (!data) return null;
   const status = data.annotations.triage_status;
   const refresh = () => setLocal((n) => n + 1);
 
+  /** Resolves true when the node accepted the write. */
   const act = async (fn: () => Promise<unknown>) => {
-    setBusy(true);
-    setError(null);
-    try {
-      await fn();
-      refresh();
-    } catch (e) {
-      const reason = apiErrorMessage(e);
-      log.error({ event_id: eventId, status: e instanceof HttpError ? e.status : null, error: reason }, "Operator data write failed");
-      setError(reason);
-    } finally {
-      setBusy(false);
-    }
+    const done = await run(fn, "Operator data write failed", { event_id: eventId });
+    if (done) refresh();
+    return done;
   };
 
   return (
@@ -90,10 +81,9 @@ export function OpsPanel({ eventId, version, readOnly }: { eventId: string; vers
       {!readOnly && (
         <form
           className="decision-form"
-          onSubmit={(e) => {
+          onSubmit={async (e) => {
             e.preventDefault();
-            act(() => postJSON(`/api/events/${encodeURIComponent(eventId)}/decision`, { decision, rationale }));
-            setRationale("");
+            if (await act(() => postJSON(`/api/events/${encodeURIComponent(eventId)}/decision`, { decision, rationale }))) setRationale("");
           }}
         >
           <select value={decision} onChange={(e) => setDecision(e.target.value)} aria-label="Decision">
