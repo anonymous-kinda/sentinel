@@ -9,6 +9,7 @@ the store and the engine keep working and the leaf reconnects on its own.
 from __future__ import annotations
 
 import contextlib
+from typing import TYPE_CHECKING
 
 import nats
 from nats.errors import NoRespondersError
@@ -17,11 +18,16 @@ from nats.errors import TimeoutError as NatsTimeout
 from ..obs import get_logger
 from .base import Handler, Msg, NoResponders, RequestTimeout, Responder
 
+if TYPE_CHECKING:
+    from nats.aio.client import Client
+    from nats.aio.msg import Msg as NatsMsg
+    from nats.aio.subscription import Subscription as NatsSubscription
+
 log = get_logger(__name__)
 
 
 class _Sub:
-    def __init__(self, sub):
+    def __init__(self, sub: NatsSubscription):
         self._sub = sub
 
     async def unsubscribe(self) -> None:
@@ -30,7 +36,7 @@ class _Sub:
 
 
 class NatsBus:
-    def __init__(self, nc):
+    def __init__(self, nc: Client):
         self._nc = nc
 
     @classmethod
@@ -55,7 +61,7 @@ class NatsBus:
         await self._nc.publish(subject, data, headers=headers or None)
 
     async def subscribe(self, subject: str, handler: Handler) -> _Sub:
-        async def cb(m) -> None:
+        async def cb(m: NatsMsg) -> None:
             await handler(Msg(m.subject, m.data, dict(m.headers or {})))
 
         return _Sub(await self._nc.subscribe(subject, cb=cb))
@@ -72,7 +78,7 @@ class NatsBus:
         return Msg(m.subject, m.data, dict(m.headers or {}))
 
     async def serve(self, subject: str, responder: Responder) -> _Sub:
-        async def cb(m) -> None:
+        async def cb(m: NatsMsg) -> None:
             try:
                 body, headers = await responder(Msg(m.subject, m.data, dict(m.headers or {})))
             except Exception:  # noqa: BLE001 - never kill the subscription

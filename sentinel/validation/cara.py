@@ -59,7 +59,7 @@ class CaraCase:
     def override_config(self) -> AssessmentConfig:
         """Configuration that reproduces CARA's 'compute regardless' setting."""
         override = self.raw.get("config_override") or {}
-        fields = {k: (math.inf if v is None else v) for k, v in override.items()}
+        fields: dict[str, Any] = {k: (math.inf if v is None else v) for k, v in override.items()}
         return AssessmentConfig(**fields)
 
 

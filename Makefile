@@ -9,7 +9,7 @@ help:  ## list targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
 
 install:  ## python venv + web dependencies
-	$(UV) venv -q --allow-existing && $(UV) pip install -q -e ".[dev]"
+	$(UV) sync -q --locked --python 3.12 --extra dev
 	npm --prefix web ci --no-audit --no-fund
 
 test:  ## python test ladder (network disabled) + web tests
@@ -166,3 +166,48 @@ opsec: tools  ## OPSEC scenario on real processes: a unit set at the edge never 
 	$(UV) run python -m harness.run opsec
 	$(UV) run python -m harness.report
 # --- end M3 pass service ------------------------------------------------------
+
+# >>> interface control documents (docs/icd) >>>
+# openapi.json is exported from the app; the other ICDs are written by hand
+# and held to the code by tests/docs. See docs/icd/README.md.
+.PHONY: openapi icd
+
+openapi:  ## regenerate docs/icd/openapi.json from the FastAPI app (deterministic; never hand-edit)
+	$(UV) run python scripts/export_openapi.py
+
+icd: openapi  ## regenerate the OpenAPI export, then run every ICD drift test
+	$(UV) run pytest -q tests/docs
+# <<< interface control documents (docs/icd) <<<
+
+# --- Docker Compose stack (begin) --------------------------------------------
+# Hub and edge in containers over a Toxiproxy-shaped leaf link (docs/compose.md).
+# Needs only Docker: the sentinel image builds from this checkout, nats-server
+# and Toxiproxy are the tools.lock versions pinned by digest. CI runs it live.
+COMPOSE ?= docker compose -f deploy/compose/compose.yaml
+PRESET ?= CONNECTED
+.PHONY: compose-config compose-up compose-down compose-smoke compose-link
+
+compose-config:  ## re-render deploy/compose NATS and Toxiproxy configs from deploy/nats/*.tmpl
+	$(UV) run python scripts/compose_config.py
+
+compose-up:  ## build and start hub :8000 and edge :8001 in containers; returns once both are healthy
+	$(COMPOSE) up --build --detach --wait --wait-timeout 600
+
+compose-down:  ## stop the stack and delete its volumes (keys, databases, trust file)
+	$(COMPOSE) down --volumes
+
+compose-smoke:  ## on a running stack: health, sync VERIFIED, DENIED measured, reconvergence, OPSEC
+	$(UV) run python -m harness.compose_smoke
+
+compose-link:  ## shape the leaf link from inside the edge: PRESET=CONNECTED|DEGRADED|LIMITED|DENIED
+	$(UV) run python -m harness.compose_link $(PRESET)
+# --- Docker Compose stack (end) ----------------------------------------------
+
+# >>> type check (mypy) >>>
+# Strict on the core (bus, crdt, sync, triage) and the risk engine, standard
+# on the rest of sentinel/. The per-module settings live in pyproject.toml and
+# are held to `mypy --strict` by tests/test_typecheck.py.
+.PHONY: typecheck
+typecheck:  ## mypy over sentinel/: strict on the core and the risk engine, standard on the rest
+	$(UV) run mypy sentinel
+# <<< type check (mypy) <<<

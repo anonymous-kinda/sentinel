@@ -2,13 +2,16 @@
 
 Sentinel is a DDIL-resilient conjunction assessment decision aid, with an overhead-pass mission module. The architecture record is in `docs/system-design.md` (ADRs) and the maths in `docs/risk-engine-design.md`.
 
+**Before adding a mission module, pass provider, source adapter, AI tool or requirement,** follow its recipe under "How to extend" in `docs/technical-guide.md`. Each recipe names the files to touch and the tests and contracts that hold you to it. `docs/technical-guide.md` also has the configuration reference, `docs/index.md` lists every document, and `CONTRIBUTING.md` has the pre-PR commands for each kind of change.
+
 ## Commands
 
 ```bash
 export PATH=$HOME/.local/bin:$PATH                  # uv lives here
-uv venv --python 3.12 && uv pip install -e ".[dev]" # 3.12: the lock resolves numpy differently on newer Pythons
+uv sync --locked --python 3.12 --extra dev          # exactly uv.lock, as CI installs; 3.12 matches the dev lock
 uv run pytest -q                                    # must report 0 skipped
 uv run ruff check . && uv run lint-imports
+make typecheck                                      # mypy: strict on the core and risk, standard on the rest
 make help                                           # every target and what it regenerates
 ```
 
@@ -21,6 +24,7 @@ make help                                           # every target and what it r
 | `evals/`, `sentinel/ai/` routers | `make ai-eval` | `docs/ai-eval.md` |
 | `sentinel/sync`, `harness/`, anything on the link | `make ddil` | `docs/ddil-results.md` |
 | `sentinel/risk`, `fixtures/cara` | `make report` | `docs/validation-report.md` |
+| `sentinel/api/` routes | `make openapi` | `docs/icd/openapi.json` |
 
 When a regenerated report moves a number the prose quotes, the doc guard fails until the prose and `tests/doc_claims.toml` agree again.
 
@@ -34,10 +38,12 @@ When a regenerated report moves a number the prose quotes, the doc guard fails u
 - **The test ladder comes first**: write the rung, watch it fail, then write the code.
 - **CARA fixtures are transcribed by hand** from NASA's published files, with provenance. Never generate expected values by running this code.
 - **Tests never touch the network** (`pytest-socket`). Skyfield loads bundled ephemerides only.
-- **Generated files; regenerate them and never hand-edit:** `docs/validation-report.md`, `docs/ddil-results.md`, `docs/ai-eval.md` (with `docs/img/ai-reliability.svg`), `docs/traceability.md`, `deploy/vex/sentinel.openvex.json` and the OSCAL documents under `compliance/oscal/` (`make compliance`).
+- **Generated files; regenerate them and never hand-edit:** `docs/validation-report.md`, `docs/ddil-results.md`, `docs/ai-eval.md` (with `docs/img/ai-reliability.svg`), `docs/traceability.md`, `deploy/vex/sentinel.openvex.json`, `docs/icd/openapi.json` (`make openapi`) and the OSCAL documents under `compliance/oscal/` (`make compliance`).
 - **Docs are checked against the repo** (`tests/test_docs.py`): every path, `make` target and `sentinel` subcommand they name must exist, and every headline number registered in `tests/doc_claims.toml` must match its generated source. When a regenerated report changes a number, update the prose and the registry together.
 - **AI never computes.** The assistant (`sentinel/ai/`) routes to tools and phrases their facts; `.importlinter` forbids it the maths. Hosted AI (Jev, Claude) needs an UNCLASSIFIED marking, operator opt-in and a usable measured link, and every AI answer passes the number-grounding guard. Never publish a Jev number that did not come from a real run.
-- **The core stays closed.** Adding or changing a mission module never edits `sentinel/sync`, `bus`, `crdt` or `triage`; that is the MOSA claim, and `git diff --stat 67199b7 -- sentinel/sync sentinel/bus sentinel/crdt sentinel/triage` stays empty. Documentation and checks read the core and its call sites; the core never lists mission names. A core change is a deliberate, measured decision with its own ADR.
+- **The core stays closed to modules.** Adding or changing a mission module never edits `sentinel/sync`, `bus`, `crdt` or `triage`. The proof for M3: the pass module, its service and its API landed with `git diff --stat 67199b7 f16e294 -- sentinel/sync sentinel/bus sentinel/crdt sentinel/triage` empty. Documentation and checks read the core and its call sites; the core never lists mission names. The core changes only deliberately: a bug fix proven by a failing test, typing or documentation with no behaviour change, or a design change recorded in an ADR.
+- **Types are checked.** `make typecheck` runs mypy strict on `bus`, `crdt`, `sync`, `triage` and `risk`, and standard on the rest (`tests/test_typecheck.py` holds the strict list). Wire data enters as `Mapping[str, Any]`. A `cast` or `# type: ignore` needs an error code and a reason. Modules leave the TODO `ignore_errors` list in `pyproject.toml` when they are fixed; nothing new joins it.
+- **Interfaces are documented where they are checked.** `docs/icd/` holds the OpenAPI, AsyncAPI, CDM-profile and sync-envelope ICDs, each held to the code by `tests/docs/`. A new node-local event kind or bus header needs its channel or message in `docs/icd/asyncapi.yaml`; the test discovers kinds at the `subjects.local` call sites and fails on anything undocumented.
 - **Every record a hub offers over sync costs a round trip on a thin link.** Read ADR-008, "Reference data on a thin link", before a hub offers edges anything more.
 - **Module boundaries are enforced by `.importlinter`**: `bus`, `triage`, `sync`, `crdt`, `ops` and `linkstate` may not import mission modules (`conjunction`, `risk`, `cdm`, `passes`) or the API.
 - **Data class on everything**: REAL, DERIVED or EXERCISE. Exercise data carries `ORIGINATOR=SENTINEL-EXERCISE`.

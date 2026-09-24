@@ -1,0 +1,176 @@
+# Sentinel hub and edge over an emulated link, in containers (docs/compose.md).
+#
+#   make compose-up                  # hub http://127.0.0.1:8000, edge http://127.0.0.1:8001
+#   make compose-link PRESET=DENIED  # shape the leaf link (CONNECTED DEGRADED LIMITED DENIED)
+#   make compose-smoke               # health, sync, DENIED measured, reconvergence, OPSEC
+#   make compose-down                # stop and delete the volumes
+#
+# The topology of the process harness (harness/cluster.py):
+#
+#   [edge] -- nats(edge) --leaf--> toxiproxy --> nats(hub) -- [hub]
+#
+# - Each node is two containers sharing one network namespace, like a pod:
+#   nats-server owns it, sentinel joins it. The NATS configs' loopback
+#   listeners keep their meaning: a node's bus is reachable by that node only.
+# - The hub and the edge sit on separate networks. Toxiproxy is the only
+#   container on both, so the leaf link has exactly one path.
+# - NATS and Toxiproxy configs are rendered from deploy/nats/*.tmpl by the
+#   harness's own code (scripts/compose_config.py): same leaf permissions,
+#   same DDIL fixes. nats-server and Toxiproxy are the tools.lock versions,
+#   pinned by digest; their binaries are byte-identical to the pinned ones.
+# - Each node enrols its signing key in a shared trust file before either
+#   starts (harness/identity.py), so operator data merges across the link.
+
+name: sentinel
+
+x-hardening: &hardening
+  user: "65532:65532"
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
+x-sentinel: &sentinel
+  <<: *hardening
+  image: sentinel-compose:local
+  build:
+    context: ../..
+    dockerfile: deploy/compose/Dockerfile
+  tmpfs: [/tmp]
+
+x-node-healthcheck: &node-healthcheck
+  test: ["CMD", "/opt/sentinel/venv/bin/python", "-c",
+         "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"]
+  interval: 5s
+  timeout: 3s
+  retries: 12
+  start_period: 60s
+
+x-enrolment: &enrolment
+  <<: *sentinel
+  network_mode: none
+  entrypoint: ["/opt/sentinel/venv/bin/python", "/opt/enrol/identity.py"]
+
+services:
+  # ------------------------------------------------------------------ hub
+  hub-nats:
+    <<: *hardening
+    image: docker.io/library/nats:2.15.0-scratch@sha256:c0d27f3054601a99055aa5ec897b0a55bf1869ae50f454e659acfbbea11d2ab7
+    command: ["--config", "/etc/nats/nats.conf"]
+    configs:
+      - source: hub-nats
+        target: /etc/nats/nats.conf
+    networks: [hub-side]
+    ports:
+      - "127.0.0.1:8000:8000"   # the hub console: the hub container shares this namespace
+
+  hub-identity:
+    <<: *enrolment
+    command: [hub, /var/lib/sentinel, /var/lib/sentinel/trust/trust.json]
+    volumes:
+      - hub-var:/var/lib/sentinel
+      - trust:/var/lib/sentinel/trust
+      - ../../harness/identity.py:/opt/enrol/identity.py:ro
+
+  hub:
+    <<: *sentinel
+    network_mode: service:hub-nats
+    depends_on:
+      hub-nats:
+        condition: service_started
+      hub-identity:
+        condition: service_completed_successfully
+      edge-identity:
+        condition: service_completed_successfully
+    environment:
+      SENTINEL_NODE_ID: hub
+      SENTINEL_ROLE: hub
+      SENTINEL_NATS_URL: nats://127.0.0.1:4222
+      SENTINEL_TRUST_FILE: /var/lib/sentinel/trust/trust.json
+      SENTINEL_MARKING: "UNCLASSIFIED // EXERCISE"
+      SENTINEL_EXERCISE: "1"
+    volumes:
+      - hub-var:/var/lib/sentinel
+      - trust:/var/lib/sentinel/trust:ro
+    healthcheck: *node-healthcheck
+
+  # ----------------------------------------------------------------- link
+  toxiproxy:
+    <<: *hardening
+    image: ghcr.io/shopify/toxiproxy:2.12.0@sha256:9378ed52a28bc50edc1350f936f518f31fa95f0d15917d6eb40b8e376d1a214e
+    command: ["-host=0.0.0.0", "-config=/etc/toxiproxy/toxiproxy.json"]
+    configs:
+      - source: toxiproxy
+        target: /etc/toxiproxy/toxiproxy.json
+    networks: [hub-side, edge-side]
+
+  # ----------------------------------------------------------------- edge
+  edge-nats:
+    <<: *hardening
+    image: docker.io/library/nats:2.15.0-scratch@sha256:c0d27f3054601a99055aa5ec897b0a55bf1869ae50f454e659acfbbea11d2ab7
+    command: ["--config", "/etc/nats/nats.conf"]
+    configs:
+      - source: edge-nats
+        target: /etc/nats/nats.conf
+    networks: [edge-side]
+    ports:
+      - "127.0.0.1:8001:8000"   # the edge console: the edge container shares this namespace
+    depends_on:
+      toxiproxy:
+        condition: service_started
+
+  edge-identity:
+    <<: *enrolment
+    command: [edge-alpha, /var/lib/sentinel, /var/lib/sentinel/trust/trust.json]
+    depends_on:
+      hub-identity:
+        condition: service_completed_successfully
+    volumes:
+      - edge-var:/var/lib/sentinel
+      - trust:/var/lib/sentinel/trust
+      - ../../harness/identity.py:/opt/enrol/identity.py:ro
+
+  edge:
+    <<: *sentinel
+    network_mode: service:edge-nats
+    depends_on:
+      edge-nats:
+        condition: service_started
+      hub-identity:
+        condition: service_completed_successfully
+      edge-identity:
+        condition: service_completed_successfully
+    environment:
+      SENTINEL_NODE_ID: edge-alpha
+      SENTINEL_ROLE: edge
+      SENTINEL_HUB_ID: hub
+      SENTINEL_NATS_URL: nats://127.0.0.1:4222
+      SENTINEL_TRUST_FILE: /var/lib/sentinel/trust/trust.json
+      SENTINEL_MARKING: "UNCLASSIFIED // EXERCISE"
+      SENTINEL_EXERCISE: "0"
+      SENTINEL_SYNC_MODE: edf
+      SENTINEL_SYNC_INTERVAL_S: "1"
+      # Link presets for the demo. The API accepts them from the edge's own
+      # loopback only, so `make compose-link` sends them from inside it.
+      SENTINEL_DEMO_CONTROLS: "1"
+      SENTINEL_TOXIPROXY_API: http://toxiproxy:8474
+    volumes:
+      - edge-var:/var/lib/sentinel
+      - trust:/var/lib/sentinel/trust:ro
+    healthcheck: *node-healthcheck
+
+configs:
+  hub-nats:
+    file: ./nats/hub.conf
+  edge-nats:
+    file: ./nats/edge.conf
+  toxiproxy:
+    file: ./toxiproxy.json
+
+networks:
+  hub-side: {}
+  edge-side: {}
+
+volumes:
+  hub-var: {}
+  edge-var: {}
+  trust: {}   # public keys only; written by the two enrolments, read-only to the nodes

@@ -1,9 +1,9 @@
 {
   "plan-of-action-and-milestones": {
-    "uuid": "a418e64a-c9fb-5d3a-befa-82751c0c8761",
+    "uuid": "084afe42-8cf7-5ced-8bad-b5909dc99091",
     "metadata": {
       "title": "Sentinel plan of action and milestones",
-      "last-modified": "2026-09-24T08:20:57Z",
+      "last-modified": "2026-09-24T18:54:56Z",
       "version": "0.2.0",
       "oscal-version": "1.2.1"
     },
@@ -319,7 +319,7 @@
         "uuid": "93b130c8-422e-5b58-bd65-d80b3b240591",
         "title": "CM-8 (Build, test and release pipeline): partial",
         "description": "Catalogue each container image archive with syft in the release workflow and gate it like the bundle SBOMs. Push the first release tag, then check that the published SBOMs and their attestations match the bundles (gh attestation verify --predicate-type https://spdx.dev/Document/v2.3).",
-        "statement": "Stated in the SSP as partial: Software components are inventoried with versions and hashes. On every push the supply-chain CI job writes SPDX 2.3 and CycloneDX SBOMs with the pinned syft for what a bundle ships from source: the Python runtime (the hash-locked runtime set and the sentinel wheel, installed for the bundle's CPython 3.12 target) and the web console (the production closure of web/package-lock.json). The step fails if an SBOM is empty or lacks a component known to ship (scripts/sbom.py, step \"SBOMs (fails if empty or missing a shipped component)\"). The bundle builder writes BUNDLE.json, which lists every wheel with its digest and every bundled binary with its version, upstream URL and SHA-256, and refuses a binary with no pin for the target architecture; deploy/tools.lock pins every third-party binary for both architectures. Two gaps remain. The container image's base layer (Chainguard's CPython image) is in no SBOM that Sentinel produces. In CI, bundles are built, and SBOMs published with a release and attested to it, only by .github/workflows/release.yml, which runs on a tag on GitHub, has been checked only statically (actionlint) and has not run yet.",
+        "statement": "Stated in the SSP as partial: Software components are inventoried with versions and hashes. On every push the supply-chain CI job writes SPDX 2.3 and CycloneDX SBOMs with the pinned syft for what a bundle ships from source: the Python runtime (the hash-locked runtime set and the sentinel wheel, installed for the bundle's CPython 3.12 target) and the web console (the production closure of web/package-lock.json). The step fails if an SBOM is empty or lacks a component known to ship (scripts/sbom.py, step \"SBOMs (fails if empty or missing a shipped component)\"). The bundle builder writes BUNDLE.json, which lists every wheel with its digest and every bundled binary with its version, upstream URL and SHA-256, and refuses a binary with no pin for the target architecture; deploy/tools.lock pins every third-party binary for both architectures. Two gaps remain. The container image's base layer (Chainguard's CPython image) is in no SBOM that Sentinel produces. The airgap-install CI job builds a bundle for each architecture on every push and installs it offline, but SBOMs are published with a release and attested to it only by .github/workflows/release.yml, which runs on a tag on GitHub, has been checked only statically (actionlint) and has not run yet.",
         "status": "open",
         "remediations": [
           {
@@ -333,15 +333,15 @@
       {
         "uuid": "fc4fff06-db99-5c92-a78b-0687f77066be",
         "title": "CM-14 (Build, test and release pipeline): partial",
-        "description": "Push the first release tag and confirm that the sign job's offline verification and the verify job (signature, install and run under unshare -rn) pass on both architectures. Then run the full offline install (deploy/bundle/verify_offline.sh) in CI on every push, not only in a release.",
-        "statement": "Stated in the SSP as partial: Installation refuses a bundle whose signature does not verify against the approved signer. One verifier, deploy/bundle/verify_signature.sh, holds the policy for every install path. It accepts exactly one policy: the release workflow's keyless identity, checked offline against the Sigstore trusted root (whose SHA-256 is pinned), or a site public key. No policy, two policies, a missing signature bundle, or a trusted root that does not match its pin is refused before cosign runs, and a rejected signature fails closed. On every push the supply-chain CI job runs the verifier with the pinned cosign in a namespace with no network: a good signature verifies; a tampered artifact, another key's signature and a wrong identity are rejected; a real Sigstore public-good signature verifies offline (deploy/bundle/selftest_signature.sh). The same job runs the Ansible role's gate on localhost (deploy/ansible/tests/test_verify.sh): a tampered bundle with a regenerated digest, a missing policy and another signer's identity are refused. Not yet proven: releases are signed keyless only by the sign job of .github/workflows/release.yml, which runs on a tag on GitHub, has been checked only statically (actionlint) and has not run yet, so no Sentinel release signature exists. The full offline install behind the gate (make airgap-local) is proven only on a developer machine. Unpacking a bundle by hand and running install.sh skips the gate by construction: a script inside a bundle cannot vouch for that bundle.",
+        "description": "Push the first release tag and confirm that the sign job's offline verification and the verify job (keyless signature, install and run under unshare -rn) pass on both architectures.",
+        "statement": "Stated in the SSP as partial: Installation refuses a bundle whose signature does not verify against the approved signer. One verifier, deploy/bundle/verify_signature.sh, holds the policy for every install path. It accepts exactly one policy: the release workflow's keyless identity, checked offline against the Sigstore trusted root (whose SHA-256 is pinned), or a site public key. No policy, two policies, a missing signature bundle, or a trusted root that does not match its pin is refused before cosign runs, and a rejected signature fails closed. On every push the supply-chain CI job runs the verifier with the pinned cosign in a namespace with no network: a good signature verifies; a tampered artifact, another key's signature and a wrong identity are rejected; a real Sigstore public-good signature verifies offline (deploy/bundle/selftest_signature.sh). The same job runs the Ansible role's gate on localhost (deploy/ansible/tests/test_verify.sh): a tampered bundle with a regenerated digest, a missing policy and another signer's identity are refused. The airgap-install CI job runs the full offline install behind the gate on every push, for each architecture (make airgap-local): it builds a bundle, signs it with a throwaway key, and in a namespace with no network verifies that signature before unpacking, installs and runs the node. Not yet proven: releases are signed keyless only by the sign job of .github/workflows/release.yml, which runs on a tag on GitHub, has been checked only statically (actionlint) and has not run yet, so no Sentinel release signature exists, and the full install is exercised on every push only in key mode, not against the release workflow's keyless identity. Unpacking a bundle by hand and running install.sh skips the gate by construction: a script inside a bundle cannot vouch for that bundle.",
         "status": "open",
         "remediations": [
           {
             "uuid": "c486a980-74bb-56e8-aa6b-2813b60e7e2b",
             "lifecycle": "planned",
             "title": "Planned remediation",
-            "description": "Push the first release tag and confirm that the sign job's offline verification and the verify job (signature, install and run under unshare -rn) pass on both architectures. Then run the full offline install (deploy/bundle/verify_offline.sh) in CI on every push, not only in a release."
+            "description": "Push the first release tag and confirm that the sign job's offline verification and the verify job (keyless signature, install and run under unshare -rn) pass on both architectures."
           }
         ]
       },
@@ -678,15 +678,15 @@
       {
         "uuid": "262c8bc6-5c86-5ed7-b81c-1db296d735d6",
         "title": "SI-7 (Node host (Ubuntu 24.04 LTS)): partial",
-        "description": "Run verify_offline.sh on a freshly built bundle in CI on every push (the gap the requirement trace records as VC-DEP-002); apply the STIG role to the hub and scan.",
-        "statement": "Stated in the SSP as partial: Installation verifies before it unpacks, and each check fails closed. The sentinel Ansible role first verifies the bundle's signature on the target (verify.yml: the pinned cosign, itself checked against deploy/tools.lock on the host, runs verify_signature.sh), then the tarball's SHA-256; install.sh then checks every file against the bundle's SHA256SUMS and installs dependencies offline with --require-hashes. CI exercises the signature gate on every push: on localhost, a tampered bundle is refused even when its .sha256 is regenerated to match (deploy/ansible/tests/test_verify.sh, in the supply-chain job). The complete offline path (deploy/bundle/verify_offline.sh: signature, digest, SHA256SUMS, install and run inside unshare -rn) is proven only on a developer machine (make airgap-local) and in the release workflow, which has not run yet. AIDE checks file integrity daily (STIG role), and the STIG role has not been applied to a host.",
+        "description": "Apply the STIG role to the hub and scan. Push the first release tag and confirm that the release workflow's verify job passes on keyless-signed bundles.",
+        "statement": "Stated in the SSP as partial: Installation verifies before it unpacks, and each check fails closed. The sentinel Ansible role first verifies the bundle's signature on the target (verify.yml: the pinned cosign, itself checked against deploy/tools.lock on the host, runs verify_signature.sh), then the tarball's SHA-256; install.sh then checks every file against the bundle's SHA256SUMS and installs dependencies offline with --require-hashes. CI exercises the signature gate on every push: on localhost, a tampered bundle is refused even when its .sha256 is regenerated to match (deploy/ansible/tests/test_verify.sh, in the supply-chain job). The complete offline path (deploy/bundle/verify_offline.sh: signature, digest, SHA256SUMS, install and run inside unshare -rn) runs on every push in the airgap-install CI job, on a freshly built bundle for each architecture signed with a throwaway key (make airgap-local); the bundle's SHA256SUMS covers the reference data it ships. The release workflow runs the same path on keyless-signed bundles and has not run yet. AIDE checks file integrity daily (STIG role), and the STIG role has not been applied to a host.",
         "status": "open",
         "remediations": [
           {
             "uuid": "4a056ba0-329b-589b-87b1-b9e68c2acfdc",
             "lifecycle": "planned",
             "title": "Planned remediation",
-            "description": "Run verify_offline.sh on a freshly built bundle in CI on every push (the gap the requirement trace records as VC-DEP-002); apply the STIG role to the hub and scan."
+            "description": "Apply the STIG role to the hub and scan. Push the first release tag and confirm that the release workflow's verify job passes on keyless-signed bundles."
           }
         ]
       },
@@ -1537,7 +1537,7 @@
       {
         "uuid": "e8aba527-0dd3-5399-93dc-f4d8f3090177",
         "title": "CM-14 (Build, test and release pipeline): partial",
-        "description": "Push the first release tag and confirm that the sign job's offline verification and the verify job (signature, install and run under unshare -rn) pass on both architectures. Then run the full offline install (deploy/bundle/verify_offline.sh) in CI on every push, not only in a release.",
+        "description": "Push the first release tag and confirm that the sign job's offline verification and the verify job (keyless signature, install and run under unshare -rn) pass on both architectures.",
         "props": [
           {
             "name": "related-control",
@@ -2173,7 +2173,7 @@
       {
         "uuid": "6f253658-7997-53e4-ba01-00f1022b88e6",
         "title": "SI-7 (Node host (Ubuntu 24.04 LTS)): partial",
-        "description": "Run verify_offline.sh on a freshly built bundle in CI on every push (the gap the requirement trace records as VC-DEP-002); apply the STIG role to the hub and scan.",
+        "description": "Apply the STIG role to the hub and scan. Push the first release tag and confirm that the release workflow's verify job passes on keyless-signed bundles.",
         "props": [
           {
             "name": "related-control",

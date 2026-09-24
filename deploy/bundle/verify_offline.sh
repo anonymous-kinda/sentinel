@@ -12,8 +12,9 @@
 # tile server fails the run. Order, each step failing closed:
 #   1. signature (cosign, offline)        SI-7, CM-14 - nothing is unpacked before this
 #   2. tarball digest (.sha256, if present)
-#   3. per-file SHA256SUMS and --require-hashes install (install.sh)
-#   4. node health, NASA validation reproduced, console and Cesium assets served
+#   3. per-file SHA256SUMS and --require-hashes install (install.sh), as a hub
+#   4. node health, NASA validation reproduced, element sets loaded for every
+#      catalogued imager, console and Cesium assets served
 set -euo pipefail
 HERE=$(cd "$(dirname "$0")" && pwd)
 BUNDLE=$(realpath "$1")
@@ -33,7 +34,7 @@ unshare -rn bash -euo pipefail -c '
   tar -xzf "$BUNDLE" -C "$WORK"
   DIR=$(find "$WORK" -maxdepth 1 -mindepth 1 -type d | head -1)
   cd "$DIR"
-  PREFIX="$WORK/opt" SYSTEMD=0 ./install.sh
+  PREFIX="$WORK/opt" SYSTEMD=0 SENTINEL_ROLE=hub ./install.sh
   cd "$WORK/opt"
   set -a; . ./sentinel.env; set +a
   SENTINEL_DB=:memory: ./venv/bin/sentinel serve --port 18799 > serve.log 2>&1 &
@@ -45,6 +46,13 @@ d = json.load(sys.stdin)
 assert d[\"available\"] and d[\"operational_count\"] == 53, d
 assert d[\"worst_rel_error\"] < 1e-6 and d[\"confusion\"][\"fn\"] == 0, d
 print(f\"  validation reproduced offline: 53 events, worst rel error {d[\"worst_rel_error\"]:.1e}, false negatives 0\")"
+  curl -sf http://127.0.0.1:18799/api/passes/catalog | ./venv/bin/python -c "
+import json, sys
+imagers = json.load(sys.stdin)[\"imagers\"]
+ages = [i[\"element_age_days\"] for i in imagers]
+assert len(imagers) == 38 and None not in ages, imagers
+print(f\"  element sets loaded offline: {len(imagers)} imagers, element ages {min(ages):.1f} to {max(ages):.1f} days\")" \
+    || { grep -E "Element (snapshot missing|sets loaded)" serve.log || true; echo "FAIL: hub has no element sets"; exit 1; }
   curl -sf -o /dev/null http://127.0.0.1:18799/ || { echo "FAIL: console"; exit 1; }
   curl -sf -o /dev/null http://127.0.0.1:18799/cesium/Assets/Textures/NaturalEarthII/tilemapresource.xml || { echo "FAIL: cesium assets"; exit 1; }
   echo "  console and offline globe imagery served"

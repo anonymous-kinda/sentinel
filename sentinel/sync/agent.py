@@ -29,13 +29,15 @@ import dataclasses
 import datetime as dt
 import json
 import time
+from typing import Any
 
 from ..bus import Bus, NoResponders, RequestTimeout, subjects
 from ..clock import Clock
 from ..crdt import codec
-from ..linkstate import LinkMonitor
+from ..linkstate import LinkMonitor, LinkState
 from ..obs import get_logger
 from ..triage import Consequence, PriorityClass, TriageKey, order
+from .operator_data import OperatorData
 from .records import ReferenceRecords
 
 log = get_logger(__name__)
@@ -54,7 +56,7 @@ class WantItem:
     status: str = "QUEUED"          # QUEUED | FETCHING | ARRIVED | SUMMARY_ONLY
     eta_s: float | None = None
 
-    def view(self, now: dt.datetime) -> dict:
+    def view(self, now: dt.datetime) -> dict[str, Any]:
         return {
             "event_id": self.event_id,
             "sha": self.sha16,
@@ -73,7 +75,7 @@ class SyncAgent:
         self,
         bus: Bus,
         records: ReferenceRecords,
-        ops,
+        ops: OperatorData,
         clock: Clock,
         node_id: str,
         hub_id: str,
@@ -95,19 +97,19 @@ class SyncAgent:
         self.interval_s = interval_s
         self.urgent_window_s = urgent_window_s
         self.queue: list[WantItem] = []
-        self.arrivals: list[dict] = []
+        self.arrivals: list[dict[str, Any]] = []
         self.summary_only: set[str] = set()
         self.manifest_digest: str | None = None
-        self.last_cycle: dict = {}
+        self.last_cycle: dict[str, Any] = {}
         self.started_wall = time.monotonic()
-        self._last_state = None
+        self._last_state: LinkState | None = None
 
     # ------------------------------------------------------------------ helpers
     def _timeout(self, expected_bytes: int) -> float:
         rate = self.link.rate_bytes_per_s or 1000.0
         return 6.0 + 1.5 * expected_bytes / max(rate, 400.0)
 
-    async def _publish(self, kind: str, payload: dict) -> None:
+    async def _publish(self, kind: str, payload: dict[str, Any]) -> None:
         await self.bus.publish(
             subjects.local(self.node_id, kind),
             json.dumps(payload, default=str).encode(),
@@ -151,7 +153,7 @@ class SyncAgent:
         }
 
     # ------------------------------------------------------------ operator data
-    async def exchange_ops(self) -> dict:
+    async def exchange_ops(self) -> dict[str, Any]:
         peer = self.ops.peer_contexts(self.hub_id)
         push = self.ops.payload_for(peer["log_ctx"], peer["mv_ctx"])
         request = codec.encode({"from": self.node_id, **self.ops.contexts(), "push": push})
@@ -172,7 +174,7 @@ class SyncAgent:
         }
 
     # ---------------------------------------------------------------- manifest
-    async def fetch_manifest(self) -> list[dict] | None:
+    async def fetch_manifest(self) -> list[dict[str, Any]] | None:
         request = codec.encode({"from": self.node_id, "known": self.manifest_digest})
         t0 = time.monotonic()
         reply = await self.bus.request(subjects.sync_manifest(self.hub_id), request, timeout=self._timeout(4000))
@@ -181,13 +183,14 @@ class SyncAgent:
         if reply.headers.get("Sentinel-Unchanged") == "1":
             return None
         self.manifest_digest = reply.headers.get("Sentinel-Digest")
-        return codec.decode(reply.data)
+        manifest: list[dict[str, Any]] = codec.decode(reply.data)
+        return manifest
 
-    def apply_manifest(self, manifest: list[dict]) -> None:
+    def apply_manifest(self, manifest: list[dict[str, Any]]) -> None:
         self.records.put_summaries(manifest, self.hub_id)
         self._rebuild_queue(manifest)
 
-    def _rebuild_queue(self, manifest: list[dict]) -> None:
+    def _rebuild_queue(self, manifest: list[dict[str, Any]]) -> None:
         now = self.clock.now()
         items: list[WantItem] = []
         for compact in manifest:
@@ -283,7 +286,7 @@ class SyncAgent:
         await self._publish("sync.arrival", arrival)
 
     # ------------------------------------------------------------------ status
-    def status(self) -> dict:
+    def status(self) -> dict[str, Any]:
         now = self.clock.now()
         return {
             "mode": self.mode,

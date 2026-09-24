@@ -15,6 +15,7 @@ from __future__ import annotations
 import dataclasses
 import enum
 import time
+from typing import Any
 
 
 class LinkState(enum.StrEnum):
@@ -77,7 +78,7 @@ class LinkMonitor:
             return LinkState.DEGRADED
         return LinkState.CONNECTED
 
-    def snapshot(self) -> dict:
+    def snapshot(self) -> dict[str, Any]:
         now = time.monotonic()
         return {
             "state": self.state.value,

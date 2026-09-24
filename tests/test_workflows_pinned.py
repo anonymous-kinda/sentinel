@@ -31,3 +31,29 @@ def test_the_check_catches_a_tag(tmp_path):
     workflow = tmp_path / "x.yml"
     workflow.write_text("steps:\n  - uses: actions/checkout@v4\n  - uses: ./local\n")
     assert unpinned([workflow]) == ["x.yml:2 actions/checkout@v4"]
+
+
+def unlocked_installs(paths=WORKFLOWS) -> list[str]:
+    """Python installs that resolve fresh instead of installing uv.lock."""
+    found = []
+    for path in paths:
+        for number, line in enumerate(path.read_text().splitlines(), start=1):
+            if re.search(r"\b(uv pip install|pip install)\b", line):
+                found.append(f"{path.name}:{number} {line.strip()}")
+    return found
+
+
+def test_python_dependencies_install_from_the_lock():
+    """CI installs exactly uv.lock (`uv sync --locked`), so a new upstream
+    release cannot change what CI tests, and a stale lock fails."""
+    assert unlocked_installs() == []
+    for path in WORKFLOWS:
+        text = path.read_text()
+        if "setup-uv@" in text:
+            assert "uv sync --locked" in text, path.name
+
+
+def test_the_lock_check_catches_a_fresh_resolve(tmp_path):
+    workflow = tmp_path / "x.yml"
+    workflow.write_text("steps:\n  - run: uv pip install -e \".[dev]\"\n")
+    assert unlocked_installs([workflow]) == ['x.yml:2 - run: uv pip install -e ".[dev]"']

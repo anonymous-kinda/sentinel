@@ -93,13 +93,23 @@ def refine_to_tca(rel: RelativeState, dt_s: float) -> RelativeState:
     return RelativeState(rel.position_m + rel.velocity_m_s * dt_s, rel.velocity_m_s)
 
 
+def _require_covariances(conjunction: Conjunction) -> tuple[np.ndarray, np.ndarray]:
+    """Both objects' RTN covariances. Raises ValueError if either is missing."""
+    primary, secondary = conjunction.primary.covariance_rtn_m2, conjunction.secondary.covariance_rtn_m2
+    if primary is None or secondary is None:
+        raise ValueError("both objects need a covariance to build an encounter plane")
+    return primary, secondary
+
+
 def combined_covariance_eci_m2(conjunction: Conjunction) -> np.ndarray:
     """Sum of both objects' position covariances, each rotated from its own
     RTN frame to ECI. Valid if the two orbit determinations are independent."""
     p, s = conjunction.primary, conjunction.secondary
-    return rotate_covariance_rtn_to_eci(
-        p.covariance_rtn_m2, p.position_km, p.velocity_km_s
-    ) + rotate_covariance_rtn_to_eci(s.covariance_rtn_m2, s.position_km, s.velocity_km_s)
+    p_cov, s_cov = _require_covariances(conjunction)
+    combined: np.ndarray = rotate_covariance_rtn_to_eci(
+        p_cov, p.position_km, p.velocity_km_s
+    ) + rotate_covariance_rtn_to_eci(s_cov, s.position_km, s.velocity_km_s)
+    return combined
 
 
 def build_encounter_plane(
@@ -108,8 +118,7 @@ def build_encounter_plane(
     """Construct the encounter plane. Raises ValueError on degenerate input
     (missing covariance, zero relative velocity); the engine gates those
     cases before calling this, and returns a refusal instead."""
-    if conjunction.primary.covariance_rtn_m2 is None or conjunction.secondary.covariance_rtn_m2 is None:
-        raise ValueError("both objects need a covariance to build an encounter plane")
+    _require_covariances(conjunction)
 
     rel0 = relative_state(conjunction)
     dt_s = linear_tca_adjustment_s(rel0) if refine_tca else 0.0

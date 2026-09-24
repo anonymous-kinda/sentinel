@@ -14,6 +14,7 @@ reports the geometry that is honestly derivable without covariance.
 from __future__ import annotations
 
 import math
+from typing import Any
 
 import numpy as np
 
@@ -87,7 +88,7 @@ def assess(
         "hbr_defaulted": hbr_defaulted,
     }
 
-    def refuse(reason: RefusalReason, **extra) -> AssessedConjunction:
+    def refuse(reason: RefusalReason, **extra: Any) -> AssessedConjunction:
         return AssessedConjunction(
             method=Method.REFUSED,
             pc=None,
@@ -116,8 +117,9 @@ def assess(
         return refuse(RefusalReason.NO_HBR, default_radius_m=config.default_radius_m)
 
     # --- gate: supplied covariances are valid ----------------------------
-    for state in (primary, secondary):
-        smallest = _min_eigenvalue(state.covariance_rtn_m2)
+    supplied = ((primary, primary.covariance_rtn_m2), (secondary, secondary.covariance_rtn_m2))
+    for state, covariance in supplied:
+        smallest = _min_eigenvalue(covariance)
         if smallest <= 0.0:
             return refuse(
                 RefusalReason.INVALID_COVARIANCE,

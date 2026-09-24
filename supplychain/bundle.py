@@ -1,4 +1,4 @@
-"""The air-gap bundle's reproducible tarball and its machine-readable manifest.
+"""The air-gap bundle's reference data, reproducible tarball and machine-readable manifest.
 
 The manifest (BUNDLE.json inside the tarball) is the component inventory a
 receiving site can read without unpacking wheels: what was built, from which
@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import gzip
 import pathlib
+import shutil
 import subprocess
 import tarfile
 from collections.abc import Iterable, Sequence
@@ -19,6 +20,23 @@ from .toolslock import ToolPin, select
 
 MANIFEST_FORMAT = 1
 PYTHON_TAG = "3.12"
+# Reference data an installed node reads from SENTINEL_FIXTURES, shipped as vendored:
+# the NASA CARA validation set, and the public element-set snapshot a hub starts from.
+SHIPPED_FIXTURES = ("cara", "cara_cases.json", "omm")
+
+
+def stage_fixtures(source: pathlib.Path, stage: pathlib.Path) -> pathlib.Path:
+    """Copy the shipped reference data, with its provenance and checksums, to
+    <stage>/fixtures: install.sh puts that directory where SENTINEL_FIXTURES
+    points. A data set missing from the source fails the build."""
+    target = stage / "fixtures"
+    target.mkdir(parents=True)
+    for name in SHIPPED_FIXTURES:
+        if (source / name).is_dir():
+            shutil.copytree(source / name, target / name)
+        else:
+            shutil.copy2(source / name, target / name)
+    return target
 
 
 def export_requirements(root: pathlib.Path) -> str:

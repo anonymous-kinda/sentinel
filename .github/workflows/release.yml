@@ -56,7 +56,7 @@ jobs:
           node-version: 22
           package-manager-cache: false
       - name: Install
-        run: uv pip install -e .
+        run: uv sync --locked
       - name: The tag names the package version
         id: version
         run: |

@@ -1,0 +1,680 @@
+# Interface control: the Sentinel message bus (AsyncAPI 3.0).
+#
+# Written by hand and held to the code by tests/docs/test_asyncapi.py:
+#   - every node-local kind the code publishes (found by AST over sentinel/ and
+#     harness/ at the subjects.local call sites, never listed in the core) and
+#     every subject builder in sentinel/bus/subjects.py is a channel here, and
+#     every channel is one of them;
+#   - every Sentinel-Kind value and bus header name in the code is declared
+#     here, and vice versa;
+#   - the leaf policy below is the edge nats-server's (deploy/nats/edge.conf.tmpl);
+#   - a hub and an edge run over a recording bus, and every message they send
+#     validates against the message this document gives its channel.
+# See docs/icd/README.md.
+asyncapi: 3.0.0
+info:
+  title: Sentinel message bus
+  version: 1.0.0
+  description: |
+    How the modules of a Sentinel node talk to each other, and how an edge
+    talks to its hub (ADR-004). Modules use only a `Bus` protocol: publish and
+    subscribe, request and reply. In one process the bus is in memory; on a
+    deployed node it is NATS. Each node runs its own `nats-server` and connects
+    only to it. The server, not the application, holds the leafnode link to
+    the other node, so a denied link never breaks a node's own bus.
+
+    Two families of subject:
+
+    - **Node-local** (`node.<node_id>.<kind>`, ADR-009): the events a node's
+      console shows. They never cross a leaf link: the edge's leafnode denies
+      `node.>` both ways. Without that, an edge console subscribed to
+      `cdm.accepted` would see the hub's events before they had been fetched
+      and verified. Each carries `Sentinel-Kind` equal to its kind, and the
+      console's server-sent event stream (`GET /api/stream`) re-emits it under
+      that name.
+    - **Cross-node request/reply**, served by the hub: the priority pull of
+      reference data and the operator-data exchange (docs/icd/sync-envelope.md).
+      A request goes edge to hub; its reply comes back on the requester's NATS
+      inbox.
+
+    `unit.>` and `passes.>` carry no channel. They are denied at the leaf all
+    the same, so a ground unit's position cannot leave its edge even through
+    an application bug (ADR-010, NIST SP 800-53 AC-4).
+
+    JetStream is not used: priority is a mission concept a FIFO stream mirror
+    cannot express (ADR-008).
+  license:
+    name: Apache-2.0
+defaultContentType: application/json
+
+servers:
+  node:
+    host: '127.0.0.1:{client_port}'
+    protocol: nats
+    title: This node's own nats-server
+    description: |
+      Every node, hub or edge, connects only to its own server on localhost.
+      The edge's server holds one leafnode remote to the hub's leaf listener,
+      with the deny lists in x-sentinel-leaf-policy. Rendered from
+      deploy/nats/hub.conf.tmpl and deploy/nats/edge.conf.tmpl.
+    variables:
+      client_port:
+        default: '4222'
+        description: CLIENT_PORT in the rendered config.
+
+x-sentinel-console-subscription: 'node.{node_id}.>'
+
+x-sentinel-leaf-policy:
+  description: |
+    The edge's leafnode remote to its hub (deploy/nats/edge.conf.tmpl). A
+    channel crosses the leaf only if neither list denies it. The hub needs no
+    rules of its own: an edge never exports node-local traffic, and never
+    imports the hub's.
+  deny_exports: ['unit.>', 'passes.>', 'node.>']
+  deny_imports: ['node.>']
+
+channels:
+  # ------------------------------------------------------------ node-local
+  cdmAccepted:
+    address: 'node.{node_id}.cdm.accepted.{event_id}'
+    title: A CDM was admitted and assessed
+    description: One message per admitted CDM. The payload is the event's summary after it.
+    parameters:
+      node_id: {$ref: '#/components/parameters/node_id'}
+      event_id: {$ref: '#/components/parameters/event_id'}
+    messages:
+      cdmAccepted: {$ref: '#/components/messages/cdmAccepted'}
+    x-sentinel-crosses-leaf: false
+  cdmRejected:
+    address: 'node.{node_id}.cdm.rejected'
+    title: A CDM was quarantined
+    parameters:
+      node_id: {$ref: '#/components/parameters/node_id'}
+    messages:
+      cdmRejected: {$ref: '#/components/messages/cdmRejected'}
+    x-sentinel-crosses-leaf: false
+  opsChanged:
+    address: 'node.{node_id}.ops.changed'
+    title: Operator data changed
+    description: A local write (decision, note, annotation) or a CRDT merge that brought something new.
+    parameters:
+      node_id: {$ref: '#/components/parameters/node_id'}
+    messages:
+      opsChanged: {$ref: '#/components/messages/opsChanged'}
+    x-sentinel-crosses-leaf: false
+  syncProgress:
+    address: 'node.{node_id}.sync.progress'
+    title: Sync agent state (edge)
+    description: After every sync cycle, whether it succeeded or not.
+    parameters:
+      node_id: {$ref: '#/components/parameters/node_id'}
+    messages:
+      syncProgress: {$ref: '#/components/messages/syncProgress'}
+    x-sentinel-crosses-leaf: false
+  syncArrival:
+    address: 'node.{node_id}.sync.arrival'
+    title: One record arrived from the hub (edge)
+    parameters:
+      node_id: {$ref: '#/components/parameters/node_id'}
+    messages:
+      syncArrival: {$ref: '#/components/messages/syncArrival'}
+    x-sentinel-crosses-leaf: false
+  linkState:
+    address: 'node.{node_id}.link.state'
+    title: The measured link state changed (edge)
+    parameters:
+      node_id: {$ref: '#/components/parameters/node_id'}
+    messages:
+      linkState: {$ref: '#/components/messages/linkState'}
+    x-sentinel-crosses-leaf: false
+  linkEmulation:
+    address: 'node.{node_id}.link.emulation'
+    title: A link-emulation preset was applied (demonstration only)
+    parameters:
+      node_id: {$ref: '#/components/parameters/node_id'}
+    messages:
+      linkEmulation: {$ref: '#/components/messages/linkEmulation'}
+    x-sentinel-crosses-leaf: false
+  passesUpdated:
+    address: 'node.{node_id}.passes.updated'
+    title: The pass inputs moved
+    description: |
+      The unit was set or cleared, or synced element sets changed the store
+      (at most once per settle interval). It carries no unit id and no
+      coordinates (ADR-010); the console re-reads /api/passes.
+    parameters:
+      node_id: {$ref: '#/components/parameters/node_id'}
+    messages:
+      passesUpdated: {$ref: '#/components/messages/passesUpdated'}
+    x-sentinel-crosses-leaf: false
+
+  # ------------------------------------------------- cross-node, served by the hub
+  syncManifest:
+    address: 'sync.{hub_id}.manifest'
+    title: Summaries of every item the hub offers (P0)
+    parameters:
+      hub_id: {$ref: '#/components/parameters/hub_id'}
+    messages:
+      manifestRequest: {$ref: '#/components/messages/manifestRequest'}
+    x-sentinel-crosses-leaf: true
+  syncManifestReply:
+    address: null
+    title: Manifest reply, on the requester's inbox
+    messages:
+      manifest: {$ref: '#/components/messages/manifest'}
+      manifestUnchanged: {$ref: '#/components/messages/manifestUnchanged'}
+      error: {$ref: '#/components/messages/error'}
+    x-sentinel-crosses-leaf: true
+  syncFetch:
+    address: 'sync.{hub_id}.fetch'
+    title: One record, by content hash
+    parameters:
+      hub_id: {$ref: '#/components/parameters/hub_id'}
+    messages:
+      fetchRequest: {$ref: '#/components/messages/fetchRequest'}
+    x-sentinel-crosses-leaf: true
+  syncFetchReply:
+    address: null
+    title: Fetch reply, on the requester's inbox
+    messages:
+      record: {$ref: '#/components/messages/record'}
+      error: {$ref: '#/components/messages/error'}
+    x-sentinel-crosses-leaf: true
+  opsExchange:
+    address: 'ops.{hub_id}.exchange'
+    title: Operator-data anti-entropy, both directions in one round trip
+    parameters:
+      hub_id: {$ref: '#/components/parameters/hub_id'}
+    messages:
+      opsExchangeRequest: {$ref: '#/components/messages/opsExchangeRequest'}
+    x-sentinel-crosses-leaf: true
+  opsExchangeReply:
+    address: null
+    title: Operator-data reply, on the requester's inbox
+    messages:
+      opsExchangeReply: {$ref: '#/components/messages/opsExchangeReply'}
+      error: {$ref: '#/components/messages/error'}
+    x-sentinel-crosses-leaf: true
+
+operations:
+  publishCdmAccepted:
+    action: send
+    channel: {$ref: '#/channels/cdmAccepted'}
+    summary: Conjunction service, after admitting and assessing a CDM.
+  publishCdmRejected:
+    action: send
+    channel: {$ref: '#/channels/cdmRejected'}
+    summary: Conjunction service, after quarantining a CDM.
+  publishOpsChanged:
+    action: send
+    channel: {$ref: '#/channels/opsChanged'}
+    summary: Operator-data service.
+  publishSyncProgress:
+    action: send
+    channel: {$ref: '#/channels/syncProgress'}
+    summary: Sync agent (edge), once per cycle.
+  publishSyncArrival:
+    action: send
+    channel: {$ref: '#/channels/syncArrival'}
+    summary: Sync agent (edge), once per fetched record.
+  publishLinkState:
+    action: send
+    channel: {$ref: '#/channels/linkState'}
+    summary: Sync agent (edge), when the measured state changes.
+  publishLinkEmulation:
+    action: send
+    channel: {$ref: '#/channels/linkEmulation'}
+    summary: POST /api/demo/link (demonstration only).
+  publishPassesUpdated:
+    action: send
+    channel: {$ref: '#/channels/passesUpdated'}
+    summary: Pass service.
+
+  requestManifest:
+    action: send
+    channel: {$ref: '#/channels/syncManifest'}
+    summary: Edge sync agent, every cycle.
+    messages:
+      - {$ref: '#/channels/syncManifest/messages/manifestRequest'}
+    reply:
+      channel: {$ref: '#/channels/syncManifestReply'}
+      messages:
+        - {$ref: '#/channels/syncManifestReply/messages/manifest'}
+        - {$ref: '#/channels/syncManifestReply/messages/manifestUnchanged'}
+        - {$ref: '#/channels/syncManifestReply/messages/error'}
+  serveManifest:
+    action: receive
+    channel: {$ref: '#/channels/syncManifest'}
+    summary: Hub sync server.
+    messages:
+      - {$ref: '#/channels/syncManifest/messages/manifestRequest'}
+    reply:
+      channel: {$ref: '#/channels/syncManifestReply'}
+      messages:
+        - {$ref: '#/channels/syncManifestReply/messages/manifest'}
+        - {$ref: '#/channels/syncManifestReply/messages/manifestUnchanged'}
+        - {$ref: '#/channels/syncManifestReply/messages/error'}
+    bindings:
+      nats: {queue: sentinel, bindingVersion: 0.1.0}
+  requestFetch:
+    action: send
+    channel: {$ref: '#/channels/syncFetch'}
+    summary: Edge sync agent, one record at a time in triage order.
+    messages:
+      - {$ref: '#/channels/syncFetch/messages/fetchRequest'}
+    reply:
+      channel: {$ref: '#/channels/syncFetchReply'}
+      messages:
+        - {$ref: '#/channels/syncFetchReply/messages/record'}
+        - {$ref: '#/channels/syncFetchReply/messages/error'}
+  serveFetch:
+    action: receive
+    channel: {$ref: '#/channels/syncFetch'}
+    summary: Hub sync server.
+    messages:
+      - {$ref: '#/channels/syncFetch/messages/fetchRequest'}
+    reply:
+      channel: {$ref: '#/channels/syncFetchReply'}
+      messages:
+        - {$ref: '#/channels/syncFetchReply/messages/record'}
+        - {$ref: '#/channels/syncFetchReply/messages/error'}
+    bindings:
+      nats: {queue: sentinel, bindingVersion: 0.1.0}
+  requestOpsExchange:
+    action: send
+    channel: {$ref: '#/channels/opsExchange'}
+    summary: Edge sync agent, first in every cycle.
+    messages:
+      - {$ref: '#/channels/opsExchange/messages/opsExchangeRequest'}
+    reply:
+      channel: {$ref: '#/channels/opsExchangeReply'}
+      messages:
+        - {$ref: '#/channels/opsExchangeReply/messages/opsExchangeReply'}
+        - {$ref: '#/channels/opsExchangeReply/messages/error'}
+  serveOpsExchange:
+    action: receive
+    channel: {$ref: '#/channels/opsExchange'}
+    summary: Hub sync server.
+    messages:
+      - {$ref: '#/channels/opsExchange/messages/opsExchangeRequest'}
+    reply:
+      channel: {$ref: '#/channels/opsExchangeReply'}
+      messages:
+        - {$ref: '#/channels/opsExchangeReply/messages/opsExchangeReply'}
+        - {$ref: '#/channels/opsExchangeReply/messages/error'}
+    bindings:
+      nats: {queue: sentinel, bindingVersion: 0.1.0}
+
+components:
+  parameters:
+    node_id:
+      description: The publishing node's id (SENTINEL_NODE_ID). Any character other than a letter, digit, - or _ becomes _.
+    hub_id:
+      description: The serving hub's node id; an edge's SENTINEL_HUB_ID. Sanitised as node_id.
+    event_id:
+      description: The event id assigned where the CDM was first admitted (docs/icd/cdm-profile.md). Sanitised as node_id.
+
+  messages:
+    # ---------------------------------------------------------- node-local
+    cdmAccepted:
+      name: cdm.accepted
+      title: CDM accepted
+      headers:
+        type: object
+        additionalProperties: false
+        required: [Sentinel-Kind, Sentinel-Data-Class]
+        properties:
+          Sentinel-Kind: {const: cdm.accepted}
+          Sentinel-Data-Class: {$ref: '#/components/schemas/DataClass'}
+      payload: {$ref: '#/components/schemas/EventSummary'}
+    cdmRejected:
+      name: cdm.rejected
+      title: CDM quarantined
+      headers:
+        type: object
+        additionalProperties: false
+        required: [Sentinel-Kind]
+        properties:
+          Sentinel-Kind: {const: cdm.rejected}
+      payload:
+        type: object
+        additionalProperties: false
+        required: [sha256, code, detail, source]
+        properties:
+          sha256: {type: string, description: Of the bytes as received.}
+          code: {type: string, description: A rejection code from docs/icd/cdm-profile.md.}
+          detail: {type: string}
+          source: {type: string, description: 'Where it came from: api-upload, exercise-feed, sync:<hub_id>, ...'}
+    opsChanged:
+      name: ops.changed
+      title: Operator data changed
+      headers:
+        type: object
+        additionalProperties: false
+        required: [Sentinel-Kind]
+        properties:
+          Sentinel-Kind: {const: ops.changed}
+      payload:
+        type: object
+        additionalProperties: false
+        required: [what, event_id]
+        properties:
+          what: {enum: [log, annotation, merge]}
+          event_id: {type: [string, 'null']}
+    syncProgress:
+      name: sync.progress
+      title: Sync agent state
+      headers:
+        type: object
+        additionalProperties: false
+        required: [Sentinel-Kind]
+        properties:
+          Sentinel-Kind: {const: sync.progress}
+      payload:
+        type: object
+        additionalProperties: false
+        required: [mode, hub_id, link, queue, arrivals, arrivals_total, summary_only, last_cycle]
+        properties:
+          mode: {enum: [edf, fifo], description: fifo is the measured baseline only.}
+          hub_id: {type: string}
+          link: {$ref: '#/components/schemas/LinkSnapshot'}
+          queue:
+            type: array
+            description: The want-list in triage order (docs/icd/sync-envelope.md).
+            items:
+              type: object
+              additionalProperties: false
+              required: [event_id, sha, bytes, class, deadline, seconds_to_deadline, latest, status, eta_s]
+              properties:
+                event_id: {type: string}
+                sha: {type: string, description: sha16 of the record.}
+                bytes: {type: integer}
+                class: {$ref: '#/components/schemas/PriorityClass'}
+                deadline: {type: [string, 'null']}
+                seconds_to_deadline: {type: [number, 'null']}
+                latest: {type: boolean}
+                status: {enum: [QUEUED, FETCHING, ARRIVED, SUMMARY_ONLY]}
+                eta_s: {type: [number, 'null']}
+          arrivals:
+            type: array
+            description: The last 50 arrivals.
+            items: {$ref: '#/components/schemas/Arrival'}
+          arrivals_total: {type: integer}
+          summary_only: {type: array, items: {type: string}, description: Items held by admission control.}
+          last_cycle: {type: object, description: 'Timing and counts of the last cycle, or {error, at} when it failed on the link.'}
+    syncArrival:
+      name: sync.arrival
+      title: A record arrived
+      headers:
+        type: object
+        additionalProperties: false
+        required: [Sentinel-Kind]
+        properties:
+          Sentinel-Kind: {const: sync.arrival}
+      payload: {$ref: '#/components/schemas/Arrival'}
+    linkState:
+      name: link.state
+      title: Measured link state
+      headers:
+        type: object
+        additionalProperties: false
+        required: [Sentinel-Kind]
+        properties:
+          Sentinel-Kind: {const: link.state}
+      payload: {$ref: '#/components/schemas/LinkSnapshot'}
+    linkEmulation:
+      name: link.emulation
+      title: Link-emulation preset applied
+      headers:
+        type: object
+        additionalProperties: false
+        required: [Sentinel-Kind]
+        properties:
+          Sentinel-Kind: {const: link.emulation}
+      payload:
+        type: object
+        additionalProperties: false
+        required: [preset, enabled, toxics]
+        properties:
+          preset: {enum: [CONNECTED, DEGRADED, LIMITED, DENIED]}
+          enabled: {type: [boolean, 'null'], description: false while DENIED, a black hole.}
+          toxics: {type: array, items: {type: object}, description: The emulator's toxics, name, type and attributes.}
+    passesUpdated:
+      name: passes.updated
+      title: Pass inputs moved
+      headers:
+        type: object
+        additionalProperties: false
+        required: [Sentinel-Kind]
+        properties:
+          Sentinel-Kind: {const: passes.updated}
+      payload:
+        type: object
+        additionalProperties: false
+        required: [reason, elements_version]
+        properties:
+          reason: {enum: [unit_set, unit_cleared, elements]}
+          elements_version: {type: integer, description: Counts accepted element sets in this node's store.}
+
+    # ------------------------------------------------------- request/reply
+    manifestRequest:
+      name: manifest.request
+      contentType: application/cbor
+      headers: {$ref: '#/components/schemas/NoHeaders'}
+      payload:
+        type: object
+        additionalProperties: false
+        required: [from, known]
+        properties:
+          from: {type: string, description: The requesting node's id.}
+          known: {type: [string, 'null'], description: The Sentinel-Digest of the last manifest this node applied.}
+    manifest:
+      name: manifest
+      contentType: application/cbor
+      headers:
+        type: object
+        additionalProperties: false
+        required: [Sentinel-Digest, Sentinel-Schema]
+        properties:
+          Sentinel-Digest: {type: string, description: sha256 of the manifest's canonical CBOR.}
+          Sentinel-Schema: {const: sentinel.manifest/1}
+      payload:
+        type: array
+        items: {$ref: '#/components/schemas/Summary'}
+    manifestUnchanged:
+      name: manifest.unchanged
+      contentType: application/octet-stream
+      description: The request's `known` digest is current. Nothing but the fact is sent.
+      headers:
+        type: object
+        additionalProperties: false
+        required: [Sentinel-Unchanged, Sentinel-Digest]
+        properties:
+          Sentinel-Unchanged: {const: '1'}
+          Sentinel-Digest: {type: string}
+      payload: {$ref: '#/components/schemas/EmptyBody'}
+    fetchRequest:
+      name: fetch.request
+      contentType: application/cbor
+      headers: {$ref: '#/components/schemas/NoHeaders'}
+      payload:
+        type: object
+        additionalProperties: false
+        required: [sha, from]
+        properties:
+          sha: {type: string, description: sha16 from the manifest's c list.}
+          from: {type: string}
+    record:
+      name: record
+      contentType: application/octet-stream
+      description: |
+        The record's bytes exactly as the hub received them: CCSDS 508.0-B-1
+        KVN for a conjunction event, canonical OMM JSON for an omm: element set.
+        The edge hashes them and compares with Sentinel-Sha256.
+      headers:
+        type: object
+        additionalProperties: false
+        required: [Sentinel-Kind, Sentinel-Event-Id, Sentinel-Data-Class, Sentinel-Sha256, Nats-Msg-Id]
+        properties:
+          Sentinel-Kind: {const: record.full}
+          Sentinel-Event-Id: {type: string, description: The item id the hub assigned; the edge never re-derives it.}
+          Sentinel-Data-Class: {$ref: '#/components/schemas/DataClass'}
+          Sentinel-Sha256: {type: string, description: Full sha256 of the bytes.}
+          Nats-Msg-Id: {type: string, description: The same sha256. Not read by the agent.}
+      payload: {type: string, format: binary}
+    opsExchangeRequest:
+      name: ops.exchange.request
+      contentType: application/cbor
+      headers: {$ref: '#/components/schemas/NoHeaders'}
+      payload:
+        type: object
+        additionalProperties: false
+        required: [from, log_ctx, mv_ctx, push]
+        properties:
+          from: {type: string}
+          log_ctx: {$ref: '#/components/schemas/DotContext'}
+          mv_ctx: {$ref: '#/components/schemas/DotContext'}
+          push: {$ref: '#/components/schemas/OpsPayload'}
+    opsExchangeReply:
+      name: ops.exchange
+      contentType: application/cbor
+      headers:
+        type: object
+        additionalProperties: false
+        required: [Sentinel-Kind]
+        properties:
+          Sentinel-Kind: {const: ops.exchange}
+      payload:
+        type: object
+        additionalProperties: false
+        required: [pull, ctx, merged]
+        properties:
+          pull: {$ref: '#/components/schemas/OpsPayload'}
+          ctx:
+            type: object
+            additionalProperties: false
+            required: [log_ctx, mv_ctx]
+            properties:
+              log_ctx: {$ref: '#/components/schemas/DotContext'}
+              mv_ctx: {$ref: '#/components/schemas/DotContext'}
+          merged:
+            type: object
+            additionalProperties: false
+            required: [entries_added, registers_changed]
+            properties:
+              entries_added: {type: integer}
+              registers_changed: {type: integer}
+    error:
+      name: error
+      contentType: application/octet-stream
+      description: |
+        not-found - the hub holds no record with that sha16 (fetch only); the
+        edge re-queues the item. responder-failed - the hub's responder raised;
+        set by the NATS transport, on any served subject.
+      headers:
+        type: object
+        additionalProperties: false
+        required: [Sentinel-Error]
+        properties:
+          Sentinel-Error: {enum: [not-found, responder-failed]}
+      payload: {$ref: '#/components/schemas/EmptyBody'}
+
+  schemas:
+    NoHeaders:
+      type: object
+      additionalProperties: false
+      properties: {}
+      description: No headers.
+    EmptyBody:
+      type: string
+      maxLength: 0
+      description: An empty body.
+    DataClass:
+      enum: [REAL, DERIVED, EXERCISE]
+    PriorityClass:
+      enum: [P0_SUMMARY, P1_URGENT, P2_ROUTINE, P3_REFERENCE, P4_BULK]
+    LinkSnapshot:
+      type: object
+      additionalProperties: false
+      required: [state, rtt_ms, rate_bytes_per_s, seconds_since_success, failures_in_row, bytes_total, exchanges]
+      properties:
+        state: {enum: [CONNECTED, DEGRADED, LIMITED, DENIED, UNKNOWN]}
+        rtt_ms: {type: [number, 'null']}
+        rate_bytes_per_s: {type: [number, 'null']}
+        seconds_since_success: {type: [number, 'null']}
+        failures_in_row: {type: integer}
+        bytes_total: {type: integer}
+        exchanges: {type: integer}
+    Arrival:
+      type: object
+      additionalProperties: false
+      required: [event_id, sha, class, latest, bytes, wall_s, node_time, deadline, hash_ok, status, verification]
+      properties:
+        event_id: {type: string}
+        sha: {type: string}
+        class: {$ref: '#/components/schemas/PriorityClass'}
+        latest: {type: boolean}
+        bytes: {type: integer}
+        wall_s: {type: number}
+        node_time: {type: string}
+        deadline: {type: [string, 'null']}
+        hash_ok: {type: boolean, description: The bytes hash to the hub's Sentinel-Sha256.}
+        status: {enum: [accepted, duplicate, rejected]}
+        verification: {type: [string, 'null'], description: For a conjunction event, its verification state after re-assessment.}
+    Summary:
+      type: object
+      required: [e, dl, q, c]
+      description: |
+        One item's summary. Sync reads only e, dl, q and c; a module adds its
+        own fields (docs/icd/sync-envelope.md lists the conjunction module's).
+      properties:
+        e: {type: string, description: Item id.}
+        dl: {type: integer, description: Deadline, Unix epoch seconds.}
+        q: {type: integer, description: Consequence 0-3.}
+        c:
+          type: array
+          description: The item's records, oldest first, each [sha16, bytes, created_epoch].
+          items: {type: array}
+    EventSummary:
+      type: object
+      required: [event_id, data_class, primary, secondary, tca, mcp, band, consequence, needs_attention, assessment, cdm_count, latest_cdm_sha256]
+      properties:
+        event_id: {type: string}
+        data_class: {$ref: '#/components/schemas/DataClass'}
+        primary: {type: object, required: [id, name]}
+        secondary: {type: object, required: [id, name]}
+        tca: {type: string}
+        mcp: {type: string, description: Maneuver commit point.}
+        band: {enum: [RED, AMBER, GREEN, UNASSESSED]}
+        worst_case_band: {enum: [RED, AMBER, GREEN, UNASSESSED, null]}
+        consequence: {enum: [ROUTINE, WATCH, SERIOUS, CRITICAL]}
+        needs_attention: {type: boolean}
+        assessment: {$ref: '#/components/schemas/Assessment'}
+        originator_pc: {type: [number, 'null'], description: The originator's own Pc, never Sentinel's.}
+        cdm_count: {type: integer}
+        latest_cdm_sha256: {type: string}
+    Assessment:
+      type: object
+      description: A Pc never travels without its method.
+      required: [method, pc, pc_max, dilution_flag, miss_distance_m, relative_speed_m_s, hbr_m, inputs_hash, refusal_reason]
+      properties:
+        method: {enum: [FOSTER_ESTES_2D, REFUSED]}
+        pc: {type: [number, 'null']}
+        pc_max: {type: [number, 'null']}
+        dilution_flag: {type: boolean}
+        inputs_hash: {type: string}
+        refusal_reason: {type: [string, 'null']}
+    DotContext:
+      type: object
+      additionalProperties: false
+      required: [vv, cloud]
+      properties:
+        vv: {type: object, description: Version vector, node id to highest contiguous sequence.}
+        cloud: {type: array, description: 'Dots seen out of order, each [node, seq].'}
+    OpsPayload:
+      type: object
+      additionalProperties: false
+      required: [log, reg]
+      properties:
+        log: {type: array, description: Signed decision-log entries the other side lacks.}
+        reg: {type: object, description: Annotation registers the other side lacks, by key.}
