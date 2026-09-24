@@ -362,6 +362,50 @@ quoted = "rise and set within 2 s, maximum elevation within 0.1°"
 source = "tests/conformance/test_pass_providers.py"
 patterns = ["RISE_SET_TOLERANCE_S = 2.0", "MAX_ELEVATION_TOLERANCE_DEG = 0.1"]
 
+# --- Technical guide: docs/technical-guide.md -----------------------------------
+
+[[claim]]
+id = "guide-limited-edf-vs-fifo"
+doc = "docs/technical-guide.md"
+quoted = "every event was visible as a summary at 5.5 s, and the most urgent full CDM arrived in 12.1 s with earliest-deadline-first against 46.8 s in FIFO order"
+source = "docs/ddil-results.md"
+patterns = ["summaries at 5.5 s", "EDF 12.1 s vs FIFO 46.8 s"]
+
+[[claim]]
+id = "guide-catalog-element-sets"
+doc = "docs/technical-guide.md"
+quoted = "only the 38 in the imaging catalog"
+source = "docs/ddil-results.md"
+patterns = ["edge assessed 38 imagers"]
+
+[[claim]]
+id = "guide-summary-size"
+doc = "docs/technical-guide.md"
+quoted = "encodes to at most 256 bytes of CBOR"
+source = "sentinel/conjunction/summaries.py"
+patterns = ["SUMMARY_MAX_BYTES = 256"]
+
+[[claim]]
+id = "guide-pass-conformance"
+doc = "docs/technical-guide.md"
+quoted = "rise and set within 2 s, maximum elevation within 0.1°"
+source = "tests/conformance/test_pass_providers.py"
+patterns = ["RISE_SET_TOLERANCE_S = 2.0", "MAX_ELEVATION_TOLERANCE_DEG = 0.1"]
+
+[[claim]]
+id = "guide-cara-event-count"
+doc = "docs/technical-guide.md"
+quoted = "Load NASA CARA's 53 operational conjunctions"
+source = "docs/validation-report.md"
+patterns = ["53 real operational conjunctions"]
+
+[[claim]]
+id = "guide-airgap-validation"
+doc = "docs/technical-guide.md"
+quoted = "53 operational events, a worst relative error below 1e-6 and no false negatives"
+source = "deploy/bundle/verify_offline.sh"
+patterns = ['operational_count\"] == 53', 'worst_rel_error\"] < 1e-6', 'fn\"] == 0']
+
 # --- Program documents: white paper proof points, install guide ---------------
 # Every number a white-paper proof point states is registered here against a
 # generated report; tests/docs/test_program_docs.py fails on any that is not.
