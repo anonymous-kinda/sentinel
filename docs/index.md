@@ -60,6 +60,7 @@ Audiences: **new engineer** (has just cloned the repository), **reviewer** (judg
 | Document | Path | Audience | Authored or generated | Regenerate with |
 |---|---|---|---|---|
 | [Deploying the cloud hub on AWS](deploy-aws.md) | `docs/deploy-aws.md` | operator | authored | |
+| [Hub and edge in Docker Compose](compose.md) | `docs/compose.md` | operator, reviewer | authored: the container stack, what its smoke test proves, and what was verified live versus statically | |
 | [Software supply chain](supply-chain.md) | `docs/supply-chain.md` | security, operator | authored | |
 | [Compliance package](compliance.md) | `docs/compliance.md` | security | authored prose; its counts are checked against the sources by `tests/compliance/test_package_integrity.py` | |
 | OSCAL profile, component definition, SSP and assessment plan | `compliance/oscal/profiles/sentinel/profile.json`, `compliance/oscal/component-definitions/sentinel/component-definition.json`, `compliance/oscal/system-security-plans/sentinel/system-security-plan.json`, `compliance/oscal/assessment-plans/sentinel/assessment-plan.json` | security | generated from `compliance/sources/*.toml` | `uv run python scripts/oscal_evidence.py` |
@@ -85,6 +86,7 @@ Audiences: **new engineer** (has just cloned the repository), **reviewer** (judg
 | [NASA CARA test-case notes](../fixtures/cara/PcTestCaseCDMs/README.md) | `fixtures/cara/PcTestCaseCDMs/README.md` | reviewer | vendored from NASA, unmodified | |
 | [Element-set snapshots](../fixtures/omm/PROVENANCE.md) | `fixtures/omm/PROVENANCE.md` | reviewer | authored, with rows appended by `scripts/fetch_omm.py` | `uv run python scripts/fetch_omm.py resource` (network: CelesTrak) |
 | [Wayfinder fixture provenance](../fixtures/wayfinder/PROVENANCE.md) | `fixtures/wayfinder/PROVENANCE.md` | reviewer | authored | |
+| [Compose-spec schema provenance](../deploy/compose/schema/PROVENANCE.md) | `deploy/compose/schema/PROVENANCE.md` | reviewer, security | authored: the source commit and sha256 of the vendored schema that `tests/test_compose_stack.py` validates against | |
 | [NIST catalog provenance](../compliance/vendor/nist/PROVENANCE.md) | `compliance/vendor/nist/PROVENANCE.md` | security | authored | |
 | [DISA STIG provenance](../compliance/vendor/disa/PROVENANCE.md) | `compliance/vendor/disa/PROVENANCE.md` | security | authored | |
 | [Routing eval set](../evals/README.md) | `evals/README.md` | reviewer | authored: how the labels in `evals/routing.jsonl` were written, and their limits | |
@@ -94,11 +96,3 @@ Audiences: **new engineer** (has just cloned the repository), **reviewer** (judg
 | Document | Path | Audience | Authored or generated | Regenerate with |
 |---|---|---|---|---|
 | Console screenshots | `docs/img/console.png`, `docs/img/validation.png`, `docs/img/assistant.png`, `docs/img/edge-denied.png`, `docs/img/edge-sync.png`, `docs/img/edge-conflict.png`, `docs/img/passes.png` | everyone | captured by hand from a running node | no script; recapture from `make serve` or `make demo-local` |
-
-## Being added (not yet on this branch)
-
-Other work is finishing this document now. It is named here as plain text, not linked or quoted as a path, because it does not exist on this branch yet. When it lands, move it into the right group above, with a link.
-
-| Document | Planned path | Audience |
-|---|---|---|
-| Container compose guide | docs/compose.md | operator |

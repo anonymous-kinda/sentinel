@@ -89,8 +89,18 @@ Claim two, built and measured. Each node runs its own `nats-server` and serves i
 
 ```bash
 make demo-local      # hub :8000, edge :8001 - the edge's LINK chip shapes the real link
+make compose-up      # the same hub and edge in containers; only Docker needed (docs/compose.md)
 make ddil            # every scenario on real processes -> docs/ddil-results.md
 ```
+
+**In containers.** `make compose-up` runs the same topology with only Docker needed.
+- Each node's `nats-server` and console share a network namespace.
+- The edge reaches the hub only through Toxiproxy.
+- The NATS configs are rendered from the same templates by the harness's own code, so the leaf permissions and DDIL fixes are identical.
+
+`make compose-link PRESET=DENIED` shapes the link. `make compose-smoke` checks that the edge syncs and verifies the hub's events, keeps answering while DENIED, reconverges, and never lets a unit reach the hub.
+
+The containers themselves have not run yet: the `compose-smoke` CI job is their first real run. The smoke test has passed against the process harness. See `docs/compose.md`.
 
 **Denied: the edge keeps working.** The console stays up (2.8 ms p95 while cut off). Operators triage events and record signed decisions locally, and the link state is *measured*, not configured.
 

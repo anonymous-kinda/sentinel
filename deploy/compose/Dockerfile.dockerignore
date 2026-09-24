@@ -1,0 +1,18 @@
+# Build-context allowlist for deploy/compose/Dockerfile. BuildKit reads a
+# <Dockerfile>.dockerignore beside the Dockerfile, so this applies to that
+# build only. Everything is excluded, then only what the build copies is
+# admitted: no .venv, .tools, dist, keys or local state reach the builder.
+*
+!pyproject.toml
+!uv.lock
+!README.md
+!LICENSE
+!sentinel/
+!fixtures/cara/
+!fixtures/cara_cases.json
+!fixtures/omm/
+!web/
+web/node_modules
+web/dist
+**/__pycache__
+**/*.pyc
