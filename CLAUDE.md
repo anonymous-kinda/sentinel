@@ -5,20 +5,24 @@ Sentinel is a DDIL-resilient conjunction assessment decision aid, with an overhe
 ## Commands
 
 ```bash
-export PATH=$HOME/.local/bin:$PATH      # uv lives here
-uv pip install -e ".[dev]"              # into .venv
-uv run pytest -q                        # full suite; must report 0 skipped
-uv run pytest -q -m tier4               # one rung of the ladder (tier1..tier6)
+export PATH=$HOME/.local/bin:$PATH                  # uv lives here
+uv venv --python 3.12 && uv pip install -e ".[dev]" # 3.12: the lock resolves numpy differently on newer Pythons
+uv run pytest -q                                    # must report 0 skipped
 uv run ruff check . && uv run lint-imports
-uv run python scripts/validation_report.py   # regenerates docs/validation-report.md
-uv run sentinel --help                  # CLI
-make help                               # all make targets
-make trace && make sysml-check          # requirement trace (docs/traceability.md) and SysML v2 syntax
-make screen PRIMARY=40115               # demonstration mode: element-set geometry, no Pc
-make sbom scan airgap-selftest          # SBOMs, vulnerability gate, offline signature proofs
-make airgap-local                       # build, sign (throwaway key), verify and install with no network
-make ai-eval bench-passes               # score the AI routers; time the pass engine
+make help                                           # every target and what it regenerates
 ```
+
+**Before committing, regenerate what your change feeds.** CI fails on a stale committed output, so re-run the generator whose inputs you touched:
+
+| You changed | Run | It rewrites |
+|---|---|---|
+| `mbse/`, or a test or CI step the model cites | `make trace` | `docs/traceability.md` |
+| `compliance/sources/`, or evidence a control cites | `make compliance` | `compliance/oscal/` |
+| `evals/`, `sentinel/ai/` routers | `make ai-eval` | `docs/ai-eval.md` |
+| `sentinel/sync`, `harness/`, anything on the link | `make ddil` | `docs/ddil-results.md` |
+| `sentinel/risk`, `fixtures/cara` | `make report` | `docs/validation-report.md` |
+
+When a regenerated report moves a number the prose quotes, the doc guard fails until the prose and `tests/doc_claims.toml` agree again.
 
 ## Non-negotiable rules
 
@@ -33,6 +37,8 @@ make ai-eval bench-passes               # score the AI routers; time the pass en
 - **Generated files; regenerate them and never hand-edit:** `docs/validation-report.md`, `docs/ddil-results.md`, `docs/ai-eval.md` (with `docs/img/ai-reliability.svg`), `docs/traceability.md`, `deploy/vex/sentinel.openvex.json` and the OSCAL documents under `compliance/oscal/` (`make compliance`).
 - **Docs are checked against the repo** (`tests/test_docs.py`): every path, `make` target and `sentinel` subcommand they name must exist, and every headline number registered in `tests/doc_claims.toml` must match its generated source. When a regenerated report changes a number, update the prose and the registry together.
 - **AI never computes.** The assistant (`sentinel/ai/`) routes to tools and phrases their facts; `.importlinter` forbids it the maths. Hosted AI (Jev, Claude) needs an UNCLASSIFIED marking, operator opt-in and a usable measured link, and every AI answer passes the number-grounding guard. Never publish a Jev number that did not come from a real run.
+- **The core stays closed.** Adding or changing a mission module never edits `sentinel/sync`, `bus`, `crdt` or `triage`; that is the MOSA claim, and `git diff --stat 67199b7 -- sentinel/sync sentinel/bus sentinel/crdt sentinel/triage` stays empty. Documentation and checks read the core and its call sites; the core never lists mission names. A core change is a deliberate, measured decision with its own ADR.
+- **Every record a hub offers over sync costs a round trip on a thin link.** Read ADR-008, "Reference data on a thin link", before a hub offers edges anything more.
 - **Module boundaries are enforced by `.importlinter`**: `bus`, `triage`, `sync`, `crdt`, `ops` and `linkstate` may not import mission modules (`conjunction`, `risk`, `cdm`, `passes`) or the API.
 - **Data class on everything**: REAL, DERIVED or EXERCISE. Exercise data carries `ORIGINATOR=SENTINEL-EXERCISE`.
 - **Requirement-to-evidence mapping lives in `mbse/verification.sysml`**, not in pytest markers. Unbuilt work is marked `@Planned` and must show as unverified, never verified.
