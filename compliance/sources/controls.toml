@@ -321,13 +321,15 @@ rationale = "Evidence is regenerated on every change, not collected once for an 
 component = "pipeline"
 status = "implemented"
 statement = """Every push and pull request runs the full test ladder with the network disabled, lint, \
-the module-boundary contracts, reproducibility checks of the generated reports and the requirement \
-trace, Terraform and Ansible validation, secret scanning over the full history, lint of the \
-workflows, the container file and the deploy scripts, and the supply-chain checks: SBOMs with a \
+the module-boundary contracts, the type check, reproducibility checks of the generated reports, the \
+interface control documents and the requirement trace, Terraform and Ansible validation, secret \
+scanning over the full history, lint of the workflows, the container file and the deploy scripts, \
+and the supply-chain checks: SBOMs with a \
 completeness gate, a vulnerability scan that fails on any finding no reviewed VEX statement \
 answers, and offline signature verification with the real cosign. The DDIL harness runs on changes \
 to the layers it exercises and nightly with a 15-minute denial. Every CI run regenerates this \
 package's assessment results and POA&M from its own test evidence."""
+tests = ["tests/test_typecheck.py::test_ci_runs_the_type_check"]
 ci = [
     "ci.yml#python", "ci.yml#infra", "ci.yml#secrets", "ci.yml#compliance", "ci.yml#supply-chain",
     "ci.yml#release-lint", "ci.yml#mbse", "harness.yml#scenario",
@@ -352,9 +354,20 @@ status = "implemented"
 statement = """The baseline is code under version control: hash-locked Python dependencies (uv.lock), \
 third-party binaries pinned by version and SHA-256 (deploy/tools.lock), the bundle build \
 (scripts/build_bundle.py), the Ansible roles, the Terraform and the NATS configuration templates. \
-CI checks the Terraform (fmt, validate) and the playbook's syntax on every push."""
-ci = ["ci.yml#infra"]
-files = ["uv.lock", "deploy/tools.lock", "scripts/build_bundle.py", "deploy/ansible/site.yml", "deploy/aws/terraform/main.tf", "deploy/nats/edge.conf.tmpl"]
+The Python baseline that CI tests is the declared one: the jobs that test, lint, type-check and assess \
+install exactly uv.lock with uv sync --locked, which refuses a lock that no longer matches \
+pyproject.toml, and a test fails any workflow that installs with pip or uv pip instead, since those \
+resolve afresh. make install uses the same command. CI checks the Terraform (fmt, validate) and the \
+playbook's syntax on every push."""
+tests = [
+    "tests/test_workflows_pinned.py::test_python_dependencies_install_from_the_lock",
+    "tests/test_workflows_pinned.py::test_the_lock_check_catches_a_fresh_resolve",
+]
+ci = ["ci.yml#infra", "ci.yml#python"]
+files = [
+    "uv.lock", "pyproject.toml", "Makefile", "deploy/tools.lock", "scripts/build_bundle.py", "deploy/ansible/site.yml",
+    "deploy/aws/terraform/main.tf", "deploy/nats/edge.conf.tmpl",
+]
 
 [[control]]
 id = "cm-3"
@@ -638,15 +651,22 @@ rationale = "The evidence is only as good as the control over the code and data 
 [[control.by]]
 component = "pipeline"
 status = "implemented"
-statement = """Every change is a git commit; dependencies and tools are pinned by hash; generated \
-artifacts (the validation and AI eval reports, the requirement trace, this package's authored OSCAL \
-documents) are regenerated and compared in CI; vendored upstream data (NASA CARA, CelesTrak, NIST, \
-DISA) carries provenance and checksums that the tests verify; module boundaries are contracts \
-checked in CI. The bundle writer is deterministic: the same tree and SOURCE_DATE_EPOCH give \
-identical bytes whatever the file times, the gzip header carries the epoch rather than the build \
-time, and a build from uncommitted changes records a dirty tree, so it cannot pass as its commit. \
-The workflows (with shellcheck on every run block), the container file and the deploy scripts are \
-linted in CI with actionlint, shellcheck and hadolint, each pinned by SHA-256."""
+statement = """Every change is a git commit; dependencies and tools are pinned by hash, and the CI \
+jobs that test and assess install the Python dependencies exactly as uv.lock pins them (uv sync \
+--locked), so a new release of a dependency cannot change what they test without a change here; \
+generated artifacts (the validation and AI eval reports, the requirement trace, the OpenAPI \
+interface control document, this package's authored OSCAL documents) are regenerated and compared \
+in CI. Three more interface control documents in docs/icd (the AsyncAPI bus contract, the CDM \
+admission profile and the sync envelope) are design specifications held to the code: tests read \
+the facts from the code and fail on any difference, and each check is shown to catch a stale copy \
+of its document. Vendored \
+upstream data (NASA CARA, CelesTrak, NIST, DISA) carries provenance and checksums that the tests \
+verify; module boundaries are contracts checked in CI. The bundle writer is deterministic: the same \
+tree and SOURCE_DATE_EPOCH give identical bytes whatever the file times, the gzip header carries \
+the epoch rather than the build time, and a build from uncommitted changes records a dirty tree, so \
+it cannot pass as its commit. The workflows (with shellcheck on every run block), the container \
+file and the deploy scripts are linted in CI with actionlint, shellcheck and hadolint, each pinned \
+by SHA-256."""
 tests = [
     "tests/test_tier3_cara_validation.py::test_vendored_nasa_files_are_unmodified",
     "tests/compliance/test_package_integrity.py::test_vendored_upstream_files_are_unmodified",
@@ -655,9 +675,19 @@ tests = [
     "tests/supplychain/test_bundle.py::test_the_gzip_header_carries_the_epoch_not_the_build_time",
     "tests/supplychain/test_bundle.py::test_a_build_from_uncommitted_changes_says_so",
     "tests/mbse/test_real_model.py::test_the_committed_trace_is_current",
+    "tests/test_workflows_pinned.py::test_python_dependencies_install_from_the_lock",
+    "tests/docs/test_openapi_current.py::test_the_committed_openapi_matches_a_fresh_export",
+    "tests/docs/test_openapi_current.py::test_drift_names_what_a_stale_document_is_missing",
+    "tests/docs/test_asyncapi.py::test_the_document_matches_the_subjects_headers_and_leaf_policy_in_the_code",
+    "tests/docs/test_asyncapi.py::test_a_stale_document_is_caught",
+    "tests/docs/test_cdm_profile.py::test_the_profile_matches_the_code",
+    "tests/docs/test_cdm_profile.py::test_a_stale_profile_is_caught",
+    "tests/docs/test_sync_envelope.py::test_the_envelope_matches_the_code",
+    "tests/docs/test_sync_envelope.py::test_a_stale_envelope_is_caught",
+    "tests/docs/test_icd_index.py::test_the_index_lists_every_icd_and_its_checks_exist",
 ]
 ci = ["ci.yml#python", "ci.yml#release-lint", "ci.yml#mbse"]
-files = ["supplychain/bundle.py", "scripts/build_bundle.py"]
+files = ["supplychain/bundle.py", "scripts/build_bundle.py", "uv.lock", "docs/icd/README.md"]
 
 [[control]]
 id = "sa-11"
@@ -671,12 +701,17 @@ geometry, integration against closed forms and an independent quadrature, agreem
 CARA's published values for 53 operational conjunctions and its benchmark cases, maximum Pc and \
 dilution, every refusal gate, and the output contract. CRDT convergence is property-tested \
 (Hypothesis); the DDIL harness runs real processes over a shaped link; the assistant's routing is \
-scored on a labelled set. Every CI run turns its JUnit evidence into assessment results and a \
-POA&M (this package). The tests are traced to the requirements they verify: the SysML v2 model \
-(mbse/) links each requirement to the tests, harness scenarios, import contracts and CI steps that \
-verify it, and its generated trace (docs/traceability.md) fails CI when a reference names evidence \
-that does not exist. Work not yet built is marked planned and shown as unverified, never as \
-verified."""
+scored on a labelled set. Static analysis runs in the same CI job as the tests, on each Python in \
+its matrix: mypy over sentinel/ (make typecheck), with every check mypy --strict enables on the core \
+(bus, crdt, sync, triage) and the risk engine, and mypy's standard checks on the rest, where nine \
+modules are still exempt, listed in pyproject.toml as work to do. A test reads back the options \
+mypy derives from pyproject.toml, module by module, so a strict flag dropped from the list or an \
+exemption on a strict module fails it. Every CI run turns its JUnit evidence into assessment \
+results and a POA&M (this package). The tests are traced to the requirements they verify: the \
+SysML v2 model (mbse/) links each requirement to the tests, harness scenarios, import contracts and \
+CI steps that verify it, and its generated trace (docs/traceability.md) fails CI when a reference \
+names evidence that does not exist. Work not yet built is marked planned and shown as unverified, \
+never as verified."""
 tests = [
     "tests/test_tier3_cara_validation.py::test_pc2d_matches_published_cara_value",
     "tests/test_tier3_cara_validation.py::test_gate_refuses_every_event_cara_says_2d_cannot_handle",
@@ -687,10 +722,13 @@ tests = [
     "tests/mbse/test_real_model.py::test_the_model_has_no_broken_references",
     "tests/mbse/test_real_model.py::test_every_requirement_is_satisfied_by_a_part_and_has_a_verification_case",
     "tests/mbse/test_real_model.py::test_unverified_means_planned_never_forgotten",
+    "tests/test_typecheck.py::test_the_core_and_the_risk_engine_get_every_strict_check",
+    "tests/test_typecheck.py::test_the_check_catches_a_dropped_flag",
+    "tests/test_typecheck.py::test_ci_runs_the_type_check",
 ]
 harness = ["denied", "limited", "intermittent", "degraded", "recovery"]
 ci = ["ci.yml#python", "harness.yml#scenario", "ci.yml#compliance", "ci.yml#mbse"]
-files = ["mbse/verification.sysml", "docs/traceability.md"]
+files = ["mbse/verification.sysml", "docs/traceability.md", "pyproject.toml"]
 
 [[control]]
 id = "sa-15"
@@ -702,18 +740,32 @@ status = "implemented"
 statement = """The development process is written down and enforced by tools: test-first development \
 and architecture decision records (docs/system-design.md); requirements modelled in SysML v2 \
 (mbse/), parsed with the SysML v2 pilot grammar and traced to their verification evidence in CI; \
-ruff and import-linter in CI; a test that forbids interpolated log messages; pre-commit hooks for \
-ruff and gitleaks; and pinned tool versions, with the workflow, container and shell linters \
+ruff, import-linter and mypy in CI, with mypy's options set in pyproject.toml and read back by a \
+test, module by module (SA-11); a test that forbids interpolated log messages; documentation checked \
+against the repository, so every path, make target and sentinel subcommand the docs name must exist \
+and every headline number registered in tests/doc_claims.toml must match the generated report it \
+comes from, at the precision the prose states (tests/test_docs.py), and interfaces documented where \
+they are checked (docs/icd, SA-10); pre-commit hooks for ruff and gitleaks; and pinned tools. The \
+Python development tools (pytest, ruff, import-linter, mypy) are hash-locked in uv.lock, which a \
+test requires every workflow to install from, and the workflow, container and shell linters are \
 fetched against SHA-256 pins."""
 tests = [
     "tests/test_logging_policy.py::test_log_messages_are_constants_with_values_as_fields",
     "tests/mbse/test_real_model.py::test_the_committed_trace_is_current",
     "tests/mbse/test_syntax_check.py::test_a_validator_that_accepts_a_known_bad_model_is_not_trusted",
+    "tests/test_typecheck.py::test_the_core_and_the_risk_engine_get_every_strict_check",
+    "tests/test_typecheck.py::test_the_rest_of_sentinel_gets_the_standard_checks",
+    "tests/test_docs.py::test_every_path_a_doc_names_exists",
+    "tests/test_docs.py::test_every_make_target_a_doc_names_exists",
+    "tests/test_docs.py::test_every_cli_subcommand_a_doc_names_exists",
+    "tests/test_docs.py::test_every_quoted_number_matches_its_source",
+    "tests/test_workflows_pinned.py::test_python_dependencies_install_from_the_lock",
 ]
 ci = ["ci.yml#python", "ci.yml#mbse", "ci.yml#release-lint"]
 files = [
     "docs/system-design.md", ".pre-commit-config.yaml", ".importlinter", "pyproject.toml",
-    "mbse/requirements.sysml", "mbse/verification.sysml", "docs/traceability.md",
+    "mbse/requirements.sysml", "mbse/verification.sysml", "docs/traceability.md", "tests/doc_claims.toml",
+    "uv.lock",
 ]
 
 # ======================================== SYSTEM AND COMMUNICATIONS PROTECTION
@@ -859,15 +911,19 @@ rationale = "Flaws found by tests, scans and updates must be tracked to closure.
 component = "pipeline"
 status = "partial"
 statement = """Every failing test becomes a POA&M item, linked to the controls that cite it, on every CI \
-run (this package); dependency updates go through the lockfile and the full test ladder. On every \
-push the vulnerability gate fails the build on any finding in a dependency or a shipped binary \
-that no reviewed VEX statement answers (RA-5), so a known flaw cannot pass unnoticed. Those \
-findings reach the job's SARIF output, not yet this package's POA&M."""
+run (this package). A dependency update reaches CI only as a change to uv.lock, because the jobs \
+that test install exactly the lock (uv sync --locked, which a test requires), so the full test \
+ladder runs on the update itself. On every push the vulnerability gate fails the build on any \
+finding in a dependency or a shipped binary that no reviewed VEX statement answers (RA-5), so a \
+known flaw cannot pass unnoticed. Those findings reach the job's SARIF output, not yet this \
+package's POA&M."""
 tests = [
     "tests/compliance/test_assessment.py::test_every_failing_test_is_an_open_item_linked_to_its_controls",
     "tests/supplychain/test_trivy.py::test_a_gating_scan_applies_vex_and_fails_on_any_remaining_finding",
+    "tests/test_workflows_pinned.py::test_python_dependencies_install_from_the_lock",
 ]
 ci = ["ci.yml#compliance", "ci.yml#supply-chain"]
+files = ["uv.lock"]
 plan = "Feed Trivy findings, with VEX, into the POA&M alongside test failures."
 milestone = "M4"
 
@@ -1087,22 +1143,27 @@ job runs them on every push: SBOMs with a completeness gate (CM-8), a Trivy scan
 finding no reviewed VEX statement answers (RA-5), and offline signature verification with the real \
 cosign (CM-14, SI-7). Third-party binaries and trust material are pinned by version and SHA-256 \
 (deploy/tools.lock); a mismatch writes nothing (scripts/fetch_tools.py, used by every job that \
-fetches a tool). Python dependencies are hash-locked and installed offline with --require-hashes. \
-Upstream data (NASA CARA, CelesTrak, NIST, DISA) is vendored unmodified with provenance and \
-checksums that the tests verify. Every action in every workflow is pinned by commit SHA, which a \
-test enforces (tests/test_workflows_pinned.py). Not yet done: signing, SLSA provenance and SBOM \
-attestation of releases exist only in release.yml, which has not run yet."""
+fetches a tool). Python dependencies are hash-locked in uv.lock. The CI jobs that test and assess \
+install exactly the lock with uv sync --locked, which refuses a stale lock, and a test fails any \
+workflow that installs with pip or uv pip instead, since those resolve afresh; a bundle installs \
+them offline with --require-hashes. Upstream data (NASA CARA, CelesTrak, NIST, DISA) is vendored \
+unmodified with provenance and checksums that the tests verify. Every action in every workflow is \
+pinned by commit SHA, which a test enforces (tests/test_workflows_pinned.py). Not yet done: \
+signing, SLSA provenance and SBOM attestation of releases exist only in release.yml, which has not \
+run yet."""
 tests = [
     "tests/supplychain/test_toolslock.py::test_fetch_refuses_a_digest_mismatch_and_writes_nothing",
     "tests/supplychain/test_toolslock.py::test_the_committed_lock_parses_and_pins_both_architectures_for_every_tool",
     "tests/test_tier3_cara_validation.py::test_vendored_nasa_files_are_unmodified",
     "tests/compliance/test_package_integrity.py::test_vendored_upstream_files_are_unmodified",
     "tests/test_workflows_pinned.py::test_every_action_is_pinned_by_commit_sha",
+    "tests/test_workflows_pinned.py::test_python_dependencies_install_from_the_lock",
+    "tests/test_workflows_pinned.py::test_the_lock_check_catches_a_fresh_resolve",
 ]
 ci = ["ci.yml#supply-chain", "harness.yml#scenario"]
 files = [
     "docs/supply-chain.md", "deploy/tools.lock", "scripts/fetch_tools.py", "supplychain/toolslock.py",
-    "deploy/bundle/install.sh", ".github/workflows/release.yml",
+    "uv.lock", "deploy/bundle/install.sh", ".github/workflows/release.yml",
 ]
 plan = """Push the first release tag so that signing, provenance and SBOM attestation run."""
 milestone = "M4"
@@ -1119,21 +1180,24 @@ fixtures/omm/PROVENANCE.md, compliance/vendor/nist/PROVENANCE.md, compliance/ven
 and each NASA CARA test case documents its source and tolerance. Each bundle's BUNDLE.json records \
 the commit it was built from, whether that tree was clean or dirty, its SOURCE_DATE_EPOCH, and the \
 upstream URL and SHA-256 of every bundled binary; a build from uncommitted changes cannot pass as \
-its commit. deploy/tools.lock records the upstream URL and SHA-256 of every third-party binary. \
-SLSA v1 build provenance (Build L2) and SBOM attestations for every tarball and image archive are \
-generated by the sign job of .github/workflows/release.yml and shipped as files, so they verify \
-offline. That workflow runs only on a tag on GitHub, has been checked only statically (actionlint) \
-and has not run yet, so no release provenance exists. Build L3 is not claimed: the provenance is \
-generated inside this repository's own workflow (docs/supply-chain.md)."""
+its commit. deploy/tools.lock records the upstream URL and SHA-256 of every third-party binary, \
+and uv.lock the registry, file URL and SHA-256 of every third-party Python distribution; the CI \
+jobs that test and assess install exactly what uv.lock records (uv sync --locked), which a test \
+requires. SLSA v1 build provenance (Build L2) and SBOM attestations for every tarball and image \
+archive are generated by the sign job of .github/workflows/release.yml and shipped as files, so \
+they verify offline. That workflow runs only on a tag on GitHub, has been checked only statically \
+(actionlint) and has not run yet, so no release provenance exists. Build L3 is not claimed: the \
+provenance is generated inside this repository's own workflow (docs/supply-chain.md)."""
 tests = [
     "tests/test_tier3_cara_validation.py::test_every_case_documents_provenance_and_tolerance",
     "tests/supplychain/test_bundle.py::test_manifest_records_identity_shipped_tools_for_this_arch_and_every_wheel",
     "tests/supplychain/test_bundle.py::test_a_build_from_uncommitted_changes_says_so",
+    "tests/test_workflows_pinned.py::test_python_dependencies_install_from_the_lock",
 ]
 ci = ["ci.yml#release-lint"]
 files = [
     "fixtures/cara/PROVENANCE.md", "fixtures/omm/PROVENANCE.md", "compliance/vendor/nist/PROVENANCE.md",
-    "compliance/vendor/disa/PROVENANCE.md", "supplychain/bundle.py", "deploy/tools.lock",
+    "compliance/vendor/disa/PROVENANCE.md", "supplychain/bundle.py", "deploy/tools.lock", "uv.lock",
     ".github/workflows/release.yml", "docs/supply-chain.md",
 ]
 plan = """Push the first release tag; verify the published provenance and SBOM attestations online \
