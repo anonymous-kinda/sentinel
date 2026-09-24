@@ -31,7 +31,7 @@ from ..cdm import CdmParseError, CdmRejected, parse_bytes, to_conjunction
 from ..cdm.model import CdmMessage
 from ..clock import Clock
 from ..risk.encounter import build_encounter_plane, curvilinear_check, pc_curve
-from ..risk.engine import assess
+from ..risk.engine import assess, finite_eigenvalues
 from ..risk.types import AssessedConjunction, AssessmentConfig, Method, RefusalReason
 from .policy import ConjunctionPolicy, triage
 from .store import CdmRow, ConjunctionStore, EventRow
@@ -364,6 +364,8 @@ class ConjunctionService:
             plane = build_encounter_plane(conj, hbr, refine_tca=self.engine_config.refine_tca)
         except ValueError:
             return None
+        if finite_eigenvalues(plane.cov_2d_m2) is None:
+            return {"available": False, "reason": "projected covariance cannot be decomposed"}
         values, vectors = np.linalg.eigh(plane.cov_2d_m2)
         if np.any(values <= 0):
             return {"available": False, "reason": "projected covariance is not positive definite"}
@@ -400,7 +402,8 @@ class ConjunctionService:
             plane = build_encounter_plane(conj, hbr, refine_tca=self.engine_config.refine_tca)
         except ValueError:
             return None
-        if np.any(np.linalg.eigvalsh(plane.cov_2d_m2) <= 0):
+        eigenvalues = finite_eigenvalues(plane.cov_2d_m2)
+        if eigenvalues is None or eigenvalues[0] <= 0:
             return None
         from ..risk.integrate import maximize_pc_over_scale
 

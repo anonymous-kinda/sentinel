@@ -7,9 +7,9 @@ Wrong (CdmRejected - the message is quarantined with a reason):
   input that would make the engine's answer silently incorrect. A state in
   metres labelled as kilometres, a non-inertial frame treated as inertial,
   three covariance terms out of six, a header miss distance that disagrees
-  with the states it summarises, a keyword given twice, a state no
-  Earth-orbiting object can have, a TCA before there were satellites, or a
-  number the node will display that cannot be read as one.
+  with the states it summarises, a state whose separation is not finite in
+  metres, a TCA before there were satellites, or a number the node reads or
+  displays that is not a finite number.
 
 Incomplete (a CdmWarning - the message is accepted):
   input that limits what can be concluded, without corrupting it. No
@@ -25,7 +25,6 @@ from __future__ import annotations
 import dataclasses
 import datetime as dt
 import math
-from collections import Counter
 
 import numpy as np
 
@@ -74,17 +73,6 @@ MISS_DISTANCE_TOLERANCE_REL = 0.005
 # launched 1957-10-04). CARA's own sample cases sit at J2000.
 EARLIEST_TCA = dt.datetime(1957, 10, 4, tzinfo=dt.UTC)
 
-# A CDM screens Earth-orbiting objects. A state below the surface (WGS-84
-# polar radius), outside Earth's Hill sphere (about 1.5 million km, where
-# the Sun's pull wins), or faster than light is wrong, not unusual, and the
-# arithmetic downstream would overflow or never converge on it.
-WGS84_POLAR_RADIUS_KM = 6356.752314245
-EARTH_HILL_SPHERE_KM = 1.5e6
-SPEED_OF_LIGHT_KM_S = 299_792.458
-# A position variance wider than the Hill sphere says nothing about where
-# the object is; beyond it the engine's products overflow.
-MAX_COVARIANCE_M2 = (EARTH_HILL_SPHERE_KM * 1000.0) ** 2
-
 
 class CdmRejected(ValueError):
     """The message would produce a wrong answer. Quarantine it."""
@@ -131,49 +119,32 @@ def _state_vector(section: CdmSection, index: int) -> tuple[np.ndarray, np.ndarr
         if not math.isfinite(value):
             raise CdmRejected("NONFINITE_STATE", f"{key} = {value}", index)
         values.append(value)
-    position, velocity = np.array(values[:3]), np.array(values[3:])
-    _check_plausible(position, velocity, index)
-    return position, velocity
+    return np.array(values[:3]), np.array(values[3:])
 
 
-def _check_plausible(position_km: np.ndarray, velocity_km_s: np.ndarray, index: int) -> None:
-    radius_km = float(np.linalg.norm(position_km))
-    speed_km_s = float(np.linalg.norm(velocity_km_s))
-    if not WGS84_POLAR_RADIUS_KM <= radius_km <= EARTH_HILL_SPHERE_KM:
-        raise CdmRejected(
-            "IMPLAUSIBLE_STATE",
-            f"|r| = {radius_km:.6g} km is not between the Earth's surface "
-            f"({WGS84_POLAR_RADIUS_KM:g} km) and its Hill sphere ({EARTH_HILL_SPHERE_KM:g} km)",
-            index,
-        )
-    if not speed_km_s < SPEED_OF_LIGHT_KM_S:
-        raise CdmRejected("IMPLAUSIBLE_STATE", f"|v| = {speed_km_s:.6g} km/s is not below light speed", index)
+def _relative_state_m(states: list[tuple[np.ndarray, np.ndarray]]) -> tuple[float, float]:
+    """Separation (m) and relative speed (m/s) in the engine's units. A state
+    finite in km can still overflow there, and the engine would report inf."""
+    (r1, v1), (r2, v2) = states
+    miss_m = float(np.linalg.norm((r2 - r1) * 1000.0))
+    speed_m_s = float(np.linalg.norm((v2 - v1) * 1000.0))
+    if not (math.isfinite(miss_m) and math.isfinite(speed_m_s)):
+        raise CdmRejected("NONFINITE_STATE", "the relative state of the two objects is not finite in metres")
+    return miss_m, speed_m_s
 
 
-def _check_single_keywords(section: CdmSection, index: int | None) -> None:
-    counts = Counter(field.key for field in section.fields())
-    repeated = sorted(key for key, count in counts.items() if count > 1)
-    if repeated:
-        raise CdmRejected("DUPLICATE_KEY", f"{', '.join(repeated)} given more than once", index)
-
-
-def _check_time(message: CdmMessage, key: str, code: str) -> None:
+def _read_time(message: CdmMessage, key: str) -> None:
+    """Raises ValueError for a time that is not CCSDS, or that no conjunction can have."""
     text = message.preamble.text(key)
-    if text is None:
-        return
-    try:
-        when = parse_ccsds_time(text)
-    except ValueError as exc:
-        raise CdmRejected(code, str(exc)) from exc
-    if when < EARLIEST_TCA:
-        raise CdmRejected(code, f"{key} {text} precedes the first artificial satellite")
+    if text is not None and parse_ccsds_time(text) < EARLIEST_TCA:
+        raise ValueError(f"{key} {text} precedes the first artificial satellite")
 
 
 def _check_originator_pc(message: CdmMessage) -> None:
-    """The originator's Pc is shown beside Sentinel's, so it must be one."""
+    """The originator's Pc is served beside Sentinel's: it must be a finite number."""
     pc = _number(message.preamble, "COLLISION_PROBABILITY")
-    if pc is not None and not 0.0 <= pc <= 1.0:
-        raise CdmRejected("BAD_COLLISION_PROBABILITY", f"COLLISION_PROBABILITY = {pc} is not a probability")
+    if pc is not None and not math.isfinite(pc):
+        raise CdmRejected("UNREADABLE", f"COLLISION_PROBABILITY = {pc} is not a finite number")
 
 
 def covariance_status(section: CdmSection, index: int) -> str:
@@ -182,10 +153,6 @@ def covariance_status(section: CdmSection, index: int) -> str:
     for key in POSITION_COVARIANCE_KEYS:
         value = _number(section, key, index)
         finite.append(value is not None and math.isfinite(value))
-        if finite[-1] and abs(value) > MAX_COVARIANCE_M2:
-            raise CdmRejected(
-                "IMPLAUSIBLE_COVARIANCE", f"|{key}| = {abs(value):.6g} m**2 exceeds {MAX_COVARIANCE_M2:.3g}", index
-            )
     if all(finite):
         return "present"
     if not any(finite):
@@ -204,13 +171,16 @@ def validate(message: CdmMessage) -> list[CdmWarning]:
     warnings: list[CdmWarning] = []
 
     # --- header / relative metadata --------------------------------------
-    _check_single_keywords(message.preamble, None)
-    for index, obj in enumerate(message.objects):
-        _check_single_keywords(obj, index)
     if message.preamble.text("TCA") is None:
         raise CdmRejected("MISSING_TCA", "TCA is absent")
-    _check_time(message, "TCA", "BAD_TCA")
-    _check_time(message, "CREATION_DATE", "BAD_CREATION_DATE")
+    try:
+        _read_time(message, "TCA")
+    except ValueError as exc:
+        raise CdmRejected("BAD_TCA", str(exc)) from exc
+    try:
+        _read_time(message, "CREATION_DATE")
+    except ValueError as exc:
+        raise CdmRejected("BAD_CREATION_DATE", str(exc)) from exc
     _check_originator_pc(message)
 
     for key, expected in _SUMMARY_UNITS.items():
@@ -256,10 +226,9 @@ def validate(message: CdmMessage) -> list[CdmWarning]:
             )
 
     # --- cross-check: the header must describe these states --------------
+    state_miss, _ = _relative_state_m(states)
     header_miss = _number(message.preamble, "MISS_DISTANCE")
     if header_miss is not None and math.isfinite(header_miss):
-        (r1, _), (r2, _) = states
-        state_miss = float(np.linalg.norm((r2 - r1) * 1000.0))
         tolerance = max(MISS_DISTANCE_TOLERANCE_ABS_M, MISS_DISTANCE_TOLERANCE_REL * state_miss)
         if abs(state_miss - header_miss) > tolerance:
             raise CdmRejected(

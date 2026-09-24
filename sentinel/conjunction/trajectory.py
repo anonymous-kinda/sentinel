@@ -18,6 +18,11 @@ from scipy.integrate import solve_ivp
 from ..risk.types import Conjunction
 
 MU_EARTH_M3_S2 = 3.986004418e14
+# Arcs are drawn only from a state between the Earth's surface (WGS-84 polar
+# radius) and its Hill sphere (about 1.5 million km). Outside that band a
+# two-body Earth arc means nothing, and near r = 0 or at the float limit the
+# integrator can take minutes to give up.
+DRAWABLE_RADIUS_M = (6_356_752.3, 1.5e9)
 _J2000 = dt.datetime(2000, 1, 1, 12, 0, 0, tzinfo=dt.UTC)
 
 
@@ -49,6 +54,9 @@ def _two_body(_t, y):
 def propagate_eci_m(r_km, v_km_s, offsets_s: np.ndarray) -> np.ndarray:
     """Positions (m, ECI) at each offset from the epoch, both directions."""
     y0 = np.concatenate([np.asarray(r_km, float) * 1000.0, np.asarray(v_km_s, float) * 1000.0])
+    low, high = DRAWABLE_RADIUS_M
+    if not low <= float(np.linalg.norm(y0[:3])) <= high:
+        raise TrajectoryUnavailable("the state is not between the Earth's surface and its Hill sphere")
     out = np.empty((len(offsets_s), 3))
     fwd = offsets_s >= 0
     for mask, span in ((fwd, (0.0, float(offsets_s.max()))), (~fwd, (0.0, float(offsets_s.min())))):
