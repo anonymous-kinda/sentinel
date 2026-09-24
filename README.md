@@ -175,7 +175,7 @@ A classified or disconnected site has to trust a bundle without reaching the int
 - **Offline verification.** Every install path verifies the signature against a pinned Sigstore trust root (or a site key) before unpacking anything, with no network. `make airgap-verify` and the Ansible role run the same gate, `deploy/bundle/verify_signature.sh`; the bundle's `install.sh` then checks every file against its `SHA256SUMS`.
 - **Local proofs.**
   - `make airgap-selftest` shows that a tampered, unsigned, wrong-key or wrong-identity bundle is refused.
-  - `make airgap-local` builds a bundle, signs it with a throwaway key, and installs it inside a network namespace with only loopback. There it reproduces the NASA validation.
+  - `make airgap-local` builds a bundle, signs it with a throwaway key, and installs it inside a network namespace with only loopback. There it reproduces the NASA validation and, as a hub, loads its bundled element sets. The `airgap-install` CI job is configured to repeat this for each architecture.
 - **Vulnerability gate.** Scans fail on any finding without a reviewed VEX statement. The one current finding (GO-2026-5932, against the `openpgp` package of a Go module `nats-server` depends on) is shown not to be linked into the binary, and that check re-runs on every scan.
 
 ## Traceability, generated

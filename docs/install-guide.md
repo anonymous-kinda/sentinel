@@ -19,7 +19,7 @@ These files cross the gap together, through your site's software approval proces
 | `verify_signature.sh` | The verifier, from `deploy/bundle/verify_signature.sh` |
 | `cosign` | The cosign binary for the host's architecture, pinned in `deploy/tools.lock` |
 | `site.pub` | Only if your site countersigns software with its own key |
-| `elements.json` | Public element sets (CelesTrak OMM JSON), if this node screens or computes passes itself. The bundle does not carry them. |
+| `elements.json` | Optional: newer public element sets (CelesTrak OMM JSON). The bundle carries the snapshot it was built with, which goes stale three days after its epoch. |
 
 ## 2. Verify offline, before unpacking anything
 
@@ -76,7 +76,7 @@ Edit `/opt/sentinel/sentinel.env`:
 | `SENTINEL_AI` | `0` turns the assistant off. Left on, it runs local rules and templates only. The bundle carries no hosted AI libraries, and `SENTINEL_AI_CLOUD` stays `0`. |
 | `SENTINEL_EXERCISE` | `0` stops the scripted exercise scenario. |
 | `SENTINEL_LIBRARY` | Leave at `1`: it loads NASA's reference events, which the Validation tab and the smoke test use. |
-| `SENTINEL_ELEMENTS` | The path of the element-set file you brought across. A hub or standalone node needs it to screen or compute passes. An edge normally gets its element sets from its hub; an edge with no hub link can be given a file the same way. Without it, the log says `Element snapshot missing` and screening answers `404 UNKNOWN_PRIMARY`. |
+| `SENTINEL_ELEMENTS` | Optional: the path of a newer element-set file you brought across. A hub or standalone node loads the bundled snapshot by default. An edge normally gets its element sets from its hub; an edge with no hub link can be given a file the same way. |
 | `SENTINEL_SYNC_ELEMENTS` | On a hub: `catalog` (the default) offers edges only the imaging catalog's element sets that the pass module uses. `all` offers every set it holds and costs link time. |
 
 **Where data comes from.**
