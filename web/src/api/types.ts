@@ -51,6 +51,10 @@ export interface EventSummary {
   cdm_count: number;
   latest_cdm_sha256: string;
   latest_message_id: string | null;
+  /** Edge nodes: how this node knows the event. */
+  verification?: "LOCAL" | "VERIFIED" | "UPDATING" | "MISMATCH" | "HUB_ASSERTED";
+  /** One line readable over a voice net (hub-asserted summaries). */
+  voice?: string;
 }
 
 export interface HistoryEntry {
@@ -69,6 +73,7 @@ export interface HistoryEntry {
 export interface EventDetail {
   summary: EventSummary;
   history: HistoryEntry[];
+  asserted_by?: string;
   engine_version: string;
   policy: { red_pc: number; amber_pc: number; mcp_lead_time_s: number; urgent_window_s: number };
 }
@@ -149,4 +154,89 @@ export interface Validation {
   alfano?: { case_id: string; sentinel_pc: number; cara_pc2d: number; rel_error: number }[];
   alfano_worst_rel_error?: number;
   calibration_note?: string;
+}
+
+export interface LogEntryView {
+  dot: [string, number];
+  lamport: number;
+  wall_time: string;
+  kind: "DECISION" | "NOTE" | "RESOLUTION" | "AI_DRAFT_CONFIRMED";
+  event_ref: { event_id: string; cdm_sha256?: string; inputs_hash?: string; message_id?: string };
+  body: Record<string, string>;
+  author: string;
+  node: string;
+  signature_valid: boolean;
+  digest: string;
+  review_required: boolean;
+}
+
+export interface RegisterValue {
+  dot: [string, number];
+  v: string;
+  by: string;
+  node: string;
+  at: string;
+}
+
+export interface OpsView {
+  entries: LogEntryView[];
+  annotations: Record<string, { values: RegisterValue[]; conflict: boolean }>;
+  current_ref: { cdm_sha256: string; inputs_hash: string; message_id: string | null } | null;
+  decisions: string[];
+}
+
+export interface LinkMonitorView {
+  state: "CONNECTED" | "DEGRADED" | "LIMITED" | "DENIED" | "UNKNOWN";
+  rtt_ms: number | null;
+  rate_bytes_per_s: number | null;
+  seconds_since_success: number | null;
+  failures_in_row: number;
+  bytes_total: number;
+  exchanges: number;
+}
+
+export interface LinkInfo {
+  role: string;
+  hub_id: string | null;
+  monitor: LinkMonitorView;
+  emulation?: { preset: string; enabled: boolean; toxics: { name: string; type: string }[] } | null;
+}
+
+export interface QueueItem {
+  event_id: string;
+  sha: string;
+  bytes: number;
+  class: string;
+  deadline: string | null;
+  seconds_to_deadline: number | null;
+  latest: boolean;
+  status: string;
+  eta_s: number | null;
+}
+
+export interface Arrival {
+  event_id: string;
+  sha: string;
+  class: string;
+  latest: boolean;
+  bytes: number;
+  wall_s: number;
+  node_time: string;
+  deadline: string | null;
+  hash_ok: boolean;
+  status: string;
+  verification: string | null;
+}
+
+export interface SyncStatus {
+  role: string;
+  mode?: string;
+  hub_id?: string;
+  link?: LinkMonitorView;
+  queue?: QueueItem[];
+  arrivals?: Arrival[];
+  arrivals_total?: number;
+  summary_only?: string[];
+  last_cycle?: Record<string, unknown>;
+  requests?: Record<string, number>;
 }

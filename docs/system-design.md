@@ -105,43 +105,126 @@ CARA publishes expected values for real conjunctions, including its own judgemen
 
 ### ADR-004 — Modular monolith with an internal event bus
 
-**Status:** Accepted
+**Status:** Accepted (2026-09-23). Amended after implementation; the amendments are marked below.
 
-**Decision.** Sentinel is a single deployable binary internally structured as event-driven modules communicating over NATS JetStream. The same modules can be split into separate services in a cloud deployment without changing module code.
+**Decision.** Sentinel is structured as event-driven modules that talk only through a `Bus` protocol: publish/subscribe plus request/reply. In one process the bus is in-memory. On a deployed node it is NATS: each node runs its own `nats-server`, and the server, not the application, holds the leafnode link to other nodes. The same module code runs in both.
 
-**Rationale.** The job description names microservices, event-driven architectures, and modular monoliths in one sentence, which is a hint that the interesting answer is understanding when each applies. The honest answer for an edge-deployable system is both: microservice decomposition in the cloud where orchestration is free, single-binary at the edge where it is not.
+**Rationale.** The job description names microservices, event-driven architectures and modular monoliths in one sentence. That is a hint that the interesting answer is knowing when each applies. For an edge-deployable system the honest answer is both: decompose in the cloud where orchestration is free, and ship a single deployable at the edge where it is not.
 
-NATS is a small single binary with no external dependencies. Critically, its leaf node model with local JetStream storage provides durable messaging that survives disconnection and reconciles on reconnect — which is the sync problem in ADR-005, solved at the transport layer rather than in application code.
+A node's console, store and engine talk only to their *local* NATS server. So a denied link never breaks the node; the leaf reconnects by itself. The DENIED scenario measures this: 2.7 ms p95 console latency while the link is cut.
 
-**Rejected.** Kafka — requires a JVM and coordination quorum, which does not fit on constrained edge hardware and does not survive isolation gracefully. Redpanda — Kafka-compatible and lighter, still heavier than needed and with no comparable disconnected-leaf story. Plain MQTT — light enough but no durable stream semantics. Direct function calls with no bus — simplest, but forecloses the cloud decomposition that is half the argument.
+**Amendment: what NATS is used for.**
+- Leafnode connectivity, request/reply, and compression (s2).
+- Subject permissions, including OPSEC: a leaf never exports `unit.>` or `passes.>`.
+
+JetStream is **not** used for replication. Priority is a mission concept that a stream mirror, which is FIFO, cannot express (ADR-008). Operator data is a durable CRDT whose state does its own store-and-forward (ADR-005). Using JetStream anyway would add a second, unmeasured ordering to explain.
+
+**Amendment: "single binary".** A node is one signed bundle that runs two processes, `nats-server` and `sentinel`. That is stated plainly rather than hidden behind an embedded server.
+
+**Rejected.**
+- *Kafka:* needs a JVM and a coordination quorum, doesn't fit constrained edge hardware, and doesn't survive isolation gracefully.
+- *Redpanda:* lighter, but no comparable disconnected-leaf story.
+- *Plain MQTT:* no request/reply semantics and no leaf model.
+- *Direct function calls with no bus:* forecloses the cloud decomposition that is half the argument.
 
 ---
 
-### ADR-005 — Delta-state CRDTs for operator-generated data
+### ADR-005 — State-based CRDTs for operator-generated data
 
-**Status:** Proposed
+**Status:** Accepted (2026-09-23), implemented in `sentinel/crdt` and `sentinel/ops`.
 
-**Decision.** Operator annotations, triage decisions, risk-tolerance settings, and the decision log replicate as delta-state CRDTs. Ingested reference data — CDMs, ephemeris — does not; it is immutable and replicates by store-and-forward replay.
+**Decision.** Operator annotations, triage status, and the decision log replicate as state-based CRDTs:
+- **Decision log:** a grow-only log of immutable entries, each Ed25519-signed and hash-chained per node.
+- **Annotations and triage status:** multi-value registers. Concurrent writes are all kept and shown as a CONFLICT.
 
-**Rationale.** These two data classes have opposite requirements and conflating them is the common design error. Reference data is append-only and authored upstream, so it needs durable replay, not merge. Operator data is authored concurrently at multiple disconnected nodes and genuinely conflicts.
+Ingested reference data (CDMs) is immutable and replicates by priority pull (ADR-008), not by merge.
 
-State-based CRDTs are chosen over operation-based specifically because they tolerate lost, duplicated, and reordered delivery, which is the DDIL environment by definition. Operation-based CRDTs require reliable causal delivery — an assumption that is exactly what a denied link removes. Delta encoding keeps the payload from growing unboundedly.
+**Rationale.** These two data classes have opposite requirements, and conflating them is the common design error:
+- **Reference data** is append-only and authored upstream. It needs ordered delivery, not merge.
+- **Operator data** is authored concurrently at disconnected nodes, and genuinely conflicts.
 
-The model follows TAK's DataSync approach: mission data held server-side, clients synchronizing what they missed while disconnected. This is worth citing directly, because it is the pattern the customer already trusts.
+State-based rather than operation-based CRDTs, because state-based merge tolerates lost, duplicated and reordered delivery, and that is the DDIL link. Anti-entropy is a single request/reply. It carries this node's causal contexts plus whatever the peer was last known to lack; a stale memory of the peer just means sending more.
 
-**Rejected.** Last-write-wins on a timestamp — silently destroys an operator's work, unacceptable in a decision log. Operation-based CRDTs — wrong delivery assumptions. Manual conflict resolution — moves the problem to the operator at the worst possible moment.
+**Evidence.**
+- *Property tests* (Hypothesis, 150 random histories × 40 steps, three replicas, stale and duplicated payloads delivered in any order) prove:
+  - convergence;
+  - no lost or duplicated entries;
+  - every write is either visible or was overwritten by someone who had seen it.
+- *Integrity:* a tampered entry is rejected, and a reused dot with different content raises.
+- *DENIED and INTERMITTENT scenarios:* both confirm the same properties across real processes.
+
+**Rejected.**
+- *Last-write-wins on a timestamp:* silently destroys an operator's work.
+- *Operation-based CRDTs:* assume reliable causal delivery.
+- *Manual merge UI:* moves the problem to the operator at the worst moment. A CONFLICT is shown, and a person resolves it by writing a value that supersedes both, but nothing is lost while it waits.
 
 ---
 
 ### ADR-006 — Bandwidth triage by decision urgency
 
-**Status:** Proposed
+**Status:** Accepted (2026-09-23). The open question was answered by measurement.
 
-**Decision.** When bandwidth is constrained, sync priority is ordered by time-to-maneuver-commit-point and risk, not by recency or arrival order. High-Pc events approaching their commit point transit first. Routine catalog refresh transits last, or not at all.
+**Decision.** When bandwidth is constrained, sync order is:
+1. **class:** summaries, then urgent full records, then routine, then history;
+2. **within a class, earliest deadline first:** the deadline is the maneuver commit point;
+3. **consequence** as the tie-breaker.
 
-**Rationale.** This is the design decision most likely to come up in a customer conversation, because it is where the architecture demonstrably encodes mission understanding rather than engineering preference. Every system claims to prioritize; the question is by what. Sorting by operational consequence — how soon does someone have to act, and how badly — is a different answer from sorting by timestamp, and it is the right one.
+**Rationale.** Every system claims to prioritise; the question is by what. Ordering by how soon someone has to act, and how badly, is an answer that encodes the mission. Earliest-deadline-first is optimal on a single resource when a feasible schedule exists (Liu & Layland, 1973).
 
-**Open question.** Behavior when the link is so degraded that even priority traffic cannot complete. Proposal: transmit a degraded event summary — identifiers, TCA, risk band, no covariance — sized to fit, with full CDMs queued behind it. Needs sizing analysis against a realistic constrained-link budget.
+**Answer to the open question.** Summaries measure **≤ 256 bytes** each, asserted in `tests/sync`. At about 8 kbit/s, every event is visible within 3 s.
+
+Admission control handles the case where the full record can't make it in time. If the link rate measured by the agent cannot deliver a full CDM before its deadline, the event is marked SUMMARY-ONLY rather than spending the link on it. At the bottom of the ladder a summary renders as one voice-readable line.
+
+**Measured.** Same link, same bytes, same 13 records: the most urgent event's full CDM arrives in **5.5 s with EDF vs 37.7 s with FIFO**. See `docs/ddil-results.md`.
+
+---
+
+### ADR-008 — Reference data: application-level priority pull, not transport replication
+
+**Status:** Accepted (2026-09-23).
+
+**Decision.** The edge pulls CDMs from the hub over request/reply. Each cycle:
+1. fetch the manifest, skipped if its digest is unchanged;
+2. take the set difference against local records;
+3. fetch in triage order;
+4. re-assess each CDM locally and compare its inputs hash with what the hub asserted.
+
+An event stays HUB-ASSERTED until that comparison passes (VERIFIED), and any disagreement is flagged MISMATCH.
+
+**Why not a JetStream mirror.** A mirror replicates in stream order. That is exactly the FIFO baseline the LIMITED scenario measures at 6.8–6.9× slower for the record that matters.
+
+**Why this also buys modularity.** The pull agent reads only generic fields: id, deadline, consequence and record list. It reaches a mission module only through the `ReferenceRecords` protocol, and `.importlinter` forbids `sync` from importing any mission module. The Army pass module (M3) can reuse it unchanged.
+
+**Consequence.** The hub assigns event identity and the identity travels with the record (`Sentinel-Event-Id`). Updates fetched out of order would otherwise split one event into two.
+
+---
+
+### ADR-009 — Each node serves its own console; node-local events never cross a link
+
+**Status:** Accepted (2026-09-23).
+
+**Decision.** Every node, whether hub or edge, serves its own UI and API from its own data.
+- Console events are published on node-scoped subjects (`node.<id>.>`).
+- Edge leafnode permissions deny exporting or importing `node.>`.
+
+**Rationale.** A console that depends on the link to another node goes dark exactly when the operator needs it.
+
+NATS leafnodes propagate subject interest. Without node scoping, an edge console subscribed to `cdm.accepted.>` would receive the hub's events before they had been fetched and verified. That would quietly defeat the HUB-ASSERTED/VERIFIED distinction.
+
+---
+
+### Findings from the DDIL harness: NATS defaults assume a LAN
+
+The real-process harness surfaced four defaults that would have failed a satellite-class deployment. Each is now fixed in `deploy/nats/*.tmpl`, and each has a scenario guarding it.
+
+| Default | What happened over the emulated link | Fix |
+|---|---|---|
+| Leaf listener advertises its URL | After the first disconnect the edge reconnected **directly to the advertised address, bypassing the intended path**. Behind a relay or guard, that is a routing surprise. | `no_advertise: true` |
+| Remote first-INFO timeout 1 s | The hub's INFO takes longer than 1 s at 8 kbit/s plus 600 ms, so the leaf reconnected forever. | `first_info_timeout: 20s` |
+| Leaf authentication timeout 2 s | The handshake could not complete over the thin link. | `authorization { timeout: 30 }` |
+| Ping interval 2 min | A black-holed link took minutes to detect. | `ping_interval: 5s`, `ping_max: 3` |
+
+The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and third fixes were in. It now re-establishes the leaf in about 5 s.
 
 ---
 

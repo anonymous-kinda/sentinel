@@ -22,12 +22,14 @@ from typing import Protocol
 
 class Clock(Protocol):
     label: str
+    scale: float        # node seconds per wall second
 
     def now(self) -> dt.datetime: ...
 
 
 class RealClock:
     label = "real"
+    scale = 1.0
 
     def now(self) -> dt.datetime:
         return dt.datetime.now(dt.UTC)
@@ -39,6 +41,7 @@ class FixedClock:
             raise ValueError("FixedClock needs an aware datetime")
         self._instant = instant
         self.label = f"fixed:{instant.isoformat()}"
+        self.scale = 1.0
 
     def now(self) -> dt.datetime:
         return self._instant
@@ -55,6 +58,7 @@ class SimClock:
             raise ValueError("SimClock needs an aware epoch")
         self._epoch = epoch
         self._scale = float(scale)
+        self.scale = float(scale)
         self._start = time.monotonic()
         self.label = f"sim:{epoch.isoformat()},{scale:g}x"
 

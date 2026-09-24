@@ -1,0 +1,30 @@
+# Sentinel hub nats-server. Rendered by harness/run.py (or Ansible, M4).
+server_name: "${NODE_ID}"
+listen: "127.0.0.1:${CLIENT_PORT}"
+http: "127.0.0.1:${MONITOR_PORT}"
+
+# Slow links: a 10 kB message at 1 kB/s takes 10 s. The default write
+# deadline would disconnect the leaf as a slow consumer.
+write_deadline: "120s"
+# Detect a black-holed link in ~15 s rather than the default minutes.
+ping_interval: "5s"
+ping_max: 3
+max_payload: 1MB
+
+leafnodes {
+  listen: "${LEAF_LISTEN}"
+  # Compression chosen by measured RTT: stronger on slow links.
+  compression: s2_auto
+  # Do not gossip this listener's URL to leaves. Otherwise a leaf that loses
+  # its configured path (a relay, a cross-domain guard, the link emulator)
+  # silently reconnects to the advertised address instead - routing around
+  # the path the architecture intended.
+  no_advertise: true
+  # The leaf handshake (INFO / CONNECT, plus TLS in production) must fit
+  # through ~8 kbit/s at 600 ms latency. The 2 s default authentication
+  # timeout does not, and the edge would never reconnect over a thin link.
+  authorization {
+    timeout: 30
+  }
+  ${LEAF_TLS}
+}

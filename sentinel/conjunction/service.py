@@ -35,6 +35,7 @@ from ..risk.engine import assess
 from ..risk.types import AssessedConjunction, AssessmentConfig, Method, RefusalReason
 from .policy import ConjunctionPolicy, triage
 from .store import CdmRow, ConjunctionStore, EventRow
+from .summaries import compact_summary, expand_summary
 from .trajectory import encounter_arcs_ecef
 
 EVENT_TCA_WINDOW_S = 60.0
@@ -65,7 +66,9 @@ class ConjunctionService:
         clock: Clock,
         policy: ConjunctionPolicy | None = None,
         engine_config: AssessmentConfig | None = None,
+        node_id: str = "standalone",
     ):
+        self.node_id = node_id
         self.store = store
         self.bus = bus
         self.clock = clock
@@ -74,7 +77,17 @@ class ConjunctionService:
         self.engine_version = f"{__version__}+{_config_hash(self.engine_config)}"
 
     # ------------------------------------------------------------------ ingest
-    async def ingest(self, raw: bytes, source: str, data_class: str = "REAL") -> IngestResult:
+    async def ingest(
+        self,
+        raw: bytes,
+        source: str,
+        data_class: str = "REAL",
+        event_id: str | None = None,
+    ) -> IngestResult:
+        """Admit one CDM. `event_id` is passed when another node already
+        assigned the event identity (edge fetching from the hub); the edge
+        must not re-derive it, or updates fetched out of order would split
+        one event into two."""
         if data_class not in DATA_CLASSES:
             raise ValueError(f"unknown data class {data_class!r}")
         sha = hashlib.sha256(raw).hexdigest()
@@ -94,7 +107,7 @@ class ConjunctionService:
         if (message.originator or "").upper() == EXERCISE_ORIGINATOR:
             data_class = "EXERCISE"
 
-        event = self._event_for(message, data_class)
+        event = self._event_for(message, data_class, event_id)
         warnings = [dataclasses.asdict(w) for w in conversion.warnings]
         self.store.add_cdm(
             CdmRow(
@@ -114,26 +127,25 @@ class ConjunctionService:
                 hbr_source=conversion.hbr_source,
             )
         )
-        result = self._assess_sha(sha, message)
+        self._assess_sha(sha, message)
         summary = self.event_summary(event.event_id)
         await self.bus.publish(
-            subjects.CDM_ACCEPTED.format(event_id=subjects.token(event.event_id)),
+            subjects.cdm_accepted(self.node_id, event.event_id),
             json.dumps(summary, default=str).encode(),
             {"Sentinel-Kind": "cdm.accepted", "Sentinel-Data-Class": data_class},
         )
-        del result
         return IngestResult("accepted", sha, event.event_id, warnings=tuple(warnings))
 
     async def _reject(self, sha: str, raw: bytes, code: str, detail: str, source: str) -> IngestResult:
         self.store.quarantine(sha, raw, code, detail, source)
         await self.bus.publish(
-            subjects.CDM_REJECTED,
+            subjects.cdm_rejected(self.node_id),
             json.dumps({"sha256": sha, "code": code, "detail": detail, "source": source}).encode(),
             {"Sentinel-Kind": "cdm.rejected"},
         )
         return IngestResult("rejected", sha, code=code, detail=detail)
 
-    def _event_for(self, message: CdmMessage, data_class: str) -> EventRow:
+    def _event_for(self, message: CdmMessage, data_class: str, event_id: str | None = None) -> EventRow:
         """Group CDM updates into events: same object pair, TCA within 60 s.
 
         CCSDS 508.0-B-1 has no event identifier, so the rule has to be
@@ -143,6 +155,13 @@ class ConjunctionService:
         pri = message.object_designator(0) or "OBJECT1"
         sec = message.object_designator(1) or "OBJECT2"
         tca = message.tca
+        if event_id is not None:
+            existing = self.store.event(event_id)
+            if existing is not None:
+                return existing
+            row = EventRow(event_id, pri, message.object_name(0), sec, message.object_name(1), tca.isoformat(), data_class)
+            self.store.add_event(row)
+            return row
         for ev in self.store.events_for_pair(pri, sec):
             if abs((dt.datetime.fromisoformat(ev.tca_ref) - tca).total_seconds()) <= EVENT_TCA_WINDOW_S:
                 return ev
@@ -219,11 +238,29 @@ class ConjunctionService:
         }
 
     def list_events(self, scope: str = "active") -> list[dict]:
-        """scope: active (TCA in the future), past, or all."""
+        """scope: active (TCA in the future), past, or all.
+
+        On an edge node the list also carries events known only from the
+        hub's summaries (verification HUB_ASSERTED) until their CDMs arrive
+        and are re-assessed here.
+        """
         now = self.clock.now()
+        remote = self.store.remote_summaries()
         out = []
+        local_ids = set()
         for ev in self.store.events():
+            if not self.store.cdms_for_event(ev.event_id):
+                continue
+            local_ids.add(ev.event_id)
             summary = self.event_summary(ev.event_id)
+            summary["verification"] = self._verification(summary, remote.get(ev.event_id))
+            future = dt.datetime.fromisoformat(summary["tca"]) > now
+            if scope == "all" or (scope == "active") == future:
+                out.append(summary)
+        for event_id, compact in remote.items():
+            if event_id in local_ids:
+                continue
+            summary = expand_summary(compact, now, self.policy)
             future = dt.datetime.fromisoformat(summary["tca"]) > now
             if scope == "all" or (scope == "active") == future:
                 out.append(summary)
@@ -233,9 +270,55 @@ class ConjunctionService:
             out.sort(key=lambda s: s["tca"], reverse=True)
         return out
 
-    def event_detail(self, event_id: str) -> dict | None:
-        if self.store.event(event_id) is None:
+    @staticmethod
+    def _verification(summary: dict, remote: dict | None) -> str:
+        """LOCAL: this node's own data. VERIFIED: fetched and re-assessed here,
+        identical to what the hub asserted. UPDATING: the hub has a newer CDM
+        not yet fetched. MISMATCH: same CDM, different result - flag it."""
+        if remote is None:
+            return "LOCAL"
+        latest = summary["latest_cdm_sha256"]
+        hub_latest = remote["c"][-1][0] if remote.get("c") else None
+        if hub_latest and not latest.startswith(hub_latest):
+            return "UPDATING"
+        mine = summary["assessment"]["inputs_hash"][:16]
+        return "VERIFIED" if mine == remote.get("h") else "MISMATCH"
+
+    def current_ref(self, event_id: str) -> dict | None:
+        """What a decision about this event is made against, right now."""
+        latest = self._latest(event_id)
+        if latest is None:
             return None
+        a = self._assess_sha(latest.sha256)
+        return {"cdm_sha256": latest.sha256, "inputs_hash": a["inputs_hash"], "message_id": latest.message_id}
+
+    def manifest(self) -> list[dict]:
+        """Compact summaries of every active event, for edges (P0)."""
+        out = []
+        for summary in self.list_events("active"):
+            if summary.get("verification") in (None, "LOCAL"):
+                rows = self.store.cdms_for_event(summary["event_id"])
+                out.append(
+                    compact_summary(
+                        summary,
+                        [(r.sha256[:16], len(r.raw), _epoch(r.creation_date or r.received_at)) for r in rows],
+                    )
+                )
+        return out
+
+    def event_detail(self, event_id: str) -> dict | None:
+        if self.store.event(event_id) is None or not self.store.cdms_for_event(event_id):
+            remote = self.store.remote_summaries().get(event_id)
+            if remote is None:
+                return None
+            # Known only from the hub's summary: show it, marked, with no history.
+            return {
+                "summary": expand_summary(remote, self.clock.now(), self.policy),
+                "history": [],
+                "engine_version": self.engine_version,
+                "policy": dataclasses.asdict(self.policy),
+                "asserted_by": remote.get("_origin"),
+            }
         history = []
         for row in self.store.cdms_for_event(event_id):
             message, conversion = self._parsed(row.sha256)
@@ -253,8 +336,10 @@ class ConjunctionService:
                     "assessment": self._assess_sha(row.sha256),
                 }
             )
+        summary = self.event_summary(event_id)
+        summary["verification"] = self._verification(summary, self.store.remote_summaries().get(event_id))
         return {
-            "summary": self.event_summary(event_id),
+            "summary": summary,
             "history": history,
             "engine_version": self.engine_version,
             "policy": dataclasses.asdict(self.policy),
@@ -341,6 +426,10 @@ class ConjunctionService:
 
     def quarantined(self) -> list[dict]:
         return self.store.quarantined()
+
+
+def _epoch(iso: str) -> int:
+    return int(dt.datetime.fromisoformat(iso).timestamp())
 
 
 def _consequence_rank(summary: dict) -> int:

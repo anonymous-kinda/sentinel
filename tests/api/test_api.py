@@ -16,8 +16,8 @@ CARA = pathlib.Path(__file__).resolve().parents[2] / "fixtures" / "cara"
 
 
 @pytest.fixture
-def client():
-    settings = Settings(exercise=False, library=True, web_dist=None)
+def client(tmp_path):
+    settings = Settings(exercise=False, library=True, web_dist=None, var_dir=str(tmp_path))
     app = create_app(settings, clock=FixedClock(EPOCH + dt.timedelta(hours=1)), start_background=False)
     with TestClient(app) as c:
         # Load the exercise scenario synchronously for determinism.
@@ -105,8 +105,8 @@ def test_upload_is_idempotent_and_wrong_input_is_quarantined(client):
     assert client.get("/api/quarantine").json()[-1]["code"] == "UNSUPPORTED_REF_FRAME"
 
 
-def test_read_only_node_refuses_ingest():
-    app = create_app(Settings(exercise=False, library=False, read_only=True, web_dist=None))
+def test_read_only_node_refuses_ingest(tmp_path):
+    app = create_app(Settings(exercise=False, library=False, read_only=True, web_dist=None, var_dir=str(tmp_path)))
     with TestClient(app) as c:
         assert c.post("/api/ingest/cdm", content=b"x").status_code == 403
 
@@ -126,3 +126,17 @@ def test_console_is_served_under_a_same_origin_content_security_policy(client):
     assert "connect-src 'self'" in csp
     assert "'unsafe-eval'" not in csp.replace("'wasm-unsafe-eval'", "")
     assert "frame-ancestors 'none'" in csp
+
+
+def test_link_endpoint_logs_emulator_failure_instead_of_hiding_it(tmp_path, caplog):
+    class BrokenEmulator:
+        def status(self):
+            raise ConnectionError("toxiproxy down")
+
+    app = create_app(Settings(exercise=False, library=False, demo_controls=True, role="edge", web_dist=None, var_dir=str(tmp_path)))
+    app.state.node.toxiproxy = BrokenEmulator()
+    with TestClient(app) as c:
+        body = c.get("/api/link").json()
+    assert body["emulation"] is None
+    record = next(r for r in caplog.records if r.getMessage() == "Link emulator unreachable")
+    assert record.fields["error"] == "ConnectionError"

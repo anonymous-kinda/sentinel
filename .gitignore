@@ -38,3 +38,4 @@ web/test-results/
 *.tsbuildinfo
 deploy/aws/terraform/terraform.tfvars
 deploy/ansible/inventory.ini
+harness/results/

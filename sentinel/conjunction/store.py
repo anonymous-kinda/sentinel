@@ -54,6 +54,13 @@ CREATE TABLE IF NOT EXISTS assessments (
     PRIMARY KEY (sha256, engine_version)
 );
 
+CREATE TABLE IF NOT EXISTS remote_summaries (
+    event_id    TEXT PRIMARY KEY,
+    summary     TEXT NOT NULL,
+    origin      TEXT NOT NULL,
+    received_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS quarantine (
     sha256      TEXT PRIMARY KEY,
     raw         BLOB NOT NULL,
@@ -204,6 +211,34 @@ class ConjunctionStore:
                 "SELECT sha256, code, detail, source, received_at FROM quarantine ORDER BY received_at"
             ).fetchall()
         return [dict(r) for r in rows]
+
+    # --- summaries asserted by another node (edge) ------------------------------
+    def put_remote_summary(self, event_id: str, summary: dict, origin: str, received_at: str) -> None:
+        with self._lock:
+            self._db.execute(
+                "INSERT OR REPLACE INTO remote_summaries VALUES (?,?,?,?)",
+                (event_id, json.dumps(summary), origin, received_at),
+            )
+
+    def remote_summaries(self) -> dict[str, dict]:
+        with self._lock:
+            rows = self._db.execute("SELECT event_id, summary, origin, received_at FROM remote_summaries").fetchall()
+        return {
+            r["event_id"]: {**json.loads(r["summary"]), "_origin": r["origin"], "_received_at": r["received_at"]}
+            for r in rows
+        }
+
+    def has_cdm_prefix(self, prefix: str) -> bool:
+        with self._lock:
+            return (
+                self._db.execute("SELECT 1 FROM cdm_messages WHERE sha256 LIKE ?", (prefix + "%",)).fetchone()
+                is not None
+            )
+
+    def cdm_by_prefix(self, prefix: str) -> CdmRow | None:
+        with self._lock:
+            r = self._db.execute("SELECT * FROM cdm_messages WHERE sha256 LIKE ?", (prefix + "%",)).fetchone()
+        return None if r is None else self._cdm(r)
 
     def clear_derived(self) -> None:
         """Drop everything derivable from raw messages (for rebuild)."""

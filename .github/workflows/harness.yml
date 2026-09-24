@@ -1,0 +1,51 @@
+name: ddil-harness
+
+# Real processes over a shaped link: two nats-servers joined by a leafnode,
+# Toxiproxy on that TCP connection, two Sentinel nodes. Runs on changes to
+# the layers it exercises, and nightly with a longer denial.
+on:
+  pull_request:
+    paths: ["sentinel/sync/**", "sentinel/bus/**", "sentinel/crdt/**", "sentinel/ops/**", "sentinel/linkstate/**", "harness/**", "deploy/nats/**"]
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scenario:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [denied, limited, intermittent, degraded, recovery]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          activate-environment: true
+      - run: uv pip install -e ".[dev]"
+      - name: Pinned tools (sha256-verified)
+        run: uv run python scripts/fetch_tools.py nats-server toxiproxy
+      - name: Run ${{ matrix.scenario }}
+        run: |
+          DENIAL=20
+          if [ "${{ github.event_name }}" = "schedule" ]; then DENIAL=900; fi
+          uv run python -m harness.run ${{ matrix.scenario }} --denial-s $DENIAL
+      - name: Summary
+        if: always()
+        run: |
+          uv run python -c "
+          import json,pathlib
+          r=json.loads(pathlib.Path('harness/results/${{ matrix.scenario }}.json').read_text())
+          print('| assertion | result |'); print('|---|---|')
+          [print(f\"| {a['name']} | {'PASS' if a['passed'] else 'FAIL'} {a['detail']} |\") for a in r['assertions']]
+          " >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ddil-${{ matrix.scenario }}
+          path: harness/results/

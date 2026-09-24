@@ -34,3 +34,17 @@ forbidden_modules =
     sentinel.conjunction
     sentinel.api
     sentinel.bus
+
+[importlinter:contract:sync-is-mission-agnostic]
+name = Sync, CRDTs and operator data know nothing about any mission module
+type = forbidden
+source_modules =
+    sentinel.sync
+    sentinel.crdt
+    sentinel.ops
+    sentinel.linkstate
+forbidden_modules =
+    sentinel.conjunction
+    sentinel.risk
+    sentinel.cdm
+    sentinel.api

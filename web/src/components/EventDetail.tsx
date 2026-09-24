@@ -7,8 +7,22 @@ import { DilutionCurve } from "./DilutionCurve";
 import { HistorySpark } from "./HistorySpark";
 import { BandChip } from "./EventList";
 import { PcValue } from "./PcValue";
+import { OpsPanel } from "./OpsPanel";
+import { VerificationChip } from "./Verification";
 
-export function EventDetail({ eventId, version, slot }: { eventId: string; version: number; slot?: React.ReactNode }) {
+export function EventDetail({
+  eventId,
+  version,
+  slot,
+  readOnly = true,
+  hasOps = false,
+}: {
+  eventId: string;
+  version: number;
+  slot?: React.ReactNode;
+  readOnly?: boolean;
+  hasOps?: boolean;
+}) {
   const { data: detail } = useResource<Detail>(`/api/events/${encodeURIComponent(eventId)}`, version);
   const { data: encounter } = useResource<Encounter>(`/api/events/${encodeURIComponent(eventId)}/encounter`, version);
   const { data: curve } = useResource<Curve>(`/api/events/${encodeURIComponent(eventId)}/dilution-curve`, version);
@@ -22,6 +36,49 @@ export function EventDetail({ eventId, version, slot }: { eventId: string; versi
   const latest = detail.history[detail.history.length - 1];
   const diag = a.diagnostics as Record<string, number | string | boolean | string[] | null>;
 
+  if (!latest) {
+    // Known on this node only from the hub's summary.
+    return (
+      <div className="detail">
+        <header className="detail-head">
+          <div className="detail-title">
+            <span className="obj-primary">{s.primary.name ?? s.primary.id}</span>
+            <span className="vs">×</span>
+            <span className="obj-secondary">{s.secondary.name ?? s.secondary.id}</span>
+          </div>
+          <div className="detail-meta">
+            <VerificationChip v="HUB_ASSERTED" />
+            <span>TCA {dtg(s.tca)}</span>
+            <span>
+              MCP {dtg(s.mcp)} <b>{countdown(s.time_to_mcp_s)}</b>
+            </span>
+          </div>
+        </header>
+        <section className="headline">
+          <PcValue assessment={a} size="lg" />
+          <BandChip band={s.band} worst={s.worst_case_band} />
+          <div className="kv-grid">
+            <span>miss</span>
+            <b>{metres(a.miss_distance_m)}</b>
+            <span>rel. speed</span>
+            <b>{speed(a.relative_speed_m_s)}</b>
+          </div>
+        </section>
+        <section className="callout callout-asserted">
+          <b>Asserted by {detail.asserted_by ?? "the hub"}, not computed here.</b> Only the summary has reached this node; no
+          covariance travelled with it, so this node cannot have recomputed the Pc. The full CDM is in the sync queue and
+          will be re-assessed on arrival.
+          {s.voice && (
+            <div className="voice" title="The summary as one line, readable over a voice net">
+              {s.voice}
+            </div>
+          )}
+        </section>
+        {hasOps && <OpsPanel eventId={eventId} version={version} readOnly={readOnly} />}
+      </div>
+    );
+  }
+
   return (
     <div className="detail">
       <header className="detail-head">
@@ -32,6 +89,7 @@ export function EventDetail({ eventId, version, slot }: { eventId: string; versi
         </div>
         <div className="detail-meta">
           <span className={`chip dc-${s.data_class.toLowerCase()}`}>{s.data_class}</span>
+          <VerificationChip v={s.verification} />
           <span>TCA {dtg(s.tca)}</span>
           {s.time_to_tca_s < 0 ? (
             <span className="muted">historical event</span>
@@ -84,6 +142,8 @@ export function EventDetail({ eventId, version, slot }: { eventId: string; versi
       )}
 
       {slot}
+
+      {hasOps && <OpsPanel eventId={eventId} version={version} readOnly={readOnly} />}
 
       <section className="plots">
         {encounter && <BPlane encounter={encounter} log10k={log10k} />}

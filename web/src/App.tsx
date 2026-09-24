@@ -5,6 +5,7 @@ import { EventList } from "./components/EventList";
 import { EventDetail } from "./components/EventDetail";
 import { Globe } from "./components/Globe";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { LinkControl } from "./components/LinkControl";
 import { ValidationPanel } from "./components/ValidationPanel";
 import { sciPlain } from "./lib/format";
 import { extensionTabs, type ExtensionContext } from "./extensions";
@@ -126,6 +127,7 @@ export default function App() {
         </nav>
         <div className="status">
           {extTabs.flatMap((t) => (t.status ? [<span key={t.id}>{t.status(ctx)}</span>] : []))}
+          <LinkControl version={version} />
           <span className={`dot ${connected ? "ok" : "bad"}`} title={connected ? "live stream connected" : "stream disconnected"} />
           <span className="mono">
             {node?.node_id ?? "…"} · {node?.role ?? ""}
@@ -171,7 +173,11 @@ export default function App() {
           </section>
           <aside className="right">
             <ErrorBoundary label="Event detail">
-              {selected ? <EventDetail eventId={selected} version={version} /> : <div className="empty">Select an event.</div>}
+              {selected ? (
+                <EventDetail eventId={selected} version={version} readOnly={node?.read_only ?? true} hasOps={node?.modules.includes("ops") ?? false} />
+              ) : (
+                <div className="empty">Select an event.</div>
+              )}
             </ErrorBoundary>
           </aside>
         </main>

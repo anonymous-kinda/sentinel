@@ -2,7 +2,7 @@
 
 A DDIL-resilient conjunction assessment decision aid for satellite operators.
 
-**Status: risk engine, CDM codec and operator console implemented; engine validated against NASA CARA published cases. Sync and edge layers in progress.**
+**Status: risk engine (validated against NASA CARA), operator console, and hub/edge DDIL sync implemented and tested on a real two-node network. Army pass module, ATO evidence and AI decision layer in progress.**
 
 ![Sentinel operator console](docs/img/console.png)
 
@@ -71,6 +71,34 @@ yet implemented.
 The globe is CesiumJS (Wayfinder's rendering engine) using imagery bundled with the application, with no ion token, geocoder or CDN. A headless-browser check confirms that loading the full console makes **zero requests beyond the node**: the console works on a network with no route to the internet, or it is not a field tool.
 
 ![Validation tab](docs/img/validation.png)
+
+---
+
+## Disconnected operations: hub and edge
+
+Claim two, built and measured. Each node runs its own `nats-server` and serves its own console. The edge's server holds a leafnode link to the hub. In the harness, [Toxiproxy](https://github.com/Shopify/toxiproxy) shapes that real TCP link: black-hole (DENIED), 600 ms / 32 kB/s (DEGRADED), about 8 kbit/s (LIMITED), and repeated drops (INTERMITTENT).
+
+```bash
+make demo-local      # hub :8000, edge :8001 - the edge's LINK chip shapes the real link
+make ddil            # five scenarios on real processes -> docs/ddil-results.md
+```
+
+**Denied: the edge keeps working.** The console stays up (2.7 ms p95 while cut off). Operators triage events and record signed decisions locally, and the link state is *measured*, not configured.
+
+![Edge node while the link is denied](docs/img/edge-denied.png)
+
+**Limited: what matters crosses first.** The edge gets a summary of every event (at most 256 bytes each) within 3 s. Then full CDMs follow, earliest maneuver commit point first. Each is re-assessed locally and compared with what the hub asserted: an event is HUB-ASSERTED until then, VERIFIED once the local result matches, and MISMATCH if it doesn't. Measured on the same link with the same bytes, the most urgent full record arrives in **5.5 s with earliest-deadline-first vs 37.7 s in FIFO order**.
+
+![Sync tab over a limited link](docs/img/edge-sync.png)
+
+**Reconnect: nothing lost, nothing overwritten.** Operator data is a CRDT (property-tested under drop, duplication and reordering):
+- the hub and the edge converge to the same state;
+- two people who changed the same event's triage status while partitioned see a **CONFLICT** that names both, instead of whoever-wrote-last winning;
+- a decision made offline against a CDM that has since been superseded is flagged **REVIEW REQUIRED**.
+
+![Conflict and review-required after reconnect](docs/img/edge-conflict.png)
+
+The harness also found four NATS defaults that assume a LAN. One would have made a satellite-linked edge reconnect forever, and another let the edge silently route around its intended path. They are fixed and each is guarded by a scenario (`docs/system-design.md`, "Findings from the DDIL harness").
 
 ---
 
@@ -145,19 +173,21 @@ section 7, each tier a pytest marker:
 
 ```
 sentinel/cdm/          CCSDS 508.0-B-1 KVN codec and admission policy (ADR-001 seam)
-sentinel/risk/
-  types.py             result contract, refusal reasons, unit conventions
-  frames.py            RTN to ECI rotation (each object has its own RTN frame)
-  geometry.py          encounter-plane basis and projection
-  encounter.py         TCA refinement, encounter plane, Pc(k) curve, curvature check
-  integrate.py         the 2D collision integral and the maximum-Pc search
-  engine.py            orchestration and the applicability gate
-sentinel/validation/   loads NASA CARA published cases for tests and the report
-fixtures/cara/         NASA CARA data, unmodified, with licence, provenance, checksums
-docs/
-  system-design.md        architecture decision records
-  risk-engine-design.md   algorithm, pseudocode, test ladder
-  validation-report.md    generated: closed forms and NASA CARA comparisons
+sentinel/risk/         Foster-Estes 2D Pc, TCA refinement, dilution, applicability gate
+sentinel/conjunction/  mission module: ingest, events, triage policy, summaries, exercise scenario
+sentinel/bus/          Bus protocol: in-process and NATS implementations, node-scoped subjects
+sentinel/sync/         priority pull (edge) and manifest/fetch/ops server (hub) - mission-agnostic
+sentinel/crdt/         dots, signed decision log, multi-value registers (property-tested)
+sentinel/ops/          operator data service: decisions, triage, persistence, anti-entropy
+sentinel/triage/       class / deadline / consequence - the only thing sync knows about a mission
+sentinel/linkstate/    measured link state; Toxiproxy control for demos and the harness
+sentinel/api/          the node: FastAPI, SSE, strict CSP, static console
+sentinel/obs.py        structured logging: stable messages, values as fields
+web/                   React + TypeScript + CesiumJS console (offline imagery, no ion, no CDN)
+harness/               real two-node DDIL scenarios (nats-server + Toxiproxy, no containers)
+deploy/                bundle builder, offline installer, systemd, NATS configs, AWS Terraform, Ansible
+fixtures/cara/         NASA CARA data, unmodified, with licence, provenance and checksums
+docs/                  ADRs, risk-engine design, generated validation and DDIL reports
 ```
 
 ---

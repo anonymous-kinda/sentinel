@@ -6,7 +6,27 @@ NATS JetStream. Swapping one for the other changes no module code, which is
 the practical meaning of "modular monolith that can be decomposed".
 """
 
-from .base import Bus, Handler, Msg, Subscription, subject_matches
-from .inprocess import InProcessBus
+from .base import (
+    Bus,
+    Handler,
+    Msg,
+    NoResponders,
+    RequestTimeout,
+    Responder,
+    Subscription,
+    subject_matches,
+)
+from .inprocess import InProcessBus, LateBus
 
-__all__ = ["Bus", "Handler", "InProcessBus", "Msg", "Subscription", "subject_matches"]
+__all__ = [
+    "Bus",
+    "Handler",
+    "InProcessBus",
+    "LateBus",
+    "Msg",
+    "NoResponders",
+    "RequestTimeout",
+    "Responder",
+    "Subscription",
+    "subject_matches",
+]

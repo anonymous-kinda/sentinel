@@ -1,6 +1,7 @@
 import type { EventSummary } from "../api/types";
 import { countdown, dtg, metres } from "../lib/format";
 import { PcValue } from "./PcValue";
+import { VerificationChip } from "./Verification";
 
 export function BandChip({ band, worst }: { band: string; worst?: string | null }) {
   return (
@@ -52,7 +53,10 @@ export function EventList({
               ) : (
                 <span className="countdown past">{dtg(e.tca)}</span>
               )}
-              <BandChip band={e.band} worst={e.worst_case_band} />
+              <span className="chips">
+                <VerificationChip v={e.verification} />
+                <BandChip band={e.band} worst={e.worst_case_band} />
+              </span>
             </div>
             <div className="row-names">
               <span className="obj-primary">{e.primary.name ?? e.primary.id}</span>

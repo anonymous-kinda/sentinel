@@ -62,6 +62,7 @@ export function useStream(onEvent: (e: StreamEvent) => void): { connected: boole
       "sync.progress",
       "sync.arrival",
       "link.state",
+      "link.emulation",
       "passes.updated",
       "ai.audit",
     ];

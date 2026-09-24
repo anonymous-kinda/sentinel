@@ -1,0 +1,29 @@
+# Sentinel edge nats-server: the node's own bus, plus one leaf link to the hub.
+# The console, store and engine talk only to this server, so a denied link
+# never breaks the node - the leaf reconnects on its own.
+server_name: "${NODE_ID}"
+listen: "127.0.0.1:${CLIENT_PORT}"
+http: "127.0.0.1:${MONITOR_PORT}"
+write_deadline: "120s"
+# Detect a black-holed link in ~15 s rather than the default minutes.
+ping_interval: "5s"
+ping_max: 3
+max_payload: 1MB
+
+leafnodes {
+  reconnect: "1s"
+  remotes = [
+    {
+      url: "${HUB_LEAF_URL}"
+      compression: s2_auto
+      # The hub's INFO is ~1 kB: at 8 kbit/s plus 600 ms latency it takes
+      # longer than the 1 s default, and the leaf would reconnect forever.
+      first_info_timeout: "20s"
+      # OPSEC by configuration (ADR-010, AC-4): a ground unit's position and
+      # the pass windows computed from it never cross the link to the hub.
+      deny_exports: ["unit.>", "passes.>", "node.>"]
+      deny_imports: ["node.>"]
+      ${REMOTE_TLS}
+    }
+  ]
+}

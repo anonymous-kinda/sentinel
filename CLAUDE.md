@@ -29,3 +29,11 @@ make help                               # all make targets
 - **Module boundaries are enforced by `.importlinter`**: `bus`, `sync`, `crdt` and `triage` may not import mission modules (`risk`, `cdm`, `passes`).
 - **Data class on everything**: REAL, DERIVED or EXERCISE. Exercise data carries `ORIGINATOR=SENTINEL-EXERCISE`.
 - **Nothing from `../prep/` ever enters this repo.** Privateer products are mentioned only as integration targets, with the disclaimer in `docs/adapters/wayfinder.md`.
+
+## Engineering rules (the maintainer's global rules)
+
+- **TDD, strictly.** Write the test, run it, watch it fail for the right reason, then implement and prove it passes. Do not assume a change is correct.
+- **SOLID, DRY, KISS, clean code.** Small functions with one job. Depend on protocols, not concrete classes: `bus.Bus`, `sync.records.ReferenceRecords`. No speculative abstraction.
+- **Logging: stable messages, structured fields.** Use `log = get_logger(__name__)` from `sentinel.obs`, then write `log.info("Sync cycle failed", error=..., hub_id=...)`. Never interpolate values into the message; the message is the low-cardinality key you search and alert on.
+- **Errors.** Handle them where they can be handled. Log them with context fields. Never swallow them silently.
+- **Performance** only where measured; readability first.

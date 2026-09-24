@@ -11,7 +11,6 @@ import asyncio
 import contextlib
 import dataclasses
 import json
-import logging
 import pathlib
 from collections.abc import AsyncIterator
 
@@ -20,17 +19,21 @@ from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .. import __version__
-from ..bus import Bus, InProcessBus, Msg
+from ..bus import Bus, LateBus, Msg, subjects
 from ..clock import Clock, from_env
 from ..conjunction.exercise import generate
 from ..conjunction.service import ConjunctionService
 from ..conjunction.store import ConjunctionStore
+from ..conjunction.sync_adapter import ConjunctionRecords
+from ..linkstate import LinkMonitor
+from ..obs import get_logger
+from ..ops import DECISIONS, OpsService, load_identity
+from ..sync import SyncAgent, SyncServer
 from .settings import Settings
 from .validation_view import ValidationView
 
-log = logging.getLogger("sentinel.node")
+log = get_logger("sentinel.node")
 
-STREAM_SUBJECTS = ("cdm.>", "ops.>", "sync.>", "link.>", "passes.>", "ai.>")
 
 CSP = "; ".join(
     [
@@ -53,10 +56,15 @@ CSP = "; ".join(
 class Node:
     settings: Settings
     clock: Clock
-    bus: Bus
+    bus: LateBus
     store: ConjunctionStore
     conjunctions: ConjunctionService
     validation: ValidationView
+    ops: OpsService
+    link: LinkMonitor
+    sync_agent: SyncAgent | None = None
+    sync_server: SyncServer | None = None
+    toxiproxy: object | None = None
     tasks: list[asyncio.Task] = dataclasses.field(default_factory=list)
     extensions: dict = dataclasses.field(default_factory=dict)
 
@@ -67,7 +75,7 @@ async def _load_library(node: Node) -> int:
 
     directory = CARA_DIR / "PcTestCaseCDMs"
     if not directory.exists():
-        log.warning("NASA CARA library not present at %s; skipping", directory)
+        log.warning("Reference library missing", path=str(directory))
         return 0
     count = 0
     for path in sorted(directory.glob("*.cdm")):
@@ -87,10 +95,39 @@ async def _exercise_feeder(node: Node) -> None:
 
 def build_node(settings: Settings, clock: Clock | None = None, bus: Bus | None = None) -> Node:
     clock = clock or from_env()
-    bus = bus or InProcessBus()
+    late = LateBus(bus) if bus is not None else LateBus()
     store = ConjunctionStore(settings.db_path)
-    service = ConjunctionService(store, bus, clock)
-    return Node(settings, clock, bus, store, service, ValidationView())
+    conjunctions = ConjunctionService(store, late, clock, node_id=settings.node_id)
+    var = pathlib.Path(settings.var_dir)
+    var.mkdir(parents=True, exist_ok=True)
+    key, trust = load_identity(
+        settings.node_id, var, pathlib.Path(settings.trust_file) if settings.trust_file else None
+    )
+    ops = OpsService(
+        settings.node_id, key, trust, late, clock,
+        db_path=settings.db_path, current_ref=conjunctions.current_ref,
+    )
+    node = Node(settings, clock, late, store, conjunctions, ValidationView(), ops, LinkMonitor())
+    if settings.toxiproxy_api or settings.demo_controls:
+        from ..linkstate.toxiproxy import ToxiproxyControl
+
+        node.toxiproxy = ToxiproxyControl(settings.toxiproxy_api)
+    return node
+
+
+async def _connect_nats(node: Node) -> None:
+    """Swap the in-process transport for this node's own nats-server."""
+    from ..bus.nats_bus import NatsBus
+
+    for attempt in range(60):
+        try:
+            node.bus.inner = await NatsBus.connect(node.settings.nats_url, f"sentinel-{node.settings.node_id}")
+            return
+        except Exception as exc:  # noqa: BLE001 - nats-server may still be starting
+            if attempt == 59:
+                raise
+            log.info("Waiting for nats-server", attempt=attempt, error=type(exc).__name__)
+            await asyncio.sleep(0.5)
 
 
 def create_app(
@@ -104,9 +141,23 @@ def create_app(
 
     @contextlib.asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        if settings.nats_url:
+            await _connect_nats(node)
+        records = ConjunctionRecords(node.conjunctions)
+        if settings.role == "hub":
+            node.sync_server = SyncServer(node.bus, records, node.ops, settings.node_id)
+            await node.sync_server.start()
+        if settings.role == "edge" and settings.hub_id:
+            node.sync_agent = SyncAgent(
+                node.bus, records, node.ops, node.clock, settings.node_id, settings.hub_id,
+                node.link, mode=settings.sync_mode, interval_s=settings.sync_interval_s,
+                urgent_window_s=node.conjunctions.policy.urgent_window_s,
+            )
+            if start_background:
+                node.tasks.append(asyncio.create_task(node.sync_agent.run()))
         if settings.library:
             loaded = await _load_library(node)
-            log.info("loaded %d NASA CARA reference events", loaded)
+            log.info("Reference library loaded", events=loaded)
         if settings.exercise and start_background:
             node.tasks.append(asyncio.create_task(_exercise_feeder(node)))
         for hook in node.extensions.get("startup", []):
@@ -152,7 +203,9 @@ def create_app(
             "now": node.clock.now().isoformat(),
             "read_only": settings.read_only,
             "demo_controls": settings.demo_controls,
-            "modules": ["conjunction", *node.extensions.get("modules", [])],
+            "modules": ["conjunction", "ops", *(["sync"] if settings.role != "standalone" else []),
+                        *node.extensions.get("modules", [])],
+            "hub_id": settings.hub_id,
             "policy": dataclasses.asdict(node.conjunctions.policy),
         }
 
@@ -198,6 +251,94 @@ def create_app(
         response.status_code = {"accepted": 201, "duplicate": 200, "rejected": 422}[result.status]
         return dataclasses.asdict(result)
 
+    # ------------------------------------------------------- operator data
+    def operator(request: Request) -> str:
+        return request.headers.get("X-Sentinel-Operator") or f"operator@{settings.node_id}"
+
+    def writable() -> None:
+        if settings.read_only:
+            raise HTTPException(403, "this node is read-only")
+
+    @app.get("/api/events/{event_id}/ops")
+    def event_ops(event_id: str) -> dict:
+        return {
+            "entries": node.ops.entries(event_id),
+            "annotations": node.ops.annotations(event_id),
+            "current_ref": node.conjunctions.current_ref(event_id),
+            "decisions": list(DECISIONS),
+        }
+
+    @app.post("/api/events/{event_id}/decision")
+    async def decision(event_id: str, request: Request) -> dict:
+        writable()
+        body = await request.json()
+        if body.get("decision") not in DECISIONS:
+            raise HTTPException(422, f"decision must be one of {DECISIONS}")
+        return await node.ops.append(
+            event_id,
+            "DECISION",
+            {"decision": body["decision"], "rationale": str(body.get("rationale", ""))[:2000]},
+            operator(request),
+        )
+
+    @app.post("/api/events/{event_id}/note")
+    async def note(event_id: str, request: Request) -> dict:
+        writable()
+        body = await request.json()
+        return await node.ops.append(event_id, "NOTE", {"text": str(body.get("text", ""))[:2000]}, operator(request))
+
+    @app.post("/api/events/{event_id}/annotation")
+    async def annotation(event_id: str, request: Request) -> dict:
+        writable()
+        body = await request.json()
+        try:
+            return await node.ops.annotate(event_id, body.get("field"), body.get("value"), operator(request))
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+
+    @app.get("/api/ops/digest")
+    def ops_digest() -> dict:
+        return {**node.ops.digest(), "conflicts": node.ops.conflicts(), "rejected": node.ops.log.rejected}
+
+    # ------------------------------------------------------ link and sync
+    @app.get("/api/link")
+    def link() -> dict:
+        out = {"role": settings.role, "hub_id": settings.hub_id, "monitor": node.link.snapshot()}
+        if node.toxiproxy is not None and settings.demo_controls:
+            try:
+                out["emulation"] = node.toxiproxy.status()
+            except Exception as exc:  # noqa: BLE001 - report, don't fail the endpoint
+                log.warning("Link emulator unreachable", error=type(exc).__name__)
+                out["emulation"] = None
+        return out
+
+    @app.post("/api/demo/link")
+    async def demo_link(request: Request) -> dict:
+        client = request.client.host if request.client else ""
+        if not settings.demo_controls or client not in ("127.0.0.1", "::1", "localhost", "testclient"):
+            raise HTTPException(403, "link emulation controls are disabled on this node")
+        if node.toxiproxy is None:
+            raise HTTPException(503, "no link emulator configured")
+        body = await request.json()
+        try:
+            status = node.toxiproxy.apply(str(body.get("preset")))
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        await node.bus.publish(
+            subjects.local(settings.node_id, "link.emulation"),
+            json.dumps(status).encode(),
+            {"Sentinel-Kind": "link.emulation"},
+        )
+        return status
+
+    @app.get("/api/sync")
+    def sync_status() -> dict:
+        if node.sync_agent is not None:
+            return {"role": "edge", **node.sync_agent.status()}
+        if node.sync_server is not None:
+            return {"role": "hub", "requests": node.sync_server.requests}
+        return {"role": settings.role}
+
     @app.get("/api/quarantine")
     def quarantine() -> list[dict]:
         return node.conjunctions.quarantined()
@@ -215,7 +356,7 @@ def create_app(
             with contextlib.suppress(asyncio.QueueFull):
                 queue.put_nowait(msg)
 
-        subs = [await node.bus.subscribe(s, enqueue) for s in STREAM_SUBJECTS]
+        subs = [await node.bus.subscribe(subjects.local_all(settings.node_id), enqueue)]
 
         async def events_out() -> AsyncIterator[str]:
             try:

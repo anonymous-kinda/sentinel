@@ -15,8 +15,15 @@ def _serve(args: argparse.Namespace) -> int:
     import uvicorn
 
     from .api import create_app
+    from .obs import configure_logging
 
-    uvicorn.run(create_app(), host=args.host, port=args.port, log_level=args.log_level)
+    configure_logging(level=args.log_level)
+    # log_config=None: uvicorn logs through Sentinel's structured handler.
+    # No access log: requests are logged at the TLS proxy in front.
+    uvicorn.run(
+        create_app(), host=args.host, port=args.port,
+        log_level=args.log_level, log_config=None, access_log=False,
+    )
     return 0
 
 

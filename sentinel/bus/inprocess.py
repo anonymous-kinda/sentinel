@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 
-from .base import Handler, Msg, subject_matches
+from ..obs import get_logger
+from .base import Handler, Msg, NoResponders, RequestTimeout, Responder, subject_matches
 
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 
 class _Sub:
@@ -31,6 +31,7 @@ class InProcessBus:
 
     def __init__(self) -> None:
         self._subs: list[_Sub] = []
+        self._responders: dict[str, Responder] = {}
         self.failures = 0
 
     async def publish(self, subject: str, data: bytes, headers: dict[str, str] | None = None) -> None:
@@ -41,13 +42,64 @@ class InProcessBus:
                     await sub.handler(msg)
                 except Exception:  # noqa: BLE001 - isolate subscribers
                     self.failures += 1
-                    log.exception("bus handler for %s failed on %s", sub.pattern, subject)
+                    log.exception("Bus handler failed", pattern=sub.pattern, subject=subject)
 
     async def subscribe(self, subject: str, handler: Handler) -> _Sub:
         sub = _Sub(self, subject, handler)
         self._subs.append(sub)
         return sub
 
+    async def request(
+        self, subject: str, data: bytes, timeout: float, headers: dict[str, str] | None = None
+    ) -> Msg:
+        for pattern, responder in self._responders.items():
+            if subject_matches(pattern, subject):
+                try:
+                    body, reply_headers = await asyncio.wait_for(
+                        responder(Msg(subject, data, dict(headers or {}))), timeout
+                    )
+                except TimeoutError as exc:
+                    raise RequestTimeout(subject) from exc
+                return Msg(subject, body, reply_headers)
+        raise NoResponders(subject)
+
+    async def serve(self, subject: str, responder: Responder) -> _Sub:
+        self._responders[subject] = responder
+
+        async def _noop(_msg: Msg) -> None:
+            return None
+
+        sub = _Sub(self, subject, _noop)
+        return sub
+
     async def close(self) -> None:
         self._subs.clear()
+        self._responders.clear()
         await asyncio.sleep(0)
+
+
+class LateBus:
+    """A bus whose transport is chosen after construction.
+
+    Services are built synchronously; NATS connects asynchronously at
+    startup. LateBus lets services hold one reference while the node swaps
+    the in-process transport for NATS before anything subscribes.
+    """
+
+    def __init__(self, inner=None):
+        self.inner = inner or InProcessBus()
+
+    async def publish(self, subject, data, headers=None):
+        await self.inner.publish(subject, data, headers)
+
+    async def subscribe(self, subject, handler):
+        return await self.inner.subscribe(subject, handler)
+
+    async def request(self, subject, data, timeout, headers=None):
+        return await self.inner.request(subject, data, timeout, headers)
+
+    async def serve(self, subject, responder):
+        return await self.inner.serve(subject, responder)
+
+    async def close(self):
+        await self.inner.close()

@@ -3,7 +3,7 @@ SHELL := /bin/bash
 UV ?= uv
 export PATH := $(HOME)/.local/bin:$(PATH)
 
-.PHONY: help install test lint web web-test serve dev report demo clean bundle airgap-verify tools
+.PHONY: help install test lint web web-test serve dev report demo clean bundle airgap-verify tools demo-local ddil
 
 help:  ## list targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -45,3 +45,10 @@ airgap-verify:  ## install the x86_64 bundle and run it with networking disabled
 
 tools:  ## fetch pinned nats-server, toxiproxy, uv into .tools/ (sha256-verified)
 	$(UV) run python scripts/fetch_tools.py
+
+demo-local: web tools  ## hub on :8000 and edge on :8001 over an emulated link (Ctrl-C to stop)
+	$(UV) run python -m harness.demo
+
+ddil:  ## run all four DDIL scenarios on a real two-node cluster, then write docs/ddil-results.md
+	$(UV) run python -m harness.run all
+	$(UV) run python -m harness.report
