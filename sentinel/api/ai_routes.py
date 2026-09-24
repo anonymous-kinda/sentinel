@@ -23,6 +23,7 @@ from ..ai.assistant import Assistant
 from ..ai.tools import ToolError, ToolRegistry
 from ..audit import AuditLog
 from ..obs import get_logger
+from .bodies import json_object, read_only_safe
 from .identity import operator_of
 
 log = get_logger(__name__)
@@ -108,16 +109,15 @@ def register(app: FastAPI, node) -> None:
         }
 
     @app.post("/api/ai/ask")
+    @read_only_safe
     async def ai_ask(request: Request) -> dict:
-        text = _question(await request.json())
+        text = _question(await json_object(request))
         answer = await assistant.ask(text, operator_of(request, settings.node_id))
         return answer.to_dict()
 
     @app.post("/api/ai/confirm", status_code=201)
     async def ai_confirm(request: Request) -> dict:
-        if settings.read_only:
-            raise HTTPException(403, "this node is read-only")
-        body = await request.json()
+        body = await json_object(request)
         try:
             return await assistant.confirm(
                 str(body.get("draft_id", "")),

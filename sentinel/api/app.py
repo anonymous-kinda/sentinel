@@ -14,7 +14,7 @@ import json
 import pathlib
 from collections.abc import AsyncIterator, Callable
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -33,6 +33,7 @@ from ..passes.element_store import ElementStore, default_snapshot
 from ..passes.sync_adapter import PREFIX as ELEMENT_PREFIX
 from ..passes.sync_adapter import ElementRecords
 from ..sync import SyncAgent, SyncServer
+from .bodies import BodyLimit, json_object, refuse_writes_on_read_only
 from .identity import operator_of
 from .records import CompositeRecords
 from .settings import Settings
@@ -232,8 +233,12 @@ def create_app(
             await hook(node)
         await node.bus.close()
 
-    app = FastAPI(title="Sentinel", version=__version__, lifespan=lifespan)
+    app = FastAPI(
+        title="Sentinel", version=__version__, lifespan=lifespan,
+        dependencies=[Depends(refuse_writes_on_read_only)],
+    )
     app.state.node = node
+    app.add_middleware(BodyLimit)
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
@@ -305,11 +310,7 @@ def create_app(
 
     @app.post("/api/ingest/cdm")
     async def ingest(request: Request, response: Response) -> dict:
-        if settings.read_only:
-            raise HTTPException(403, "this node is read-only")
         raw = await request.body()
-        if len(raw) > 1_000_000:
-            raise HTTPException(413, "a CDM is a few kilobytes; refusing a megabyte")
         result = await node.conjunctions.ingest(raw, "api-upload", "REAL")
         response.status_code = {"accepted": 201, "duplicate": 200, "rejected": 422}[result.status]
         return dataclasses.asdict(result)
@@ -317,10 +318,6 @@ def create_app(
     # ------------------------------------------------------- operator data
     def operator(request: Request) -> str:
         return operator_of(request, settings.node_id)
-
-    def writable() -> None:
-        if settings.read_only:
-            raise HTTPException(403, "this node is read-only")
 
     @app.get("/api/events/{event_id}/ops")
     def event_ops(event_id: str) -> dict:
@@ -333,8 +330,7 @@ def create_app(
 
     @app.post("/api/events/{event_id}/decision")
     async def decision(event_id: str, request: Request) -> dict:
-        writable()
-        body = await request.json()
+        body = await json_object(request)
         if body.get("decision") not in DECISIONS:
             raise HTTPException(422, f"decision must be one of {DECISIONS}")
         return await node.ops.append(
@@ -346,14 +342,12 @@ def create_app(
 
     @app.post("/api/events/{event_id}/note")
     async def note(event_id: str, request: Request) -> dict:
-        writable()
-        body = await request.json()
+        body = await json_object(request)
         return await node.ops.append(event_id, "NOTE", {"text": str(body.get("text", ""))[:2000]}, operator(request))
 
     @app.post("/api/events/{event_id}/annotation")
     async def annotation(event_id: str, request: Request) -> dict:
-        writable()
-        body = await request.json()
+        body = await json_object(request)
         try:
             return await node.ops.annotate(event_id, body.get("field"), body.get("value"), operator(request))
         except ValueError as exc:
@@ -382,7 +376,7 @@ def create_app(
             raise HTTPException(403, "link emulation controls are disabled on this node")
         if node.toxiproxy is None:
             raise HTTPException(503, "no link emulator configured")
-        body = await request.json()
+        body = await json_object(request)
         try:
             status = node.toxiproxy.apply(str(body.get("preset")))
         except ValueError as exc:

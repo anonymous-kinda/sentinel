@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import dataclasses
 import math
-from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from starlette.concurrency import run_in_threadpool
@@ -22,6 +21,7 @@ from ..cdm import emit
 from ..obs import get_logger
 from ..screening.derived_cdm import derived_cdm, nearest_millisecond
 from ..screening.screen import CloseApproach, ScreeningRefused, ScreeningResult, screen
+from .bodies import json_object
 
 log = get_logger(__name__)
 
@@ -40,13 +40,9 @@ class ScreeningRequest:
 
 
 def register(app: FastAPI, node) -> None:
-    settings = node.settings
-
     @app.post("/api/screening")
     async def screening(request: Request) -> dict:
-        if settings.read_only:
-            raise HTTPException(403, "this node is read-only")
-        asked = _request(await _json(request))
+        asked = _request(await json_object(request))
         elements = node.elements.latest()
         start = node.clock.now()
         try:
@@ -66,16 +62,7 @@ def register(app: FastAPI, node) -> None:
         return _response(asked, result, approaches)
 
 
-async def _json(request: Request) -> Any:
-    try:
-        return await request.json()
-    except ValueError as exc:
-        raise HTTPException(422, "body is not JSON") from exc
-
-
-def _request(body: Any) -> ScreeningRequest:
-    if not isinstance(body, dict):
-        raise HTTPException(422, "body must be a JSON object")
+def _request(body: dict) -> ScreeningRequest:
     unknown = sorted(set(body) - set(FIELDS))
     if unknown:
         raise HTTPException(422, f"{unknown[0]} is not a screening field")
