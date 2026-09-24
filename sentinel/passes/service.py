@@ -81,6 +81,7 @@ class PassReport:
 @dataclasses.dataclass(frozen=True)
 class CatalogEntry:
     imager: Imager
+    object_name: str              # the element set's OBJECT_NAME, as windows carry it
     element_epoch: dt.datetime
     element_age_days: float
 
@@ -233,4 +234,6 @@ def _ages(element_sets, when: dt.datetime) -> ElementAges:
 
 
 def _catalog_entry(imager: Imager, element_set: ElementSet, now: dt.datetime) -> CatalogEntry:
-    return CatalogEntry(imager, element_epoch(dict(element_set)), _age_days(element_set, now))
+    return CatalogEntry(
+        imager, element_set["OBJECT_NAME"], element_epoch(dict(element_set)), _age_days(element_set, now)
+    )

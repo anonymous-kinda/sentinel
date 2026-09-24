@@ -35,7 +35,7 @@ def track(snapshot):
 
 
 def test_thirty_minutes_at_the_stated_step_ends_included(track):
-    assert STEP_S == 20.0
+    assert STEP_S == 20
     assert len(track) == 91
     assert all(len(p) == 3 for p in track)
 

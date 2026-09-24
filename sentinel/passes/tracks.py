@@ -19,7 +19,7 @@ from skyfield.timelib import Timescale
 from .elements import ElementSet, ElementSetError
 from .interval import require_interval
 
-STEP_S = 20.0
+STEP_S = 20
 MAX_TRACK = dt.timedelta(minutes=30)
 
 

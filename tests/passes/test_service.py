@@ -223,6 +223,7 @@ def test_the_catalog_pairs_each_imager_with_its_element_set_age(tmp_path):
     first = entries[0]
     epoch = dt.datetime.fromisoformat(h.store.latest()[first.imager.norad_id]["EPOCH"]).replace(tzinfo=dt.UTC)
     assert first.element_epoch == epoch
+    assert first.object_name == h.store.latest()[first.imager.norad_id]["OBJECT_NAME"]
     assert first.element_age_days == pytest.approx((START - epoch).total_seconds() / 86400)
     assert first.stale is False
 

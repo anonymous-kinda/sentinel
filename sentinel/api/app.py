@@ -28,8 +28,12 @@ from ..conjunction.sync_adapter import ConjunctionRecords
 from ..linkstate import LinkMonitor
 from ..obs import get_logger
 from ..ops import DECISIONS, OpsService, load_identity
+from ..passes.element_store import ElementStore, default_snapshot
+from ..passes.sync_adapter import PREFIX as ELEMENT_PREFIX
+from ..passes.sync_adapter import ElementRecords
 from ..sync import SyncAgent, SyncServer
 from .identity import operator_of
+from .records import CompositeRecords
 from .settings import Settings
 from .validation_view import ValidationView
 
@@ -63,6 +67,7 @@ class Node:
     validation: ValidationView
     ops: OpsService
     link: LinkMonitor
+    elements: ElementStore = dataclasses.field(default_factory=ElementStore)
     sync_agent: SyncAgent | None = None
     sync_server: SyncServer | None = None
     toxiproxy: object | None = None
@@ -94,6 +99,41 @@ async def _exercise_feeder(node: Node) -> None:
         await node.conjunctions.ingest(item.kvn.encode(), "exercise-feed", "EXERCISE")
 
 
+def _element_snapshot(settings: Settings) -> pathlib.Path | None:
+    """Which OMM snapshot this node starts from. A hub or standalone node
+    loads the vendored public snapshot unless told otherwise; an edge loads
+    one only if configured, and otherwise receives element sets from its
+    hub through sync."""
+    if settings.elements_path:
+        return pathlib.Path(settings.elements_path)
+    return None if settings.role == "edge" else default_snapshot()
+
+
+def _load_elements(settings: Settings) -> ElementStore:
+    store = ElementStore()
+    path = _element_snapshot(settings)
+    if path is None:
+        return store
+    if not path.exists():
+        log.warning("Element snapshot missing", path=str(path), role=settings.role)
+        return store
+    loaded = store.load_snapshot(path, source=path.name)
+    log.info("Element sets loaded", path=str(path), accepted=loaded.accepted, rejected=loaded.rejected)
+    return store
+
+
+def _sync_records(node: Node) -> CompositeRecords:
+    """Every mission module's reference data behind one sync interface:
+    conjunction CDMs by default, element sets by their `omm:` prefix."""
+
+    async def elements_changed() -> None:
+        for hook in node.extensions.get("elements_changed", []):
+            await hook(node)
+
+    elements = ElementRecords(node.elements, node.clock, on_accepted=elements_changed)
+    return CompositeRecords(ConjunctionRecords(node.conjunctions), {ELEMENT_PREFIX: elements})
+
+
 def build_node(settings: Settings, clock: Clock | None = None, bus: Bus | None = None) -> Node:
     clock = clock or from_env()
     late = LateBus(bus) if bus is not None else LateBus()
@@ -108,7 +148,10 @@ def build_node(settings: Settings, clock: Clock | None = None, bus: Bus | None =
         settings.node_id, key, trust, late, clock,
         db_path=settings.db_path, current_ref=conjunctions.current_ref,
     )
-    node = Node(settings, clock, late, store, conjunctions, ValidationView(), ops, LinkMonitor())
+    node = Node(
+        settings, clock, late, store, conjunctions, ValidationView(), ops, LinkMonitor(),
+        elements=_load_elements(settings),
+    )
     if settings.toxiproxy_api or settings.demo_controls:
         from ..linkstate.toxiproxy import ToxiproxyControl
 
@@ -144,7 +187,7 @@ def create_app(
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if settings.nats_url:
             await _connect_nats(node)
-        records = ConjunctionRecords(node.conjunctions)
+        records = _sync_records(node)
         if settings.role == "hub":
             node.sync_server = SyncServer(node.bus, records, node.ops, settings.node_id)
             await node.sync_server.start()
