@@ -1,0 +1,53 @@
+# Install from the bundle. The integrity check happens twice: here, against
+# the published .sha256 of the tarball, and inside install.sh against the
+# per-file SHA256SUMS. From M4 the tarball's cosign signature is verified
+# before either (SI-7, CM-14): an unsigned bundle is never installed.
+- name: Bundle names
+  ansible.builtin.set_fact:
+    bundle_name: "sentinel-{{ sentinel_version }}-{{ sentinel_arch }}"
+
+- name: Copy bundle and its digest
+  ansible.builtin.copy:
+    src: "{{ sentinel_bundle_dir }}/{{ item }}"
+    dest: "/var/tmp/{{ item }}"
+    mode: "0600"
+  loop:
+    - "{{ bundle_name }}.tar.gz"
+    - "{{ bundle_name }}.tar.gz.sha256"
+
+- name: Verify bundle digest before unpacking
+  ansible.builtin.command: sha256sum --strict -c {{ bundle_name }}.tar.gz.sha256
+  args:
+    chdir: /var/tmp
+  changed_when: false
+
+- name: Unpack
+  ansible.builtin.unarchive:
+    src: "/var/tmp/{{ bundle_name }}.tar.gz"
+    dest: /var/tmp
+    remote_src: true
+
+- name: Node settings
+  ansible.builtin.template:
+    src: sentinel.env.j2
+    dest: "{{ sentinel_prefix }}/sentinel.env"
+    mode: "0640"
+  notify: Restart sentinel
+
+- name: Install (offline, hash-pinned)
+  ansible.builtin.command: ./install.sh
+  args:
+    chdir: "/var/tmp/{{ bundle_name }}"
+  environment:
+    PREFIX: "{{ sentinel_prefix }}"
+    SENTINEL_ROLE: "{{ sentinel_role }}"
+    SYSTEMD: "1"
+  register: install
+  changed_when: "'installed' in install.stdout"
+  notify: Restart sentinel
+
+- name: Service running
+  ansible.builtin.service:
+    name: sentinel
+    state: started
+    enabled: true

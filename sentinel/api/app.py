@@ -32,6 +32,22 @@ log = logging.getLogger("sentinel.node")
 
 STREAM_SUBJECTS = ("cdm.>", "ops.>", "sync.>", "link.>", "passes.>", "ai.>")
 
+CSP = "; ".join(
+    [
+        "default-src 'self'",
+        "script-src 'self' 'wasm-unsafe-eval'",  # Cesium decoders are WebAssembly; JS eval stays blocked
+        "style-src 'self' 'unsafe-inline'",
+        "img-src 'self' data: blob:",
+        "worker-src 'self' blob:",
+        "connect-src 'self'",
+        "font-src 'self' data:",
+        "object-src 'none'",
+        "base-uri 'none'",
+        "frame-ancestors 'none'",
+        "form-action 'self'",
+    ]
+)
+
 
 @dataclasses.dataclass
 class Node:
@@ -104,6 +120,20 @@ def create_app(
 
     app = FastAPI(title="Sentinel", version=__version__, lifespan=lifespan)
     app.state.node = node
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        # default-src 'self' makes "the console never calls out" a property the
+        # browser enforces, not a promise: a request to any other origin -
+        # tile server, CDN, font host, telemetry - is blocked. Cesium needs
+        # blob: workers and data: images; nothing else is allowed.
+        response.headers.setdefault("Content-Security-Policy", CSP)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        response.headers.setdefault("Permissions-Policy", "geolocation=(), camera=(), microphone=()")
+        return response
 
     # ----------------------------------------------------------------- node
     @app.get("/api/health")

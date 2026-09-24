@@ -36,3 +36,5 @@ web/dist/
 web/playwright-report/
 web/test-results/
 *.tsbuildinfo
+deploy/aws/terraform/terraform.tfvars
+deploy/ansible/inventory.ini

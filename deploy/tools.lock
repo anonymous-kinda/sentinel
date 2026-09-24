@@ -1,0 +1,9 @@
+# Pinned third-party binaries. Every download is verified against the sha256
+# below before it is used; a mismatch aborts (supply-chain control SR-3/SR-11).
+# name          version  arch     sha256                                                            url                                                                                                   member
+uv              0.12.18  x86_64   89eadd7c76fc063887959510d5ba0ab1264dfd5f1143b925ddb73021a40acf16  https://github.com/astral-sh/uv/releases/download/0.12.18/uv-x86_64-unknown-linux-gnu.tar.gz          uv-x86_64-unknown-linux-gnu/uv
+uv              0.12.18  aarch64  afb6291f3f0a6b4521fc67b947822506c41dde5b60d2189dd8f3695b2ac8c9e7  https://github.com/astral-sh/uv/releases/download/0.12.18/uv-aarch64-unknown-linux-gnu.tar.gz         uv-aarch64-unknown-linux-gnu/uv
+nats-server     2.15.0   x86_64   5d2c51caca950333aba84911df7d377f826f3a59ec36061c6539105084f65c92  https://github.com/nats-io/nats-server/releases/download/v2.15.0/nats-server-v2.15.0-linux-amd64.tar.gz nats-server-v2.15.0-linux-amd64/nats-server
+nats-server     2.15.0   aarch64  cdc208f5a3f42963a52b6ab06ef65626bb870315dc936e26ba571780c6351112  https://github.com/nats-io/nats-server/releases/download/v2.15.0/nats-server-v2.15.0-linux-arm64.tar.gz nats-server-v2.15.0-linux-arm64/nats-server
+toxiproxy       2.12.0   x86_64   556d891134a3c582dc1e1a3f7335fd55142e5965769855a00b944e13e48302fc  https://github.com/Shopify/toxiproxy/releases/download/v2.12.0/toxiproxy-server-linux-amd64          -
+toxiproxy       2.12.0   aarch64  53e770c1c3035b5a9f1bc629fce537db1f95f62b26f4ebe6e756afd701cf077c  https://github.com/Shopify/toxiproxy/releases/download/v2.12.0/toxiproxy-server-linux-arm64          -

@@ -1,0 +1,43 @@
+# Sentinel node. Installed by install.sh with @PREFIX@ substituted.
+[Unit]
+Description=Sentinel conjunction assessment node
+Documentation=https://github.com/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=sentinel
+Group=sentinel
+EnvironmentFile=@PREFIX@/sentinel.env
+ExecStart=@PREFIX@/venv/bin/sentinel serve --host 127.0.0.1 --port 8000 --log-level warning
+Restart=on-failure
+RestartSec=3
+
+# Hardening: the node needs to read its install tree, write its database,
+# and open TCP sockets. Nothing else.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ReadWritePaths=@PREFIX@/var
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+CapabilityBoundingSet=
+AmbientCapabilities=
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,39 @@
+# A small, explicit baseline. The full DISA STIG for Ubuntu 24.04 is applied
+# and scanned separately (deploy/stig, M4); these are the settings the node
+# itself depends on.
+- name: Packages the node needs
+  ansible.builtin.apt:
+    name: [python3.12, python3.12-venv, unattended-upgrades, chrony]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Automatic security updates
+  ansible.builtin.copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+    mode: "0644"
+
+- name: SSH - keys only, no root login
+  ansible.builtin.copy:
+    dest: /etc/ssh/sshd_config.d/60-sentinel.conf
+    content: |
+      PasswordAuthentication no
+      KbdInteractiveAuthentication no
+      PermitRootLogin no
+      X11Forwarding no
+      MaxAuthTries 3
+      ClientAliveInterval 300
+      ClientAliveCountMax 1
+    mode: "0600"
+  notify: Restart ssh
+
+- name: Login banner (DoD-style notice for an exercise system)
+  ansible.builtin.copy:
+    dest: /etc/issue.net
+    content: |
+      UNCLASSIFIED // EXERCISE. Sentinel demonstration system. Authorized use only.
+      Activity may be monitored and recorded.
+    mode: "0644"

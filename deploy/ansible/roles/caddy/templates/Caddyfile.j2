@@ -1,0 +1,16 @@
+# Managed by Ansible. TLS certificates from Let's Encrypt (HTTP-01 on :80).
+{{ sentinel_hostname }} {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8000 {
+		# Server-sent events must not be buffered.
+		flush_interval -1
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+	log {
+		output file /var/log/caddy/access.log
+		format json
+	}
+}

@@ -4,6 +4,7 @@ import { useResource, useStream, type StreamEvent } from "./api/client";
 import { EventList } from "./components/EventList";
 import { EventDetail } from "./components/EventDetail";
 import { Globe } from "./components/Globe";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import { ValidationPanel } from "./components/ValidationPanel";
 import { sciPlain } from "./lib/format";
 import { extensionTabs, type ExtensionContext } from "./extensions";
@@ -159,14 +160,20 @@ export default function App() {
             )}
           </aside>
           <section className="center">
-            <Globe
-              trajectory={trajectory}
-              primaryName={selectedSummary?.primary.name ?? undefined}
-              secondaryName={selectedSummary?.secondary.name ?? undefined}
-            />
+            <ErrorBoundary label="Globe">
+              <Globe
+                trajectory={trajectory}
+                primaryName={selectedSummary?.primary.name ?? undefined}
+                secondaryName={selectedSummary?.secondary.name ?? undefined}
+              />
+            </ErrorBoundary>
             <div className="globe-note">two-body arcs ±20 min around TCA · visualization only · imagery bundled offline</div>
           </section>
-          <aside className="right">{selected ? <EventDetail eventId={selected} version={version} /> : <div className="empty">Select an event.</div>}</aside>
+          <aside className="right">
+            <ErrorBoundary label="Event detail">
+              {selected ? <EventDetail eventId={selected} version={version} /> : <div className="empty">Select an event.</div>}
+            </ErrorBoundary>
+          </aside>
         </main>
       )}
 

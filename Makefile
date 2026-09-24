@@ -3,7 +3,7 @@ SHELL := /bin/bash
 UV ?= uv
 export PATH := $(HOME)/.local/bin:$(PATH)
 
-.PHONY: help install test lint web web-test serve dev report demo clean
+.PHONY: help install test lint web web-test serve dev report demo clean bundle airgap-verify tools
 
 help:  ## list targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-16s %s\n", $$1, $$2}'
@@ -35,3 +35,13 @@ report:  ## regenerate docs/validation-report.md
 
 clean:
 	rm -rf web/dist .pytest_cache .ruff_cache dist build
+
+ARCH ?= x86_64
+bundle: web  ## build dist/sentinel-<ver>-$(ARCH).tar.gz (ARCH=x86_64|aarch64)
+	$(UV) run python scripts/build_bundle.py --arch $(ARCH)
+
+airgap-verify:  ## install the x86_64 bundle and run it with networking disabled
+	deploy/bundle/verify_offline.sh dist/sentinel-$$($(UV) run python -c 'import sentinel;print(sentinel.__version__)')-x86_64.tar.gz
+
+tools:  ## fetch pinned nats-server, toxiproxy, uv into .tools/ (sha256-verified)
+	$(UV) run python scripts/fetch_tools.py

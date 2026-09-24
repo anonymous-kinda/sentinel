@@ -117,3 +117,12 @@ def test_validation_tab_reproduces_the_tier3_result(client):
     assert v["operational_count"] == 53
     assert v["worst_rel_error"] < 1e-6
     assert v["confusion"]["fn"] == 0
+
+
+def test_console_is_served_under_a_same_origin_content_security_policy(client):
+    """The browser, not just the code, forbids requests beyond this node."""
+    csp = client.get("/api/health").headers["content-security-policy"]
+    assert "default-src 'self'" in csp
+    assert "connect-src 'self'" in csp
+    assert "'unsafe-eval'" not in csp.replace("'wasm-unsafe-eval'", "")
+    assert "frame-ancestors 'none'" in csp

@@ -1,0 +1,4 @@
+- name: Restart sentinel
+  ansible.builtin.service:
+    name: sentinel
+    state: restarted

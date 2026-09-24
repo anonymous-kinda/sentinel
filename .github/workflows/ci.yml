@@ -48,6 +48,25 @@ jobs:
       - run: npm --prefix web test
       - run: npm --prefix web run build
 
+  infra:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.4
+      - name: Terraform fmt and validate
+        run: |
+          terraform -chdir=deploy/aws/terraform fmt -check -recursive
+          terraform -chdir=deploy/aws/terraform init -backend=false -input=false
+          terraform -chdir=deploy/aws/terraform validate
+      - uses: astral-sh/setup-uv@v6
+      - name: Ansible syntax
+        working-directory: deploy/ansible
+        run: |
+          cp inventory.example.ini inventory.ini
+          uvx --from ansible-core ansible-playbook --syntax-check site.yml
+
   secrets:
     runs-on: ubuntu-24.04
     steps:

@@ -11,11 +11,11 @@ import {
   TileMapServiceImageryProvider,
   HorizontalOrigin,
   VerticalOrigin,
-  Viewer,
+  CesiumWidget,
   BoundingSphere,
   Entity,
 } from "cesium";
-import "cesium/Build/Cesium/Widgets/widgets.css";
+import "cesium/Build/Cesium/Widgets/CesiumWidget/CesiumWidget.css";
 import type { Trajectory } from "../api/types";
 
 export interface GlobeMarker {
@@ -32,6 +32,11 @@ export interface GlobeMarker {
  * set bundled with Cesium, there is no ion token, no geocoder and no
  * terrain server. It works on a disconnected network or it is not a field
  * tool.
+ *
+ * CesiumWidget rather than Viewer: the Viewer's UI layer compiles
+ * Knockout bindings with `new Function`, which the node's strict
+ * Content-Security-Policy (no JS eval) correctly blocks. The bare widget
+ * needs no eval and is all this console uses.
  */
 export function Globe({
   trajectory,
@@ -45,27 +50,17 @@ export function Globe({
   markers?: GlobeMarker[];
 }) {
   const container = useRef<HTMLDivElement>(null);
-  const viewer = useRef<Viewer | null>(null);
+  const viewer = useRef<CesiumWidget | null>(null);
   const entities = useRef<Entity[]>([]);
   const markerEntities = useRef<Entity[]>([]);
 
   useEffect(() => {
     if (!container.current) return;
-    const v = new Viewer(container.current, {
+    const v = new CesiumWidget(container.current, {
       baseLayer: ImageryLayer.fromProviderAsync(
         TileMapServiceImageryProvider.fromUrl(buildModuleUrl("Assets/Textures/NaturalEarthII")),
         {},
       ),
-      baseLayerPicker: false,
-      geocoder: false,
-      homeButton: false,
-      sceneModePicker: false,
-      navigationHelpButton: false,
-      animation: false,
-      timeline: false,
-      fullscreenButton: false,
-      infoBox: false,
-      selectionIndicator: false,
       creditContainer: document.createElement("div"),
     });
     v.scene.globe.enableLighting = false;

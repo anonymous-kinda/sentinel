@@ -10,6 +10,7 @@ import dataclasses
 import hashlib
 import json
 import math
+import os
 import pathlib
 from typing import Any
 
@@ -20,7 +21,9 @@ from ..risk.frames import rtn_to_eci_matrix
 from ..risk.types import AssessmentConfig, Conjunction, ObjectState
 
 REPO = pathlib.Path(__file__).resolve().parents[2]
-FIXTURES = REPO / "fixtures"
+# In a source checkout the fixtures sit at the repo root; an installed
+# bundle ships them separately and points here with SENTINEL_FIXTURES.
+FIXTURES = pathlib.Path(os.environ.get("SENTINEL_FIXTURES", REPO / "fixtures"))
 CASES_FILE = FIXTURES / "cara_cases.json"
 CARA_DIR = FIXTURES / "cara"
 

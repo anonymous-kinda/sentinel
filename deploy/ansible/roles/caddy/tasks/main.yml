@@ -1,0 +1,18 @@
+- name: Caddy
+  ansible.builtin.apt:
+    name: caddy
+    state: present
+
+- name: Caddyfile - TLS in front of the node
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: /etc/caddy/Caddyfile
+    mode: "0644"
+    validate: caddy validate --adapter caddyfile --config %s
+  notify: Reload caddy
+
+- name: Caddy running
+  ansible.builtin.service:
+    name: caddy
+    state: started
+    enabled: true

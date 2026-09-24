@@ -1,0 +1,22 @@
+# Configure the Sentinel cloud hub created by deploy/aws/terraform.
+#
+#   make bundle ARCH=aarch64
+#   ansible-playbook -i inventory.ini site.yml
+#
+# Idempotent. The node is installed from the same signed bundle an edge or
+# a disconnected enclave would receive; this playbook only adds TLS in front.
+- name: Sentinel hub
+  hosts: hub
+  become: true
+  vars:
+    sentinel_version: "0.2.0"
+    sentinel_arch: aarch64
+    sentinel_bundle_dir: "{{ playbook_dir }}/../../dist"
+    sentinel_prefix: /opt/sentinel
+    sentinel_role: hub
+    sentinel_read_only: true        # the public node never accepts uploads
+    sentinel_marking: "UNCLASSIFIED // EXERCISE"
+  roles:
+    - baseline
+    - sentinel
+    - caddy
