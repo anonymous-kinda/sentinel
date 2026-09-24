@@ -51,7 +51,7 @@ the next cycle tries again.
 A manifest is a CBOR array of summaries, one per item, concatenated across
 the hub's modules. The conjunction module lists its own active events (TCA
 in the future) and does not re-serve summaries it holds from another node.
-The pass module lists every element set in its store.
+The pass module lists the element sets the hub offers (below).
 
 ### Fields sync reads
 
@@ -180,8 +180,24 @@ module, the conjunction module.
 |---|---|---|---|---|---|
 | `omm:` | Pass module: public element sets (`sentinel/passes/sync_adapter.py`) | `omm:<NORAD id>` | Element epoch + 3 days: when it goes stale | `ROUTINE` | `REAL` |
 
+An element-set record is the set's canonical OMM JSON bytes. An edge loads no
+snapshot of its own unless configured to (`SENTINEL_ELEMENTS`). It receives
+its element sets from the hub this way, and each one it accepts makes its
+pass module publish `node.<node_id>.passes.updated` once the burst settles.
+That event is node-local and carries no unit and no coordinates.
+
+### Element sets offered
+
+Every record costs a round trip on a thin link, so a hub offers only what
+edges use. `SENTINEL_SYNC_ELEMENTS` sets the scope:
+
+| Scope | The hub's manifest lists |
+|---|---|
+| `catalog` | The default. Only the element sets of the imagers in the pass module's catalog. |
+| `all` | Every element set the hub holds. |
+
 A unit's position and its pass windows are not records. They never enter a
-manifest and never leave the node.
+manifest and never leave the node (ADR-010).
 
 ## Messages
 

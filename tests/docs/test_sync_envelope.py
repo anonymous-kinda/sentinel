@@ -10,6 +10,7 @@ read; the protocol's methods are the protocol's. All compared both ways.
 
 import inspect
 
+from sentinel.api.app import SYNC_ELEMENT_SCOPES
 from sentinel.conjunction.summaries import SUMMARY_MAX_BYTES
 from sentinel.passes.sync_adapter import PREFIX as ELEMENT_PREFIX
 from sentinel.sync.records import ReferenceRecords
@@ -40,6 +41,7 @@ SYNC = trees("sentinel/sync/*.py")
 RECORDS = trees("sentinel/conjunction/sync_adapter.py", "sentinel/passes/sync_adapter.py")
 SUMMARIES = tree("sentinel/conjunction/summaries.py")
 SERVICE = tree("sentinel/conjunction/service.py")
+ELEMENTS = tree("sentinel/passes/sync_adapter.py")
 
 
 def generic_fields() -> set[str]:
@@ -48,6 +50,10 @@ def generic_fields() -> set[str]:
 
 def conjunction_fields() -> set[str]:
     return dict_keys(function(SUMMARIES, "compact_summary")) - generic_fields()
+
+
+def element_fields() -> set[str]:
+    return dict_keys(function(ELEMENTS, "manifest"))
 
 
 def verification_states() -> set[str]:
@@ -88,6 +94,9 @@ def envelope_problems(doc: str) -> list[str]:
     problems += compare(column(doc, "Headers"), sync_headers(), "header")
     problems += compare(documented_methods(doc), protocol_methods(), "ReferenceRecords method")
     problems += compare(column(doc, "Item-id prefixes"), {ELEMENT_PREFIX}, "item-id prefix")
+    problems += compare(column(doc, "Element sets offered"), set(SYNC_ELEMENT_SCOPES), "element-set scope")
+    if element_fields() != generic_fields():
+        problems.append("an element-set summary no longer carries exactly the four generic fields")
     if f"{SUMMARY_MAX_BYTES} bytes" not in doc:
         problems.append(f"the {SUMMARY_MAX_BYTES}-byte summary limit is not stated")
     return problems
@@ -100,6 +109,7 @@ def test_the_source_yields_what_sync_is_known_to_use():
     assert {"QUEUED", "SUMMARY_ONLY"} <= queue_states()
     assert {"Sentinel-Event-Id", "Sentinel-Sha256", "Sentinel-Digest"} <= sync_headers()
     assert "ingest" in protocol_methods()
+    assert element_fields() == {"e", "dl", "q", "c"}
 
 
 def test_the_envelope_matches_the_code():
