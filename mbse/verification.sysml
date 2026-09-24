@@ -117,7 +117,6 @@ package SentinelVerification {
     verification <'VC-MOSA-005'> vcElementSetsAsOmm : SentinelVerification {
         objective { verify elementSetsAsOmm; }
         @VerificationMethod { kind = VerificationMethodKind::test; }
-        @Planned { milestone = "M3"; reason = "the OMM snapshot is vendored; its loader and element store are not merged yet"; }
         @Evidence { kind = EvidenceKind::pytest; locator = "tests/passes/test_elements.py::test_the_snapshot_loads_keyed_by_norad_id"; }
         @Evidence { kind = EvidenceKind::pytest; locator = "tests/passes/test_element_store.py::test_wrong_element_sets_are_rejected_with_a_named_reason"; }
     }
@@ -125,7 +124,6 @@ package SentinelVerification {
     verification <'VC-MOSA-006'> vcEphemerisAsOem : SentinelVerification {
         objective { verify ephemerisAsOem; }
         @VerificationMethod { kind = VerificationMethodKind::test; }
-        @Planned { milestone = "M3"; reason = "the OEM codec is not merged yet"; }
         @Evidence { kind = EvidenceKind::pytest; locator = "tests/ephemeris/test_oem.py::test_emit_then_parse_is_the_identity"; }
         @Evidence { kind = EvidenceKind::pytest; locator = "tests/ephemeris/test_oem.py::test_keywords_outside_the_subset_are_refused_rather_than_ignored"; }
     }
@@ -133,7 +131,6 @@ package SentinelVerification {
     verification <'VC-MOSA-007'> vcSecondModuleSharesSync : SentinelVerification {
         objective { verify secondModuleSharesSync; }
         @VerificationMethod { kind = VerificationMethodKind::test; }
-        @Planned { milestone = "M3"; reason = "element sets do not replicate through sync yet"; }
         @Evidence { kind = EvidenceKind::pytest; locator = "tests/sync/test_modules_share_sync.py::test_both_modules_arrive_intact_through_one_unmodified_agent"; }
         @Evidence { kind = EvidenceKind::pytest; locator = "tests/sync/test_modules_share_sync.py::test_urgent_cdms_are_pulled_before_routine_element_sets"; }
     }
@@ -415,8 +412,8 @@ package SentinelVerification {
     verification <'VC-PASS-001'> vcPassTimingAccuracy : SentinelVerification {
         objective { verify passTimingAccuracy; }
         @VerificationMethod { kind = VerificationMethodKind::test; }
-        @Planned { milestone = "M3"; reason = "no pass provider or brute-force oracle test yet"; }
-        @Evidence { kind = EvidenceKind::pytest; locator = "tests/passes/test_skyfield_provider.py::test_windows_agree_with_a_brute_force_one_second_oracle"; }
+        @Evidence { kind = EvidenceKind::pytest; locator = "tests/passes/test_oracle.py::test_windows_agree_with_one_second_brute_force"; }
+        @Evidence { kind = EvidenceKind::pytest; locator = "tests/conformance/test_pass_providers.py::test_rise_and_set_agree_with_the_oracle_within_two_seconds"; }
     }
 
     verification <'VC-PASS-002'> vcStalenessLabelled : SentinelVerification {
@@ -446,7 +443,6 @@ package SentinelVerification {
     verification <'VC-PASS-005'> vcProvidersInterchangeable : SentinelVerification {
         objective { verify providersInterchangeable; }
         @VerificationMethod { kind = VerificationMethodKind::test; }
-        @Planned { milestone = "M3"; reason = "the PassProvider contract exists; no provider implements it yet"; }
         @Evidence { kind = EvidenceKind::pytest; locator = "tests/passes/test_skyfield_provider.py::test_windows_are_sorted_by_rise_and_each_overlaps_the_interval"; }
         @Evidence { kind = EvidenceKind::pytest; locator = "tests/passes/test_skyfield_provider.py::test_the_provider_names_itself_on_every_window"; }
     }
