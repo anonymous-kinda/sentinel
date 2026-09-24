@@ -19,6 +19,7 @@ from sentinel.api import create_app
 from sentinel.api.settings import Settings
 from sentinel.bus import InProcessBus
 from sentinel.clock import FixedClock
+from sentinel.passes.catalog import DEFAULT_CATALOG, load_catalog
 from sentinel.passes.service import ELEMENTS_SETTLE_S
 
 SNAPSHOT = pathlib.Path(__file__).resolve().parents[2] / "fixtures" / "omm" / "celestrak-resource-20260924.json"
@@ -257,8 +258,10 @@ def test_the_hub_serves_element_sets_through_the_same_sync_records(tmp_path):
     hub = open_node(tmp_path, node_id="hub", role="hub")
     try:
         manifest = hub.app.state.node.sync_server.records.manifest()
-        assert len([entry for entry in manifest if entry["e"].startswith("omm:")]) == 167
-        assert f"omm:{WV3}" in {entry["e"] for entry in manifest}
+        offered = {entry["e"] for entry in manifest if entry["e"].startswith("omm:")}
+        catalog = {f"omm:{imager.norad_id}" for imager in load_catalog(DEFAULT_CATALOG)}
+        assert offered == catalog, "by default a hub offers edges the imaging catalog, not the whole snapshot"
+        assert f"omm:{WV3}" in offered
     finally:
         hub.__exit__(None, None, None)
 

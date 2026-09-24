@@ -29,12 +29,13 @@ sys.path.insert(0, str(ROOT))
 
 from sentinel.conjunction.exercise import generate  # noqa: E402
 
-# The conjunction scenarios keep measuring conjunction sync alone. A hub also
-# serves public element sets by default (M3); each is one more request/reply
-# on the link, and OPSEC is the scenario that exercises them.
-CONJUNCTION_ONLY = (
-    "The hub serves conjunction CDMs only (hub_elements=False): this scenario measures conjunction sync. "
-    "Element-set sync between real processes is exercised by OPSEC."
+# Every scenario runs the hub's default configuration: it holds the public
+# element-set snapshot and offers edges the imaging catalog the pass module
+# uses (SENTINEL_SYNC_ELEMENTS=catalog), so those records share the link
+# with the conjunction CDMs being measured.
+DEFAULT_HUB = (
+    "Default hub configuration: conjunction CDMs plus the imaging catalog's public element sets "
+    "(SENTINEL_SYNC_ELEMENTS=catalog) share the link."
 )
 OPERATOR_EDGE = {"X-Sentinel-Operator": "maj.ortiz@edge-alpha"}
 OPERATOR_HUB = {"X-Sentinel-Operator": "capt.lee@hub"}
@@ -129,12 +130,12 @@ def kendall_tau(sequence: list[float]) -> float:
 # --------------------------------------------------------------------- DENIED
 def denied(denial_s: float = 20.0) -> Result:
     r = Result("DENIED")
-    r.notes.append(CONJUNCTION_ONLY)
+    r.notes.append(DEFAULT_HUB)
     r.metrics["denial_wall_s"] = denial_s
     epoch = dt.datetime.now(dt.UTC)
     initial, later = scenario_cdms(epoch)
     second_batch, _ = scenario_cdms(epoch + dt.timedelta(hours=3))
-    with Cluster(hub_exercise=False, sync_interval_s=1.0, hub_elements=False) as c:
+    with Cluster(hub_exercise=False, sync_interval_s=1.0) as c:
         for item in initial:
             post_cdm(c.hub, item.kvn)
         wait_until(lambda: converged(c), 60, what="initial convergence")
@@ -220,7 +221,7 @@ def denied(denial_s: float = 20.0) -> Result:
 def _limited_run(mode: str) -> dict:
     epoch = dt.datetime.now(dt.UTC)
     initial, _ = scenario_cdms(epoch)
-    with Cluster(sync_mode=mode, hub_exercise=False, sync_interval_s=0.5, hub_elements=False) as c:
+    with Cluster(sync_mode=mode, hub_exercise=False, sync_interval_s=0.5) as c:
         wait_until(c.leaf_connected, 20, what="leaf")
         c.link("LIMITED")
         time.sleep(2)
@@ -264,7 +265,7 @@ def _limited_run(mode: str) -> dict:
 def limited() -> Result:
     r = Result("LIMITED")
     r.notes.append("Toxiproxy bandwidth 1 kB/s each way plus 600 ms latency; NATS leafnode s2_auto compression on.")
-    r.notes.append(CONJUNCTION_ONLY)
+    r.notes.append(DEFAULT_HUB)
     edf = _limited_run("edf")
     fifo = _limited_run("fifo")
     r.metrics["edf"] = edf
@@ -285,13 +286,13 @@ def limited() -> Result:
 # ---------------------------------------------------------------- INTERMITTENT
 def intermittent(flaps: int = 8, down_s: float = 3.0, up_s: float = 3.0) -> Result:
     r = Result("INTERMITTENT")
-    r.notes.append(CONJUNCTION_ONLY)
+    r.notes.append(DEFAULT_HUB)
     r.metrics.update({"flaps": flaps, "down_s": down_s, "up_s": up_s})
     epoch = dt.datetime.now(dt.UTC)
     initial, later = scenario_cdms(epoch)
     extra, _ = scenario_cdms(epoch + dt.timedelta(hours=5))
     feed = later + extra
-    with Cluster(hub_exercise=False, sync_interval_s=0.5, hub_elements=False) as c:
+    with Cluster(hub_exercise=False, sync_interval_s=0.5) as c:
         for item in initial:
             post_cdm(c.hub, item.kvn)
         wait_until(lambda: converged(c), 60, what="initial convergence")
@@ -326,10 +327,10 @@ def intermittent(flaps: int = 8, down_s: float = 3.0, up_s: float = 3.0) -> Resu
 def degraded() -> Result:
     r = Result("DEGRADED")
     r.notes.append("Toxiproxy latency 600 +/- 200 ms each way, bandwidth 32 kB/s.")
-    r.notes.append(CONJUNCTION_ONLY)
+    r.notes.append(DEFAULT_HUB)
     epoch = dt.datetime.now(dt.UTC)
     initial, _ = scenario_cdms(epoch)
-    with Cluster(hub_exercise=False, sync_interval_s=1.0, hub_elements=False) as c:
+    with Cluster(hub_exercise=False, sync_interval_s=1.0) as c:
         wait_until(c.leaf_connected, 20, what="leaf")
         c.link("DEGRADED")
         time.sleep(2)
@@ -356,10 +357,10 @@ def recovery() -> Result:
     timeout) and the edge reconnects forever - found by the live demo.
     """
     r = Result("RECOVERY")
-    r.notes.append(CONJUNCTION_ONLY)
+    r.notes.append(DEFAULT_HUB)
     epoch = dt.datetime.now(dt.UTC)
     initial, _ = scenario_cdms(epoch)
-    with Cluster(hub_exercise=False, sync_interval_s=1.0, hub_elements=False) as c:
+    with Cluster(hub_exercise=False, sync_interval_s=1.0) as c:
         for item in initial:
             post_cdm(c.hub, item.kvn)
         wait_until(lambda: converged(c), 60, what="initial convergence")

@@ -24,6 +24,7 @@ forbidden_modules =
     sentinel.risk
     sentinel.cdm
     sentinel.api
+    sentinel.passes
 
 [importlinter:contract:cdm-is-a-seam]
 name = The CDM codec (ADR-001 seam) does not depend on services above it
@@ -48,6 +49,7 @@ forbidden_modules =
     sentinel.risk
     sentinel.cdm
     sentinel.api
+    sentinel.passes
 
 [importlinter:contract:ai-does-no-math]
 name = The AI layer has no path to the maths: it asks tools, never computes

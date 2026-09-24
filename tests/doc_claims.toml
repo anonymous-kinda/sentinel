@@ -1,0 +1,356 @@
+# Headline numbers the prose quotes, and where each one comes from.
+#
+# Checked by tests/test_docs.py. For every claim:
+#   - `quoted` appears in `doc`;
+#   - every string in `patterns` appears in `source`;
+#   - every number in `quoted` matches, at the precision the prose states it,
+#     a number in `patterns` (the assistant's grounding rule, ADR-007).
+# Matching ignores line breaks and runs of spaces.
+#
+# When a regenerated report changes a number, its pattern stops matching and
+# the test fails. Update the pattern, then the prose, then `quoted`.
+# Sources are generated reports (docs/ddil-results.md, docs/validation-report.md,
+# docs/ai-eval.md, docs/traceability.md), or the test or pin that asserts the value.
+
+# --- DDIL: docs/ddil-results.md (make ddil) ------------------------------------
+
+[[claim]]
+id = "readme-ddil-profiles"
+doc = "README.md"
+quoted = "600 ms / 32 kB/s (DEGRADED)"
+source = "docs/ddil-results.md"
+patterns = ["Toxiproxy latency 600 +/- 200 ms each way, bandwidth 32 kB/s"]
+
+[[claim]]
+id = "readme-denied-console-p95"
+doc = "README.md"
+quoted = "(2.8 ms p95 while cut off)"
+source = "docs/ddil-results.md"
+patterns = ["p95 2.8 ms over 40 requests"]
+
+[[claim]]
+id = "readme-limited-summaries"
+doc = "README.md"
+quoted = "first: within 5.5 s in the latest run"
+source = "docs/ddil-results.md"
+patterns = ["summaries at 5.5 s"]
+
+[[claim]]
+id = "readme-limited-edf-vs-fifo"
+doc = "README.md"
+quoted = "**12.1 s with earliest-deadline-first vs 46.8 s in FIFO order** (3.9×"
+source = "docs/ddil-results.md"
+patterns = ["EDF 12.1 s vs FIFO 46.8 s (3.9x)"]
+
+[[claim]]
+id = "readme-limited-catalog-element-sets"
+doc = "README.md"
+quoted = "the 38 imaging-catalog element sets"
+source = "docs/ddil-results.md"
+patterns = ["38 element sets crossed"]
+
+[[claim]]
+id = "adr004-denied-console-p95"
+doc = "docs/system-design.md"
+quoted = "The DENIED scenario measures this: 2.8 ms p95 console latency"
+source = "docs/ddil-results.md"
+patterns = ["p95 2.8 ms over 40 requests"]
+
+[[claim]]
+id = "adr006-summaries-visible"
+doc = "docs/system-design.md"
+quoted = "At about 8 kbit/s, every event was visible as a summary within 5.5 s in the latest run"
+source = "docs/ddil-results.md"
+patterns = ["measured over ~8 kbit/s + 600 ms", "summaries at 5.5 s"]
+
+[[claim]]
+id = "adr006-edf-vs-fifo"
+doc = "docs/system-design.md"
+quoted = "same 13 CDMs: the most urgent event's full CDM arrives in **12.1 s with EDF vs 46.8 s with FIFO** (3.9×)"
+source = "docs/ddil-results.md"
+patterns = ["same 13 records", "EDF 12.1 s vs FIFO 46.8 s (3.9x)"]
+
+[[claim]]
+id = "adr008-fifo-slower"
+doc = "docs/system-design.md"
+quoted = "measures at 3.9× slower"
+source = "docs/ddil-results.md"
+patterns = ["(3.9x)"]
+
+[[claim]]
+id = "adr008-thin-link-summaries"
+doc = "docs/system-design.md"
+quoted = "every event summary arrived at 5.5 s, not sooner, because 38 more summaries ride in the manifest"
+source = "docs/ddil-results.md"
+patterns = ["summaries at 5.5 s", "38 element sets crossed"]
+
+[[claim]]
+id = "findings-recovery-leaf"
+doc = "docs/system-design.md"
+quoted = "It now re-establishes the leaf in 11.8 s."
+source = "docs/ddil-results.md"
+patterns = ["leaf re-establishes over ~8 kbit/s after a denial (11.8 s)"]
+
+# --- Summary size: asserted by the sync tests ---------------------------------
+
+[[claim]]
+id = "readme-summary-size"
+doc = "README.md"
+quoted = "a summary of every event (at most 256 bytes each)"
+source = "tests/sync/test_hub_edge.py"
+patterns = ["assert size <= 256"]
+
+[[claim]]
+id = "adr006-summary-size"
+doc = "docs/system-design.md"
+quoted = "Summaries measure **≤ 256 bytes** each"
+source = "tests/sync/test_hub_edge.py"
+patterns = ["assert size <= 256"]
+
+# --- NASA CARA: docs/validation-report.md (scripts/validation_report.py) -------
+
+[[claim]]
+id = "readme-cara-event-count"
+doc = "README.md"
+quoted = "CARA publishes 53 real operational conjunctions"
+source = "docs/validation-report.md"
+patterns = ["53 real operational conjunctions"]
+
+[[claim]]
+id = "readme-cara-worst-error"
+doc = "README.md"
+quoted = "worst relative error **1.5e-8**"
+source = "docs/validation-report.md"
+patterns = ["| 53 | **1.5e-08** |"]
+
+[[claim]]
+id = "readme-cara-gate"
+doc = "README.md"
+quoted = "**29/29 refused, 0 missed**, 5 conservative refusals"
+source = "docs/validation-report.md"
+patterns = ["| **Sentinel refuses** | 29 | 5 |", "| **Sentinel returns Pc** | **0** | 19 |"]
+
+[[claim]]
+id = "readme-cara-refuses-every-flagged-event"
+doc = "README.md"
+quoted = "refuses **every one** of the 29 that CARA flags"
+source = "docs/validation-report.md"
+patterns = ["| **Sentinel refuses** | 29 | 5 |"]
+
+[[claim]]
+id = "readme-cara-3d-divergence"
+doc = "README.md"
+quoted = "by up to 60,722× at orbital speeds, and by up to 162 orders of magnitude"
+source = "docs/validation-report.md"
+patterns = ["by factors of 0.016x to 60,722x", "19 to 162 orders of magnitude"]
+
+[[claim]]
+id = "readme-alfano"
+doc = "README.md"
+quoted = "Alfano (2009) benchmark, read from CDM files | CARA unit test | all within CARA's rtol 1e-3"
+source = "docs/validation-report.md"
+patterns = ["Alfano (2009) benchmark cases", "CARA's own tolerance for this test is 1e-3 relative"]
+
+[[claim]]
+id = "readme-omitron-1"
+doc = "README.md"
+quoted = "| Omitron Case 1 | CARA `PcCircle` high-accuracy | 1.9e-8 |"
+source = "docs/validation-report.md"
+patterns = ["**Omitron Case 1** (CARA `PcCircle`, high-accuracy mode)", "relative error 1.9e-08"]
+
+[[claim]]
+id = "readme-omitron-2"
+doc = "README.md"
+quoted = "| Omitron Case 2 | CARA `PcCircle` | difference explained to 1e-14 by miss-distance convention |"
+source = "docs/validation-report.md"
+patterns = ["**Omitron Case 2**", "reproduces CARA's value to 1e-14"]
+
+[[claim]]
+id = "readme-rayleigh"
+doc = "README.md"
+quoted = "| 2.2e-12 |"
+source = "docs/validation-report.md"
+patterns = ["Worst relative error: **2.20e-12**"]
+
+[[claim]]
+id = "readme-k-star"
+doc = "README.md"
+quoted = "| 5.2e-07 |"
+source = "docs/validation-report.md"
+patterns = ["Worst relative error: **5.16e-07**"]
+
+[[claim]]
+id = "readme-pc-max"
+doc = "README.md"
+quoted = "| 4.2e-14 |"
+source = "docs/validation-report.md"
+patterns = ["Worst relative error: **4.17e-14**"]
+
+[[claim]]
+id = "readme-dblquad-oracle"
+doc = "README.md"
+quoted = "in Cartesian coordinates (a different algorithm over a different parameterisation) at `rtol=1e-8`"
+source = "docs/validation-report.md"
+patterns = ["asserted at `rtol=1e-8`"]
+
+[[claim]]
+id = "adr003-agreement"
+doc = "docs/system-design.md"
+quoted = "**53/53 operational events within 1.5e-8 relative**"
+source = "docs/validation-report.md"
+patterns = ["| 53 | **1.5e-08** |"]
+
+[[claim]]
+id = "adr003-gates"
+doc = "docs/system-design.md"
+quoted = "A relative-speed gate alone caught only 4 of the 29 events CARA flags."
+source = "docs/validation-report.md"
+patterns = ["On the 4 slow events", "| **Sentinel refuses** | 29 | 5 |"]
+
+[[claim]]
+id = "adr003-curvilinear-gate"
+doc = "docs/system-design.md"
+quoted = "It catches all 29, at the cost of 5 conservative refusals."
+source = "docs/validation-report.md"
+patterns = ["| **Sentinel refuses** | 29 | 5 |"]
+
+[[claim]]
+id = "adr003-omitron-2"
+doc = "docs/system-design.md"
+quoted = "The 1.6e-4 difference on Omitron Case 2 is explained to 1e-14"
+source = "docs/validation-report.md"
+patterns = ["**Omitron Case 2**: Sentinel 1.8076611254e-01 vs CARA 1.8073630585e-01 (1.6e-04)", "reproduces CARA's value to 1e-14"]
+
+[[claim]]
+id = "risk-design-tier3-observed"
+doc = "docs/risk-engine-design.md"
+quoted = "worst observed 1.5e-8"
+source = "docs/validation-report.md"
+patterns = ["| 53 | **1.5e-08** |"]
+
+[[claim]]
+id = "risk-design-omitron-1-observed"
+doc = "docs/risk-engine-design.md"
+quoted = "observed 1.9e-8"
+source = "docs/validation-report.md"
+patterns = ["relative error 1.9e-08"]
+
+# --- AI eval: docs/ai-eval.md (make ai-eval) -----------------------------------
+
+[[claim]]
+id = "readme-ai-eval-set"
+doc = "README.md"
+quoted = "`make ai-eval` scores the routers on 60 labelled requests"
+source = "docs/ai-eval.md"
+patterns = ["60 labelled requests (50 in scope, 10 out of scope)"]
+
+[[claim]]
+id = "readme-ai-baseline"
+doc = "README.md"
+quoted = "The deterministic floor routes under half of in-scope requests (0.46) to the right tool"
+source = "docs/ai-eval.md"
+patterns = ["| Right tool (in scope) | 0.460 |"]
+
+[[claim]]
+id = "readme-ai-confidence-gate"
+doc = "README.md"
+quoted = "Below 0.5 confidence"
+source = "docs/ai-eval.md"
+patterns = ["(act at 0.5 or above)"]
+
+[[claim]]
+id = "adr007-ai-baseline"
+doc = "docs/system-design.md"
+quoted = "`docs/ai-eval.md` measures it routing under half of in-scope requests (0.46) to the right tool"
+source = "docs/ai-eval.md"
+patterns = ["| Right tool (in scope) | 0.460 |"]
+
+[[claim]]
+id = "design-ai-eval-set"
+doc = "docs/system-design.md"
+quoted = "`make ai-eval` scores the routers on 60 labelled requests"
+source = "docs/ai-eval.md"
+patterns = ["60 labelled requests (50 in scope, 10 out of scope)"]
+
+# --- Requirement trace: docs/traceability.md (make trace) ----------------------
+
+[[claim]]
+id = "readme-trace-counts"
+doc = "README.md"
+quoted = "54 requirements: 53 verified, 1 unverified (planned), 0 broken references"
+source = "docs/traceability.md"
+patterns = ["| **total** | **54** | **53** | **1** | **0** |"]
+
+# --- Pins and test parameters quoted by the ADRs --------------------------------
+
+[[claim]]
+id = "adr005-property-test-size"
+doc = "docs/system-design.md"
+quoted = "Hypothesis, 150 random histories × 40 steps"
+source = "tests/property/test_crdt.py"
+patterns = ["max_examples=150, stateful_step_count=40"]
+
+[[claim]]
+id = "adr007-jev-pin"
+doc = "docs/system-design.md"
+quoted = "**Jev** (`jev-1.13.0`, pinned)"
+source = "sentinel/ai/router_jev.py"
+patterns = ["JEV_MODEL = \"jev-1.13.0\""]
+
+[[claim]]
+id = "adr007-claude-model"
+doc = "docs/system-design.md"
+quoted = "**Claude** (`claude-opus-5`, low effort"
+source = "sentinel/ai/narrate_claude.py"
+patterns = ["CLAUDE_MODEL = \"claude-opus-5\""]
+
+[[claim]]
+id = "supply-chain-cosign-pin"
+doc = "docs/supply-chain.md"
+quoted = "(cosign 3.1.3, cosign-linux-amd64): echo \"4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71  cosign\""
+source = "deploy/tools.lock"
+patterns = ["cosign 3.1.3 x86_64 4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71"]
+
+[[claim]]
+id = "supply-chain-trust-root-pin"
+doc = "docs/supply-chain.md"
+quoted = "echo \"6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66  trusted_root.json\""
+source = "deploy/tools.lock"
+patterns = ["sigstore-trusted-root.json targets-v14 noarch 6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66"]
+
+[[claim]]
+id = "supply-chain-syft-pin"
+doc = "docs/supply-chain.md"
+quoted = "generated by syft 1.52.0 (pinned)"
+source = "deploy/tools.lock"
+patterns = ["syft 1.52.0 x86_64"]
+
+[[claim]]
+id = "supply-chain-vex-finding"
+doc = "docs/supply-chain.md"
+quoted = "**GO-2026-5932** in `golang.org/x/crypto v0.57.0`, inside `nats-server v2.15.0`"
+source = "deploy/vex/statements.toml"
+patterns = ["vulnerability = \"GO-2026-5932\"", "nats-server v2.15.0 depends on golang.org/x/crypto v0.57.0"]
+
+# --- Pass module: the harness report and the conformance suite ----------------
+
+[[claim]]
+id = "readme-pass-imagers"
+doc = "README.md"
+quoted = "Pass windows for 38 public-catalog EO and SAR imagers"
+source = "docs/ddil-results.md"
+patterns = ["edge assessed 38 imagers"]
+
+[[claim]]
+id = "readme-pass-conformance"
+doc = "README.md"
+quoted = "rise and set within 2 s of a brute-force oracle"
+source = "tests/conformance/test_pass_providers.py"
+patterns = ["RISE_SET_TOLERANCE_S = 2.0"]
+
+[[claim]]
+id = "adr011-pass-conformance"
+doc = "docs/system-design.md"
+quoted = "rise and set within 2 s, maximum elevation within 0.1°"
+source = "tests/conformance/test_pass_providers.py"
+patterns = ["RISE_SET_TOLERANCE_S = 2.0", "MAX_ELEVATION_TOLERANCE_DEG = 0.1"]
