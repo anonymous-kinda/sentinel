@@ -331,3 +331,26 @@ doc = "docs/supply-chain.md"
 quoted = "**GO-2026-5932** in `golang.org/x/crypto v0.57.0`, inside `nats-server v2.15.0`"
 source = "deploy/vex/statements.toml"
 patterns = ["vulnerability = \"GO-2026-5932\"", "nats-server v2.15.0 depends on golang.org/x/crypto v0.57.0"]
+
+# --- Pass module: the harness report and the conformance suite ----------------
+
+[[claim]]
+id = "readme-pass-imagers"
+doc = "README.md"
+quoted = "Pass windows for 38 public-catalog EO and SAR imagers"
+source = "docs/ddil-results.md"
+patterns = ["edge assessed 38 imagers"]
+
+[[claim]]
+id = "readme-pass-conformance"
+doc = "README.md"
+quoted = "rise and set within 2 s of a brute-force oracle"
+source = "tests/conformance/test_pass_providers.py"
+patterns = ["RISE_SET_TOLERANCE_S = 2.0"]
+
+[[claim]]
+id = "adr011-pass-conformance"
+doc = "docs/system-design.md"
+quoted = "rise and set within 2 s, maximum elevation within 0.1°"
+source = "tests/conformance/test_pass_providers.py"
+patterns = ["RISE_SET_TOLERANCE_S = 2.0", "MAX_ELEVATION_TOLERANCE_DEG = 0.1"]
