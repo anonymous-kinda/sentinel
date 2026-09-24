@@ -529,7 +529,7 @@ The scenarios are `denied`, `limited`, `intermittent`, `degraded`, `recovery` an
 
 `python -m harness.report` renders whatever results are in `harness/results/`. After `make opsec` on a fresh clone, that is the OPSEC result alone, and the rewritten `docs/ddil-results.md` loses the other five scenarios. Commit the report only from a complete, passing run of all six (`make ddil`).
 
-For this guide, `recovery` and `opsec` were run through `python -m harness.run`, which writes only the git-ignored `harness/results/`. `recovery` passed. `opsec` failed one assertion, from the harness race described under [Troubleshooting](#other-symptoms), not from a leak. `make ddil` and `make opsec` were not run, because they rewrite the committed report.
+For this guide, `recovery` and `opsec` were run through `python -m harness.run`, which writes only the git-ignored `harness/results/`. `recovery` passed. `opsec` failed one assertion, not from a leak but from a harness race: it counted element sets on the hub-side capture, which subscribes after the leaf connects and so could miss an early fetch. The scenario now counts them from the edge's own sync record (`SyncLedger` in `harness/opsec.py`) and keeps the capture for leak detection only. `make ddil` and `make opsec` were not run, because they rewrite the committed report.
 
 ### The air-gap bundle
 
@@ -781,7 +781,6 @@ The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and t
 | `make trace` exits 1 | A verification case names evidence that does not exist | The "Problems" section the regenerated `docs/traceability.md` gains after its summary |
 | `uv run lint-imports` reports a broken contract | An import crosses a module boundary | The contract named in the output; the table under [Architecture](#modules-and-their-allowed-dependencies) |
 | `harness/cluster.py` exits with `missing: run make tools` | `nats-server` or `toxiproxy` not in `.tools/<arch>/` | `uv run python scripts/fetch_tools.py nats-server toxiproxy` |
-| OPSEC fails only "element sets reached the edge through sync", counting one fewer set crossing than the edge assessed | A race in the scenario: the hub-side capture subscribes after the leaf connects, and a fetch before that is not counted. The edge loads no element sets of its own (`tests/test_harness_elements.py`), so they did cross. | `harness/scenarios.py`, `opsec`; re-run it |
 | `docs/ddil-results.md` lost scenarios after `make opsec` | The report renders only what is in `harness/results/` | Restore the file, or run `make ddil` |
 | The Passes tab lists every imager as skipped, or `GET /api/passes/catalog` is empty on an edge | Element sets have not arrived: the hub holds none (its log says `Element snapshot missing`) or lacks those imagers, or sync has not run yet | `GET /api/sync` on the edge; `SENTINEL_ELEMENTS` and `SENTINEL_SYNC_ELEMENTS` on the hub |
 | `GET /api/passes` returns 409 or 503 | 409: no unit is set. 503: an element set for a catalogued imager cannot be propagated | `PUT /api/passes/unit`; the node log `Pass computation refused` |

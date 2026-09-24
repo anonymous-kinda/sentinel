@@ -28,6 +28,7 @@ from .cluster import ROOT, Cluster, http, wait_until
 sys.path.insert(0, str(ROOT))
 
 from sentinel.conjunction.exercise import generate  # noqa: E402
+from sentinel.passes.sync_adapter import PREFIX as ELEMENT_PREFIX  # noqa: E402
 
 # Every scenario runs the hub's default configuration: it holds the public
 # element-set snapshot and offers edges the imaging catalog the pass module
@@ -423,8 +424,12 @@ def opsec() -> Result:
     on the hub's nats-server records everything the hub receives. Its
     interest reaches the edge over the leaf, so the edge forwards anything
     its leaf permissions allow: the adversarial case, not a sample.
+
+    The capture subscribes after the leaf connects, so it can miss an early
+    fetch: it looks for leaks only. Element sets are counted from the edge's
+    own record of what it fetched (`GET /api/sync`).
     """
-    from .opsec import Capture, find_leaks, leak_patterns, publish, scan_tree
+    from .opsec import Capture, SyncLedger, find_leaks, leak_patterns, publish, scan_tree
 
     r = Result("OPSEC")
     r.notes.append(
@@ -436,13 +441,19 @@ def opsec() -> Result:
     )
     patterns = leak_patterns(OPSEC_UNIT)
     nonce = f"opsec-control-{time.time_ns()}".encode()
+    edge_sync = SyncLedger()
     with Cluster(clock=OPSEC_CLOCK, hub_exercise=True, sync_interval_s=0.5) as c:
         hub_url, edge_url = (f"nats://127.0.0.1:{c.ports[p]}" for p in ("hub_client", "edge_client"))
+
+        def edge_catalog_complete() -> bool:
+            edge_sync.record(http("GET", f"{c.edge}/api/sync"))
+            return len(http("GET", f"{c.edge}/api/passes/catalog")["imagers"]) == 38
+
         wait_until(c.leaf_connected, 20, what="leaf")
+        edge_sync.record(http("GET", f"{c.edge}/api/sync"))
         with Capture(hub_url) as hub_wire, Capture(edge_url) as edge_wire:
             t0 = time.monotonic()
-            wait_until(lambda: len(http("GET", f"{c.edge}/api/passes/catalog")["imagers"]) == 38, 120,
-                       what="element sets at the edge through sync")
+            wait_until(edge_catalog_complete, 120, what="element sets at the edge through sync")
             r.metrics["element_sync_s"] = round(time.monotonic() - t0, 1)
             unit_put = status_of("PUT", f"{c.edge}/api/passes/unit", OPSEC_UNIT)
             answer = http("GET", f"{c.edge}/api/passes?hours=24")
@@ -467,7 +478,7 @@ def opsec() -> Result:
 
     hub_leaks = {m.subject: leaks for m in hub_wire.messages if (leaks := find_leaks(m.blob(), patterns))}
     pass_subjects = sorted({m.subject for m in hub_wire.messages if {"unit", "passes"} & set(m.subject.split("."))})
-    element_sets_crossed = sum(m.headers.get("Sentinel-Event-Id", "").startswith("omm:") for m in hub_wire.messages)
+    element_sets_crossed = len(edge_sync.items(ELEMENT_PREFIX))
     edge_updates = [m for m in edge_wire.messages if m.subject == "node.edge-alpha.passes.updated" and m.data != unit]
     control_crossed = any(m.subject == "opsec.control" and m.data == nonce for m in hub_wire.messages)
 
@@ -483,7 +494,8 @@ def opsec() -> Result:
     })
     r.check("element sets reached the edge through sync (the edge loads none itself)",
             answer["catalog"]["imagers"] == 38 and element_sets_crossed >= 38,
-            f"{element_sets_crossed} element sets crossed in {r.metrics['element_sync_s']} s; edge assessed {answer['catalog']['imagers']} imagers")
+            f"{element_sets_crossed} element sets crossed in {r.metrics['element_sync_s']} s; edge assessed {answer['catalog']['imagers']} imagers"
+            + (f"; arrivals that scrolled out of the edge's sync status unread: {edge_sync.unseen}" if edge_sync.unseen else ""))
     r.check("the edge accepted the unit and computed its passes locally",
             unit_put == 200 and bool(answer["windows"]) and bool(answer["gaps"]),
             f"{len(answer['windows'])} windows, {len(answer['gaps'])} gaps over 24 h")
