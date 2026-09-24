@@ -67,7 +67,7 @@ export function ganttLayout(rowCount: number, width: number): GanttLayout {
   const axisY = rowsTop + rowCount * rowH + 4;
   return {
     width,
-    height: axisY + 20,
+    height: axisY + 34,
     plotX0: labelW,
     plotX1: width - 12,
     bandY,

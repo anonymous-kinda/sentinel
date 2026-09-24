@@ -14,6 +14,11 @@ export const WINDOW_KIND_LABEL: Record<WindowKind, string> = {
   unusable: "EO at night: not usable",
 };
 
+/** A pass's identity across refetches: the imager and its rise. */
+export function passKey(w: PassWindow): string {
+  return `${w.norad_id}@${w.rise}`;
+}
+
 export function windowKind(w: PassWindow): WindowKind {
   if (!w.usable) return "unusable";
   return w.sensor === "SAR" ? "sar" : "eo";

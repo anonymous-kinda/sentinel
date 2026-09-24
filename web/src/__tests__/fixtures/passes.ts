@@ -1,4 +1,4 @@
-import type { PassCatalog, PassUnit, PassesView } from "../../api/types";
+import type { NodeInfo, PassCatalog, PassUnit, PassesView } from "../../api/types";
 
 // Payloads shaped exactly like the examples in docs/icd/passes-api.md, with
 // the "..." times filled in. The numbers are hand-written test data, not
@@ -9,6 +9,21 @@ import type { PassCatalog, PassUnit, PassesView } from "../../api/types";
  *  too short for the unit's reaction time. */
 export const NOW_ISO = "2026-09-24T11:10:00Z";
 export const NOW_MS = Date.parse(NOW_ISO);
+
+/** An edge node that runs the pass module. */
+export const node: NodeInfo = {
+  node_id: "edge-1",
+  role: "edge",
+  version: "0.2.0",
+  engine_version: "test",
+  marking: "UNCLASSIFIED",
+  clock: "real",
+  now: NOW_ISO,
+  read_only: false,
+  demo_controls: false,
+  modules: ["passes"],
+  policy: { red_pc: 1e-4, amber_pc: 1e-5, mcp_lead_time_s: 3600, urgent_window_s: 7200 },
+};
 
 export const unit: PassUnit = {
   unit_id: "EX-UNIT-1",
