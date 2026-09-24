@@ -242,3 +242,47 @@ jobs:
         if: ${{ always() }}
         run: make compose-down
   # <<< compose (end) <<<
+
+  # >>> offline install (REQ-DEP-002) >>>
+  # The whole air-gap install on every push, for each architecture on its own
+  # runner, exactly as a developer runs it (make airgap-local): build the
+  # console and the bundle, sign it with a throwaway key (generated in a
+  # mode-700 temp dir, never stored, destroyed on exit), then, inside
+  # `unshare -rn` with only loopback, verify the signature before unpacking,
+  # install from hash-pinned wheels, and run the node as a hub: NASA validation
+  # reproduced, element sets loaded, console served. No dependency cache is
+  # restored, as in a release. Release bundles are signed keyless and
+  # re-verified the same way by release.yml.
+  airgap-install:
+    name: Offline install (${{ matrix.arch }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { arch: x86_64, runner: ubuntu-24.04 }
+          - { arch: aarch64, runner: ubuntu-24.04-arm }
+    env:
+      ARCH: ${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: "3.12"
+          enable-cache: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          package-manager-cache: false
+      - name: Console dependencies
+        run: npm --prefix web ci --no-audit --no-fund
+      - name: Allow unprivileged user namespaces (unshare -rn)
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Build, sign, verify, install and run with no network (make airgap-local)
+        run: make airgap-local ARCH="${ARCH}"
+  # <<< offline install (REQ-DEP-002) <<<

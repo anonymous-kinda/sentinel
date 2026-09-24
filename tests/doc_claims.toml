@@ -284,9 +284,9 @@ patterns = ["60 labelled requests (50 in scope, 10 out of scope)"]
 [[claim]]
 id = "readme-trace-counts"
 doc = "README.md"
-quoted = "54 requirements: 53 verified, 1 unverified (planned), 0 broken references"
+quoted = "54 requirements: 54 verified, 0 unverified, 0 broken references"
 source = "docs/traceability.md"
-patterns = ["| **total** | **54** | **53** | **1** | **0** |"]
+patterns = ["| **total** | **54** | **54** | **0** | **0** |"]
 
 # --- Pins and test parameters quoted by the ADRs --------------------------------
 

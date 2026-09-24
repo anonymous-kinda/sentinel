@@ -184,7 +184,7 @@ A classified or disconnected site has to trust a bundle without reaching the int
 - the part that satisfies it;
 - the evidence that verifies it: a test, a harness scenario, an import contract or a CI step.
 
-CI regenerates `docs/traceability.md`, and fails on any reference to evidence that does not exist. Work not built yet is marked *planned* and reported as unverified, never as verified. The current trace has 54 requirements: 53 verified, 1 unverified (planned), 0 broken references. A real SysML v2 grammar (sysml2py, the pilot implementation's grammar) parses the model in CI. That check covers syntax, not semantics, and the docs say so.
+CI regenerates `docs/traceability.md`, and fails on any reference to evidence that does not exist. Work not built yet is marked *planned* and reported as unverified, never as verified. The current trace has 54 requirements: 54 verified, 0 unverified, 0 broken references. A real SysML v2 grammar (sysml2py, the pilot implementation's grammar) parses the model in CI. That check covers syntax, not semantics, and the docs say so.
 
 ---
 
