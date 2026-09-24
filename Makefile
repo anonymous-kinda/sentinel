@@ -74,3 +74,18 @@ screen:  ## demonstration mode: approaches to PRIMARY from the public snapshot (
 bench-passes:  ## time the pass engine: whole imaging catalog, 24 h, exercise unit
 	$(UV) run python scripts/bench_passes.py
 # --- end M3 pass engine -------------------------------------------------------
+
+# --- M6 MBSE: requirement trace and SysML v2 syntax check (begin) -----------
+# sysml2py carries the SysML v2 pilot implementation's grammar (ported to
+# textX). It pins astropy<6, which has no Python 3.13 wheels, so it runs in an
+# isolated environment rather than in the project's dev extra.
+SYSML2PY ?= sysml2py==0.5.3
+.PHONY: trace sysml-check
+
+trace:  ## regenerate docs/traceability.md from mbse/*.sysml (fails on a broken reference)
+	$(UV) run python scripts/trace.py
+
+sysml-check:  ## parse mbse/*.sysml with the SysML v2 pilot grammar (sysml2py, isolated env)
+	$(UV) run --no-project --isolated --python 3.12 --with '$(SYSML2PY)' --with 'setuptools<81' \
+		python scripts/sysml_check.py mbse/*.sysml
+# --- M6 MBSE (end) -----------------------------------------------------------
