@@ -306,7 +306,8 @@ The pipeline, in `sentinel/ai/assistant.py`:
 
 ```
  text ─► router (Jev | deterministic) ─► Route: tool, arguments, confidence
-      ─► gate ─────────────────────────► ask back if confidence < 0.5, or an event tool has no event
+      ─► gate ─────────────────────────► ask back if the tool or the event choice is below 0.5 confident,
+                                         or an event tool has no event
       ─► tool (sentinel/ai/tools.py) ──► facts: every number from Sentinel's own services
       ─► narrator (Claude | template) ─► prose
       ─► grounding guard ──────────────► an AI answer stating a number the facts lack is withheld;
@@ -318,7 +319,7 @@ The pipeline, in `sentinel/ai/assistant.py`:
 |---|---|---|
 | Tool catalog | `sentinel/ai/catalog.py` | `list_events`, `get_assessment`, `explain_dilution`, `link_status`, `sync_queue`, `draft_decision`. The descriptions are also Jev's option criteria. |
 | Tools | `sentinel/ai/tools.py` | deterministic code over the conjunction, ops, link and sync services. Dates and hours are formatted here, by code. A tool that writes returns a draft. |
-| Deterministic router | `sentinel/ai/router.py` | slash commands at confidence 1.0, keyword rules at 0.6 |
+| Deterministic router | `sentinel/ai/router.py` | slash commands at confidence 1.0, keyword rules at 0.6; an event it resolves by position or catalog number is an exact match, stated at 1.0 |
 | Jev router | `sentinel/ai/router_jev.py` | model pinned to `jev-1.13.0`. Typed Choice questions whose options are exactly the catalog and this node's events; one attempt, no retries |
 | Template narrator | `sentinel/ai/narrate.py` | always available; tested grounded on every tool and exercise event |
 | Claude narrator | `sentinel/ai/narrate_claude.py` | model pinned to `claude-opus-5`; no retries |

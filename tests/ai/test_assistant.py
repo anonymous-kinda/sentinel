@@ -68,7 +68,10 @@ def ask(assistant, text):
 
 
 def jev_route(tool, args, confidence, tools=None, events=None):
-    return Route(tool, args, confidence, "jev", tools or {tool: confidence}, events or {}, {"model": "jev-1.13.0"})
+    """Jev scores every option it chooses from: by default its event choice
+    is as sure as its tool choice."""
+    chosen = {args["event_id"]: confidence} if "event_id" in args else {}
+    return Route(tool, args, confidence, "jev", tools or {tool: confidence}, events or chosen, {"model": "jev-1.13.0"})
 
 
 # ------------------------------------------------------------------ tiers
@@ -136,6 +139,18 @@ def test_an_event_tool_without_an_event_asks_which(registry, event_of):
     jev = ScriptedRouter(jev_route("get_assessment", {}, 0.9, events=events))
     a = ask(make(registry, jev=jev), "how risky is it?")
     assert a.status == "clarify" and a.text.startswith("Which event?")
+    assert [alt["event_id"] for alt in a.alternatives] == [event_of("99118"), event_of("99412")]
+
+
+@pytest.mark.parametrize("tool,args", [("get_assessment", {}), ("draft_decision", {"decision": "MANEUVER"})])
+def test_an_unsure_event_choice_asks_which_instead_of_acting(registry, event_of, tool, args):
+    """Jev is sure of the tool (0.95) and unsure of the event (0.41): the
+    assistant asks which event, and drafts nothing."""
+    events = {event_of("99118"): 0.41, event_of("99412"): 0.39, "none": 0.20}
+    route = jev_route(tool, {**args, "event_id": event_of("99118")}, 0.95, events=events)
+    a = ask(make(registry, jev=ScriptedRouter(route)), "maneuver on the debris one")
+    assert a.status == "clarify" and a.text.startswith("Which event?")
+    assert a.facts is None and a.draft_id is None
     assert [alt["event_id"] for alt in a.alternatives] == [event_of("99118"), event_of("99412")]
 
 

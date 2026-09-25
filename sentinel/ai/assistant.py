@@ -52,13 +52,21 @@ TOOL_QUESTIONS = {
 
 def gate(route: Route, min_confidence: float = MIN_CONFIDENCE) -> str | None:
     """Why the assistant would ask back instead of acting; None to act.
-    The eval scores routers through this same gate. It fails closed: a
-    confidence that is not a probability (NaN, above 1) is not a confident one."""
-    if route.tool not in TOOLS or not min_confidence <= route.confidence <= 1.0:
+    The eval scores routers through this same gate. The tool choice and,
+    for an event tool, the event choice must each clear it. It fails
+    closed: a confidence that is missing or is not a probability (NaN,
+    above 1) is not a confident one."""
+    if route.tool not in TOOLS or not _confident(route.confidence, min_confidence):
         return "unsure"
-    if TOOLS[route.tool].needs_event and "event_id" not in route.args:
-        return "which_event"
+    if TOOLS[route.tool].needs_event:
+        event_id = route.args.get("event_id")
+        if event_id is None or not _confident(route.event_probabilities.get(event_id), min_confidence):
+            return "which_event"
     return None
+
+
+def _confident(p: float | None, min_confidence: float) -> bool:
+    return p is not None and min_confidence <= p <= 1.0
 
 
 @dataclasses.dataclass
