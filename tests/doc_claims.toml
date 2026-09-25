@@ -105,7 +105,7 @@ patterns = [
 [[claim]]
 id = "adr006-edf-vs-fifo"
 doc = "docs/system-design.md"
-quoted = "the same 51 records (13 CDMs and 38 element sets): the most urgent event's full CDM arrives in **9.1 s with EDF vs 136.9 s with FIFO** (15.0×), medians of 5 runs per mode"
+quoted = "the same 51 records (13 CDMs and 38 element sets): the most urgent event's full CDM arrives in **9.1 s with EDF vs 136.9 s with FIFO**, medians of 5 runs per mode"
 source = "docs/ddil-results.md"
 patterns = [
     "same 51 records (13 CDMs",
@@ -138,6 +138,31 @@ doc = "docs/system-design.md"
 quoted = "It now re-establishes the leaf in 10.5 s."
 source = "docs/ddil-results.md"
 patterns = ["leaf re-establishes over ~8 kbit/s after a denial (10.5 s)"]
+
+[[claim]]
+id = "adr005-buys-offline-merge"
+doc = "docs/system-design.md"
+quoted = "operator data converged in 1.37 s after reconnect, and over a link that dropped 8 times, 24 notes were written and 24 arrived on each node"
+source = "docs/ddil-results.md"
+patterns = ["| convergence_after_reconnect_s | 1.37 |", "| flaps | 8 |", "(hub 24, edge 24, written 24)"]
+
+[[claim]]
+id = "adr006-buys-urgent-first"
+doc = "docs/system-design.md"
+quoted = "Its full CDM arrived 15.0× sooner than in arrival order, while the whole backlog took about the same time either way (150.9 s against 149.0 s, medians of 5 runs per mode)"
+source = "docs/ddil-results.md"
+patterns = [
+    "(15.0x)",
+    "| every record delivered or held summary-only | 150.9 s (148.6–150.9) | 149.0 s (147.0–153.8) |",
+    "medians over 5 runs per mode",
+]
+
+[[claim]]
+id = "adr010-buys-opsec"
+doc = "docs/system-design.md"
+quoted = "none of the 179 messages the hub's server carried held the unit, and all 10 OPSEC checks passed"
+source = "docs/ddil-results.md"
+patterns = ["hub capture: 179 messages, 90,804 bytes", "| OPSEC | PASS | 10/10 |"]
 
 # --- Summary size: asserted by the sync tests ---------------------------------
 
@@ -254,6 +279,20 @@ doc = "docs/system-design.md"
 quoted = "**53/53 operational events within 1.5e-8 relative**"
 source = "docs/validation-report.md"
 patterns = ["| 53 | **1.5e-08** |"]
+
+[[claim]]
+id = "adr003-buys-no-pc-where-cara-flags"
+doc = "docs/system-design.md"
+quoted = "it returns no Pc for any of the 29 events CARA says the method cannot handle"
+source = "docs/validation-report.md"
+patterns = ["| **Sentinel refuses** | 29 | 5 |", "| **Sentinel returns Pc** | **0** | 19 |"]
+
+[[claim]]
+id = "adr003-costs-conservative-refusals"
+doc = "docs/system-design.md"
+quoted = "and so do 5 events CARA would compute"
+source = "docs/validation-report.md"
+patterns = ["| **Sentinel refuses** | 29 | 5 |", "The 5 false positives are refusals where CARA would have computed"]
 
 [[claim]]
 id = "adr003-gates"

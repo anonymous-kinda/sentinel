@@ -2,6 +2,7 @@
 
 CLAUDE.md's "Docs are value-first" rule, in the parts a test can hold:
 
+- every ADR opens with what it buys and what it costs, right under its title;
 - the README's limits are a top-level section placed straight after its value
   section, and they name the exercise-only data, that nothing is fielded, that
   no ATO is claimed, and the open gaps in SECURITY.md.
@@ -13,11 +14,14 @@ input, then run against the real documents.
 
 import re
 
-from .doccheck import ROOT
+from .doccheck import DOCS, ROOT
 
+SYSTEM_DESIGN = DOCS / "system-design.md"
 README = ROOT / "README.md"
 
+_ADR = re.compile(r"^### (ADR-\d{3})\b")
 _FENCE = re.compile(r"^\s*(```|~~~)")
+BUYS, COSTS = "**Buys.** ", "**Costs.** "
 
 # What the README's limits must state, as the words a reader would look for.
 LIMITS = {
@@ -38,6 +42,36 @@ def _prose_lines(markdown: str) -> list[str]:
         if not fenced:
             lines.append(line)
     return lines
+
+
+# ------------------------------------------------------------------ the ADRs
+
+
+def adr_openings(markdown: str) -> dict[str, list[str]]:
+    """ADR id -> its first two non-blank lines under the title."""
+    openings: dict[str, list[str]] = {}
+    current = None
+    for line in _prose_lines(markdown):
+        heading = _ADR.match(line)
+        if heading:
+            current = heading.group(1)
+            openings[current] = []
+        elif line.startswith("#"):
+            current = None
+        elif current and line.strip() and len(openings[current]) < 2:
+            openings[current].append(line.strip())
+    return openings
+
+
+def adr_problems(markdown: str) -> list[str]:
+    problems = []
+    for adr, lines in adr_openings(markdown).items():
+        first, second = [*lines, "", ""][:2]
+        if not (first.startswith(BUYS) and first.removeprefix(BUYS).strip()):
+            problems.append(f"{adr} does not open with a Buys line")
+        if not (second.startswith(COSTS) and second.removeprefix(COSTS).strip()):
+            problems.append(f"{adr} has no Costs line after its Buys line")
+    return problems
 
 
 # ------------------------------------------------------------ README limits
@@ -69,6 +103,24 @@ def limits_problems(markdown: str) -> list[str]:
 # --------------------------------------------------------- the checks catch it
 
 
+def test_an_adr_without_buys_and_costs_first_is_caught():
+    markdown = (
+        "### ADR-001 — Right\n\n**Buys.** Urgent data first.\n**Costs.** A protocol of our own.\n\n"
+        "**Status:** Accepted\n\n"
+        "### ADR-002 — Status first\n\n**Status:** Accepted\n\n**Buys.** x\n\n**Costs.** y\n\n"
+        "### ADR-003 — No costs\n\n**Buys.** Something.\n\n**Decision.** z\n\n"
+        "### ADR-004 — Empty lines\n\n**Buys.**\n**Costs.** \n\n"
+        "## 4. Core Pipeline\n\n**Buys.** not an ADR\n"
+    )
+    assert adr_problems(markdown) == [
+        "ADR-002 does not open with a Buys line",
+        "ADR-002 has no Costs line after its Buys line",
+        "ADR-003 has no Costs line after its Buys line",
+        "ADR-004 does not open with a Buys line",
+        "ADR-004 has no Costs line after its Buys line",
+    ]
+
+
 def test_a_readme_whose_limits_are_missing_buried_or_incomplete_is_caught():
     value = "## What it gives an operator\n\nValue.\n\n"
     limits = "## Limits\n\nExercise and public data only. Nothing is fielded. No ATO is claimed. See `SECURITY.md`.\n\n"
@@ -84,6 +136,12 @@ def test_a_readme_whose_limits_are_missing_buried_or_incomplete_is_caught():
 
 
 # ------------------------------------------------------ the real documents
+
+
+def test_every_adr_opens_with_what_it_buys_and_what_it_costs():
+    text = SYSTEM_DESIGN.read_text(encoding="utf-8")
+    assert len(adr_openings(text)) >= 12
+    assert adr_problems(text) == []
 
 
 def test_the_readme_states_its_limits_straight_after_its_value():

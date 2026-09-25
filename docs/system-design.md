@@ -2,7 +2,7 @@
 
 **A DDIL-resilient conjunction assessment decision aid for satellite operators.**
 
-Status: living design record; each ADR states its own status. This document is the design spine. The technical guide derives from it; the white paper derives from the technical guide. Nothing gets coded until the relevant ADR here is marked Accepted.
+For engineers and technical reviewers. Status: living design record; each ADR states its own status. This document is the design spine. The technical guide derives from it; the white paper derives from the technical guide. Nothing gets coded until the relevant ADR here is marked Accepted.
 
 ---
 
@@ -38,9 +38,13 @@ These are the tiebreakers. When two designs are otherwise equal, the one that be
 
 ## 3. Architecture Decision Records
 
-Each ADR states a decision, why, and what was rejected. Rejected alternatives are recorded because the reasoning is the deliverable — anyone can pick NATS, the value is in being able to say why not Kafka.
+Each ADR opens with what it buys, in operator terms and with its measured number where one exists, and what it costs: the complexity or capability given up. Then it states the decision, why, and what was rejected. Rejected alternatives are recorded because the reasoning is the deliverable — anyone can pick NATS, the value is in being able to say why not Kafka.
 
 ### ADR-001 — CDM as the canonical internal data contract
+
+**Buys.** The program is not tied to one data provider. Every conjunction reaches the engine as a CCSDS CDM, so a new source is one adapter, and every NASA CDM vendored under `fixtures/cara/` parses and round-trips with its comments and units intact (`tests/test_cdm_codec.py`).
+
+**Costs.** Whatever a source knows beyond the CDM's fields stops at the seam, and Sentinel maintains its own CCSDS codec.
 
 **Status:** Accepted, implemented in `sentinel/cdm`.
 
@@ -57,6 +61,10 @@ It also solves the data-access risk. Space-Track CDM access may not be granted. 
 ---
 
 ### ADR-002 — Two screening modes, explicitly labeled
+
+**Buys.** An operator never sees a Pc computed from element sets, the most common way a conjunction tool prints a number it cannot defend. Public data still gives a screening list of close approaches, and every line says its Pc is refused.
+
+**Costs.** Without real CDMs there is no risk number at all, only geometry, and every screen and output has to carry its mode.
 
 **Status:** Accepted
 
@@ -86,6 +94,10 @@ Each approach can be written as a DERIVED CDM with no covariance. When it is ing
 
 ### ADR-003 — Reimplement Foster-Estes 2D Pc in Python; NASA CARA's published cases as the oracle
 
+**Buys.** Trust in every number shown. Sentinel's Pc matches NASA CARA's published value on **53/53 operational events within 1.5e-8 relative**, and it returns no Pc for any of the 29 events CARA says the method cannot handle: it refuses rather than approximates.
+
+**Costs.** Some events get no answer. The console tells the operator they need a 3D assessment (low relative speed, as in GEO and co-orbiting pairs, or along-track uncertainty that bends with the orbit), and so do 5 events CARA would compute. The 3D method is not built.
+
 **Status:** Accepted (2026-09-23). Orekit was dropped as the oracle; the reasons are below.
 
 **Decision.** The primary risk engine is a Python implementation of the Foster-Estes 2D collision probability method, ported from NASA CARA's publicly released MATLAB. It is validated against values CARA itself published:
@@ -97,7 +109,7 @@ Alongside Pc, the engine computes maximum Pc by covariance scaling and flags eve
 
 **Rationale.** CARA's tools are MATLAB and are explicitly published as building blocks for reimplementation, not as a library. Porting them is the intended use, and the port is the part of this project that shows first-principles command of the domain rather than library plumbing.
 
-CARA publishes expected values for real conjunctions, including its own judgement of when the 2D method is invalid. That makes a third-party oracle unnecessary: the reference is the organisation whose method this is. Result (`docs/validation-report.md`): **53/53 operational events within 1.5e-8 relative**, and **zero** events where Sentinel returns a 2D Pc that CARA says 2D cannot handle.
+CARA publishes expected values for real conjunctions, including its own judgement of when the 2D method is invalid. That makes a third-party oracle unnecessary: the reference is the organisation whose method this is. The results are in `docs/validation-report.md`.
 
 **Rejected.**
 - Depending on Orekit at runtime: defensible, but it makes the interesting part of the project someone else's code, and adds a JVM at the edge.
@@ -115,13 +127,17 @@ CARA publishes expected values for real conjunctions, including its own judgemen
 
 ### ADR-004 — Modular monolith with an internal event bus
 
+**Buys.** A node deploys to an air-gapped edge as one signed bundle, and it needs nothing beyond its own host to serve its operator. The DENIED scenario measures this: 3.2 ms p95 console latency while the link is cut. Module boundaries are enforced in CI by import-linter, not left to convention.
+
+**Costs.** It is less "cloud-native" on paper: the modules of a node scale and deploy together, not one by one.
+
 **Status:** Accepted (2026-09-23). Amended after implementation; the amendments are marked below.
 
 **Decision.** Sentinel is structured as event-driven modules that talk only through a `Bus` protocol: publish/subscribe plus request/reply. In one process the bus is in-memory. On a deployed node it is NATS: each node runs its own `nats-server`, and the server, not the application, holds the leafnode link to other nodes. The same module code runs in both.
 
 **Rationale.** Microservices, event-driven architectures and modular monoliths are often offered as alternatives. The interesting answer is knowing when each applies. For an edge-deployable system the honest answer is both: decompose in the cloud where orchestration is free, and ship a single deployable at the edge where it is not.
 
-A node's console, store and engine talk only to their *local* NATS server. So a denied link never breaks the node; the leaf reconnects by itself. The DENIED scenario measures this: 3.2 ms p95 console latency while the link is cut.
+A node's console, store and engine talk only to their *local* NATS server. So a denied link never breaks the node; the leaf reconnects by itself.
 
 **Amendment: what NATS is used for.**
 - Leafnode connectivity, request/reply, and compression (s2).
@@ -140,6 +156,10 @@ JetStream is **not** used for replication. Priority is a mission concept that a 
 ---
 
 ### ADR-005 — State-based CRDTs for operator-generated data
+
+**Buys.** Decisions made offline merge without loss, and concurrent edits show as a CONFLICT instead of one silently winning. Measured on real processes: operator data converged in 1.37 s after reconnect, and over a link that dropped 8 times, 24 notes were written and 24 arrived on each node.
+
+**Costs.** Complexity: dots, causal contexts, signatures and anti-entropy to maintain. The trust model is also only half applied: the decision log is signed, the annotation registers are not (see "Gap, stated" below).
 
 **Status:** Accepted (2026-09-23), implemented in `sentinel/crdt` and `sentinel/ops`.
 
@@ -163,6 +183,8 @@ State-based rather than operation-based CRDTs, because state-based merge tolerat
 - *Integrity:* a tampered entry is rejected, including one that reuses a held dot; a validly signed entry that reuses a dot with different content raises. Each distinct rejection is recorded once (the newest 1,000 are kept).
 - *DENIED and INTERMITTENT scenarios:* both confirm the same properties across real processes.
 
+**Gap, stated: annotations are not signed.** Signatures cover the decision log (decisions, notes and RESOLUTION entries), not the registers (triage status, assignee, note). A register carries its causal context and no signature. So a peer that can reach `ops.<hub_id>.exchange` can erase or overwrite an annotation at the hub by claiming to have seen the write, and the hub passes the change to every edge as an ordinary overwrite. `tests/test_ops_hostile_peer.py::test_an_untrusted_peer_cannot_erase_an_annotation` records this as a strict xfail, and `SECURITY.md` lists it as gap 4. Closing it is a design change to record here: sign the registers, or authenticate peers on the leaf link (`SECURITY.md` gap 2). Until then, the decision log is the record of what was decided.
+
 **Rejected.**
 - *Last-write-wins on a timestamp:* silently destroys an operator's work.
 - *Operation-based CRDTs:* assume reliable causal delivery.
@@ -171,6 +193,10 @@ State-based rather than operation-based CRDTs, because state-based merge tolerat
 ---
 
 ### ADR-006 — Bandwidth triage by decision urgency
+
+**Buys.** On a thin link, the event due soonest crosses first. Its full CDM arrived 15.0× sooner than in arrival order, while the whole backlog took about the same time either way (150.9 s against 149.0 s, medians of 5 runs per mode). The ordering costs almost nothing.
+
+**Costs.** Summaries spend link time before any full record, and an event whose CDM cannot arrive before its deadline at the measured rate is held SUMMARY-ONLY. The order is only as good as the deadline and consequence the mission module assigns, and the commit point is an operator assumption.
 
 **Status:** Accepted (2026-09-23). The open question was answered by measurement.
 
@@ -185,13 +211,17 @@ State-based rather than operation-based CRDTs, because state-based merge tolerat
 
 Admission control handles the case where the full record can't make it in time. If the link rate measured by the agent cannot deliver a full CDM before its deadline, the event is marked SUMMARY-ONLY rather than spending the link on it. At the bottom of the ladder a summary renders as one voice-readable line.
 
-**Measured.** Same link, same bytes, the same 51 records (13 CDMs and 38 element sets): the most urgent event's full CDM arrives in **9.1 s with EDF vs 136.9 s with FIFO** (15.0×), medians of 5 runs per mode (`docs/ddil-results.md`, generated, with every run and its range). Over one link, the same bytes take the same time in any order: the order decides which record lands first, not when the last one does.
+**Measured.** Same link, same bytes, the same 51 records (13 CDMs and 38 element sets): the most urgent event's full CDM arrives in **9.1 s with EDF vs 136.9 s with FIFO**, medians of 5 runs per mode (`docs/ddil-results.md`, generated, with every run and its range). Over one link, the same bytes take the same time in any order: the order decides which record lands first, not when the last one does.
 
 **How the comparison is kept fair.** An earlier single run reported FIFO verifying every event sooner than EDF, with a link-rate reading many times higher under FIFO. The two modes had not run on equal links. In some runs the element sets crossed before the harness shaped the link. NATS also picked the hub's compression from a round trip measured before shaping, so in some runs every CDM crossed uncompressed and took far longer. Now every run starts with the backlog waiting at the hub and the link down, and the leaf connects over the shaped link. Before comparing medians, the scenario checks each run's toxics, the compression on both sides, and the records it moved.
 
 ---
 
-### ADR-007 — AI decision support: Jev routes, code computes, Claude phrases, the operator decides
+### ADR-007 — AI that cannot corrupt the decision: Jev routes, code computes, Claude phrases, the operator decides
+
+**Buys.** A way to put AI into a disconnected or classified system without letting it corrupt a decision. It answers with no keys and no link, its tier follows the measured link and the marking, and any number the tools did not produce is withheld. No benefit from the hosted models is measured yet: none has been run on the eval.
+
+**Costs.** The always-available floor is weak: `docs/ai-eval.md` measures it routing under half of in-scope requests (0.46) to the right tool. Two pinned hosted providers, and the guards around them, are code to maintain.
 
 **Status:** Accepted (2026-09-23). Replaces the earlier proposal of a local quantized model as the only AI tier.
 
@@ -222,7 +252,7 @@ Its documented weaknesses are arithmetic, dates and prompt injection, and each i
 - object names travel as data;
 - the gate and the grounding guard bound what an injected answer can do.
 
-**Why a deterministic floor instead of a local model.** The floor always works and is exact for commands. On natural language it is weak, and the eval says so: `docs/ai-eval.md` measures it routing under half of in-scope requests (0.46) to the right tool. That gap is what a model has to earn its place against, measured on the same set through the same gate. Jev's numbers are published only from a real run. A local model can slot in later behind the same `Router` protocol as a DENIED or classified tier (open question 4). It is not built.
+**Why a deterministic floor instead of a local model.** The floor always works and is exact for commands. On natural language it is weak (Costs, above). That gap is what a model has to earn its place against, measured on the same set through the same gate. Jev's numbers are published only from a real run. A local model can slot in later behind the same `Router` protocol as a DENIED or classified tier (open question 4). It is not built.
 
 **Assumption, stated.** An edge reaches hosted AI over the same link it uses to reach its hub, so the measured hub-link state stands in for the WAN. A hub or standalone node has no upstream link to measure. It is treated as CONNECTED, and the console labels that as assumed.
 
@@ -237,6 +267,10 @@ Its documented weaknesses are arithmetic, dates and prompt injection, and each i
 
 ### ADR-008 — Reference data: application-level priority pull, not transport replication
 
+**Buys.** The urgent record first, and numbers the edge has checked rather than trusted. A stream mirror delivers in FIFO order, which the LIMITED scenario measures at 15.0× slower for the record that matters, as a ratio of medians over 5 runs per mode. And an event is VERIFIED only when the edge's own engine has reproduced the hub's result, field by field.
+
+**Costs.** A sync protocol of our own where JetStream is off the shelf, so it needs its own hostile-input tests. A review found real bugs there: the edge admitted fetched bytes without checking them against what the manifest announced (`tests/sync/test_hostile_hub.py`). Each record also costs a round trip, so reference data competes with urgent CDMs on a thin link (below).
+
 **Status:** Accepted (2026-09-23).
 
 **Decision.** The edge pulls CDMs from the hub over request/reply. Each cycle:
@@ -247,7 +281,7 @@ Its documented weaknesses are arithmetic, dates and prompt injection, and each i
 
 An event stays HUB-ASSERTED until that comparison passes (VERIFIED), and any disagreement is flagged MISMATCH.
 
-**Why not a JetStream mirror.** A mirror replicates in stream order. That is exactly the FIFO baseline the LIMITED scenario measures at 15.0× slower for the record that matters, as a ratio of medians over 5 runs per mode (`docs/ddil-results.md`).
+**Why not a JetStream mirror.** A mirror replicates in stream order. That is exactly the FIFO baseline the LIMITED scenario measures (Buys, above; `docs/ddil-results.md`).
 
 **Why this also buys modularity.** The pull agent reads only generic fields: id, deadline, consequence and record list. It reaches a mission module only through the `ReferenceRecords` protocol, and `.importlinter` forbids `sync` from importing any mission module. The pass module (M3) does: its element sets travel through the same agent, and it landed with no change to `sentinel/sync`, `bus`, `crdt` or `triage` (`git diff --stat 67199b7 f16e294` over those paths is empty).
 
@@ -262,6 +296,10 @@ Even that costs something. Every event summary arrived at 6.5 s (the median of 5
 ---
 
 ### ADR-009 — Each node serves its own console; node-local events never cross a link
+
+**Buys.** An edge's operator keeps a working console with the hub unreachable (ADR-004 has the measurement), and that console never shows a hub event before the edge has fetched and verified it.
+
+**Costs.** Every node ships and serves the web app, so every node is a web server to patch and harden, and each console shows only what its own node holds.
 
 **Status:** Accepted (2026-09-23).
 
@@ -292,6 +330,10 @@ The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and t
 
 ### ADR-010 — OPSEC as architecture: a unit's position never leaves its edge node
 
+**Buys.** A ground unit learns when catalogued public imagers can see it, and its position cannot leak through the sync path, because it never enters it. On a real hub and edge, none of the 179 messages the hub's server carried held the unit, and all 10 OPSEC checks passed.
+
+**Costs.** Pass planning lives only at the edge, so the hub has no picture of any unit. An aggregate view would need a reviewed release path, and sharing a unit between edges would need its own decision and a cross-domain guard.
+
 **Status:** Accepted (2026-09-24).
 
 **Decision.** A ground unit's position, and every pass window and gap computed from it, exist only on the edge node that serves that unit's operator. Four independent layers enforce this:
@@ -316,10 +358,7 @@ The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and t
   - The detector does find the unit in the edge's own file.
 - **Element sets did arrive:** they reached the edge through sync.
 
-**Consequences.**
-- A cut-off edge keeps computing from the element sets it holds. As they age the timing pad widens, and after three days they are flagged stale.
-- The hub has no picture of any unit, by design. An aggregate view would need an explicit, reviewed release path.
-- Sharing a unit between edges would need its own decision and a cross-domain guard.
+**Consequence.** A cut-off edge keeps computing from the element sets it holds. As they age the timing pad widens, and after three days they are flagged stale.
 
 **Rejected.**
 - Computing at the hub and sending windows down: that puts the position on the link and on the hub's disk.
@@ -329,6 +368,10 @@ The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and t
 ---
 
 ### ADR-011 — Two pass providers behind one contract, held to one conformance suite
+
+**Buys.** Pass windows do not depend on one source of orbit data or one implementation. A second provider, fed by a CCSDS OEM or a source adapter, is held to the same contract and the same brute-force oracle as the first, and the suite has already caught one provider skipping an imager it could not cover (Rationale, below).
+
+**Costs.** Two implementations and a conformance suite to maintain. The second provider's real feed (Wayfinder) is on an assumed schema, so it is proven against the contract, not against that feed.
 
 **Status:** Accepted (2026-09-24).
 
@@ -361,6 +404,10 @@ Adding a provider is one factory and one line.
 ---
 
 ### ADR-012 — Keyless signing, verified offline against a pinned trust root
+
+**Buys.** A disconnected site can prove a bundle is authentic before unpacking it, with no network and no long-lived release key to guard, and an assessor gets SBOMs, build provenance and reviewed VEX statements with every release. In DoD, getting approval to operate often takes longer than building the software, and this is part of the evidence it needs.
+
+**Costs.** Provenance reaches SLSA Build L2, not L3 (below). The pinned trust root must be refreshed by hand when Sigstore rotates its keys, and verification fails closed until it is. Releases depend on GitHub Actions and Sigstore's public-good service, and the release workflow has not yet run on a tag.
 
 **Status:** Accepted (2026-09-24).
 
@@ -472,9 +519,9 @@ The recorded results of the latest run are generated into `docs/ddil-results.md`
 
 | Artifact | Derives from | Audience |
 |---|---|---|
-| This design (`docs/system-design.md`, with the maths in `docs/risk-engine-design.md`) | NASA CARA's published methods and data, CCSDS standards | Self, technical reviewers |
-| Technical guide | This design | Engineers reading the repo |
-| White paper (`docs/white-paper.md`), quad chart (`docs/quad-chart.md`) | This design and the generated reports | Acquisition, operational, executive |
+| This design (`docs/system-design.md`, with the maths in `docs/risk-engine-design.md`) | NASA CARA's published methods and data, CCSDS standards | Engineers, technical reviewers |
+| Technical guide (`docs/technical-guide.md`) | This design | Engineers reading the repo |
+| README, white paper (`docs/white-paper.md`), quad chart (`docs/quad-chart.md`) | This design and the generated reports | Operators and program offices |
 | SysML v2 model (`mbse/`) | This design | MBSE demonstration; `docs/traceability.md` is generated from it in CI |
 | OSCAL draft SSP (`compliance/oscal/`, explained in `docs/compliance.md`) | Implementation and CI evidence | Security/ATO reviewers |
 
