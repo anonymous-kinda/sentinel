@@ -34,7 +34,12 @@ The edge's `SyncAgent` runs a cycle every 2 s by default
    cycles, and the manifest and records still get the link in each. It is
    state-based, so a lost reply only means the next cycle sends a little
    more, and an item's dots enter the peer's context only when that item
-   is merged, so the part not yet sent is never lost.
+   is merged, so the part not yet sent is never lost. It runs before the
+   manifest, and only a lost request is a link failure. Anything else that
+   stops it (a `Sentinel-Error` reply, a reply this node cannot read, an
+   `IntegrityError` from the merge) is logged as `Operator data exchange
+   failed` and shown as the cycle's `ops` (`error`, `detail`) in
+   `GET /api/sync`, and the manifest and records still run.
 2. **Manifest (P0).** `sync.<hub_id>.manifest` fetches one summary per active
    item. It is skipped when the hub's digest is unchanged. Every event is then
    visible on the edge as `HUB_ASSERTED`, before any record arrives.

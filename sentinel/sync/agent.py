@@ -61,6 +61,17 @@ MALFORMED = (TypeError, ValueError, KeyError, OverflowError)
 _SHA16 = re.compile(r"[0-9a-f]{16}")
 
 
+class HubError(Exception):
+    """The hub answered with an error (Sentinel-Error) instead of a reply:
+    the link carried it, so it is not a link failure."""
+
+
+def raise_hub_error(reply: Msg) -> None:
+    error = reply.headers.get("Sentinel-Error")
+    if error:
+        raise HubError(error[:80])
+
+
 @dataclasses.dataclass(frozen=True)
 class SummaryFields:
     """The four generic fields sync reads from one summary, checked."""
@@ -254,7 +265,7 @@ class SyncAgent:
 
     async def cycle(self) -> None:
         started = time.monotonic()
-        ops_stats = await self.exchange_ops()
+        ops_stats = await self._operator_data()
         manifest = await self.fetch_manifest()
         if manifest is not None:
             self.apply_manifest(manifest)
@@ -268,6 +279,22 @@ class SyncAgent:
         }
 
     # ------------------------------------------------------------ operator data
+    async def _operator_data(self) -> dict[str, Any]:
+        """The operator-data exchange, isolated from the rest of the cycle.
+
+        Only a lost request is a link failure. Anything else that stops the
+        exchange (a hub error, a reply this node cannot read, an
+        IntegrityError from the merge) is logged and reported as the
+        cycle's `ops`, and the manifest and records still run."""
+        try:
+            return await self.exchange_ops()
+        except LINK_ERRORS:
+            raise
+        except Exception as exc:  # noqa: BLE001 - operator data must not stop reference data
+            failure = {"error": type(exc).__name__, "detail": str(exc)[:200]}
+            log.warning("Operator data exchange failed", hub_id=self.hub_id, **failure)
+            return failure
+
     async def exchange_ops(self) -> dict[str, Any]:
         budget = self._ops_budget()
         peer = self.ops.peer_contexts(self.hub_id)
@@ -277,10 +304,11 @@ class SyncAgent:
             subjects.ops_exchange(self.hub_id), request,
             self._timeout(len(request) + budget + OPS_REPLY_OVERHEAD_BYTES),
         )
+        self.link.observe_success(rtt, len(request) + len(reply_msg.data), rtt)
+        raise_hub_error(reply_msg)
         reply = codec.decode(reply_msg.data)
         merged = await self.ops.merge_payload(reply["pull"])
         self.ops.remember_peer(self.hub_id, reply["ctx"])
-        self.link.observe_success(rtt, len(request) + len(reply_msg.data), rtt)
         return {
             "sent_entries": len(push["log"]),
             "sent_registers": len(push["reg"]),
