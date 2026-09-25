@@ -52,6 +52,10 @@ class RefusalReason(enum.Enum):
     LOW_RELATIVE_VELOCITY = "LOW_RELATIVE_VELOCITY"
     TCA_INCONSISTENT = "TCA_INCONSISTENT"
     CURVILINEAR_UNCERTAINTY = "CURVILINEAR_UNCERTAINTY"
+    # The uncertainty is so far below the hard-body radius that the collision
+    # integral cannot be resolved in double precision, at k = 1 or at a scale
+    # the worst-case search needs. Any number would be a guess.
+    UNRESOLVED_INTEGRAL = "UNRESOLVED_INTEGRAL"
 
 
 @dataclasses.dataclass(frozen=True, eq=False)

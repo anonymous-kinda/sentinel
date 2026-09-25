@@ -23,9 +23,12 @@ uncertainty exceeds the miss distance over root two, adding uncertainty
 Rungs 14-18 of the ladder.
 """
 
+import math
+
 import numpy as np
 import pytest
 
+from sentinel.risk import integrate
 from sentinel.risk.engine import assess
 from sentinel.risk.integrate import gaussian_mass_over_disk, maximize_pc_over_scale
 from sentinel.risk.types import Method
@@ -197,3 +200,62 @@ def test_inflating_covariance_by_one_order_of_magnitude_lowers_pc_and_sets_flag(
 
     # Which is the point: Pc dropped, but the worst case did not.
     assert after.pc_max > after.pc
+
+
+# --- a miss inside the hard-body disk --------------------------------------
+# The disk is convex, so it is star-shaped about any mean inside it: if
+# mu + t z lies in the disk, so does mu + s z for every s < t. The event
+# {mu + sqrt(k) Z in disk} therefore shrinks as k grows, Pc(k) never rises
+# with k, and the maximum over [k_lo, k_hi] sits at k_lo. The sweep reaches
+# sigma far below R, where a fixed grid cannot see the spike.
+
+INSIDE_COV = np.diag([100.0, 400.0])
+INSIDE_MU = np.array([5.0, 3.0])       # 5.8 m from the centre of a 20 m disk
+INSIDE_HBR = 20.0
+
+
+def test_pc_at_a_tiny_scale_with_the_miss_inside_the_disk_is_one():
+    """At k = 1e-12 the widest sigma is 2e-5 m and the nearest edge 14.2 m
+    away, so the mass is 1 to double precision. The grid returned 6.5e-35."""
+    got = gaussian_mass_over_disk(1e-12 * INSIDE_COV, INSIDE_MU, INSIDE_HBR)
+    assert got == pytest.approx(1.0, abs=1e-12)
+
+
+def test_pc_never_rises_with_scale_when_the_miss_is_inside_the_disk():
+    """Allowance: where Pc rounds to 1 (k below ~1e-6), R / sigma reaches
+    2e6 and x = R cos(theta) carries ~1e-16 R of rounding, 2e-10 sigma per
+    node, which moves Pc by ~1e-12. The failure this guards against moved it
+    by 35 orders of magnitude."""
+    ks = np.logspace(-12, 12, 97)
+    pcs = np.array([gaussian_mass_over_disk(k * INSIDE_COV, INSIDE_MU, INSIDE_HBR) for k in ks])
+    assert np.all(np.diff(pcs) <= 1e-10), pcs
+
+
+def test_a_miss_inside_the_disk_puts_the_maximum_at_the_lower_search_bound():
+    """The optimiser used to report an interior k* = 3.2e-9, hit_bound False."""
+    k_star, pc_max, hit_bound = maximize_pc_over_scale(INSIDE_COV, INSIDE_MU, INSIDE_HBR)
+
+    assert k_star == pytest.approx(1e-12, rel=1e-9)
+    assert hit_bound is True
+    assert pc_max == pytest.approx(1.0, abs=1e-12)
+
+
+def test_the_engine_reports_a_miss_inside_the_hard_body_at_the_search_bound():
+    """3 m miss, 10 m combined hard-body radius: more uncertainty can only
+    lower Pc, so the operating point is on the falling side (diluted), and
+    the worst case is the whole disk."""
+    result = assess(make_conjunction(miss_m=3.0, sigma_m=50.0, radius_m=5.0))
+
+    assert result.method is Method.FOSTER_ESTES_2D
+    assert result.diagnostics["k_star_at_search_bound"] is True
+    assert result.diagnostics["k_star"] == pytest.approx(1e-12, rel=1e-9)
+    assert result.dilution_flag is True
+    assert result.dilution_margin == pytest.approx(math.log(1e-12))
+    assert result.pc_max == pytest.approx(1.0, abs=1e-12)
+
+
+def test_a_search_that_reaches_an_unresolvable_scale_says_so():
+    """At k = 1e-40 sigma is 1e-19 m against a 20 m disk: beyond double
+    precision. The search must not quietly treat that Pc as a number."""
+    with pytest.raises(integrate.UnresolvedIntegral):
+        maximize_pc_over_scale(INSIDE_COV, INSIDE_MU, INSIDE_HBR, bounds=(1e-40, 1e12))
