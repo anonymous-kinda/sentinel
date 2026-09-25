@@ -1,6 +1,6 @@
 {
   "system-security-plan": {
-    "uuid": "4da967c3-2329-5d4a-a627-1d8a982b72e7",
+    "uuid": "cd53b1a7-e0b4-564e-ba98-5f09e3cc46b4",
     "metadata": {
       "title": "Sentinel system security plan (draft)",
       "last-modified": "2026-09-24T22:00:00Z",
@@ -818,7 +818,7 @@
             {
               "component-uuid": "cd16ef70-2e73-501e-9c7f-4caa10a38352",
               "uuid": "763b84ca-b689-52a3-a365-ef2930de08de",
-              "description": "The AI audit log is hash-chained: editing or deleting a line is detected at that line. Decision-log entries are Ed25519-signed and hash-chained per node; a tampered entry is rejected before merge, and a replica that sees one dot with two different contents stops rather than choose. A decision made offline at an edge arrives at the hub with a valid signature. Truncating the newest lines of the AI audit log leaves a shorter chain that still verifies.",
+              "description": "The AI audit log is hash-chained: editing or deleting a line is detected at that line, and verification re-reads the file against the hashes the process has seen, so an edit, deletion or truncation made while the node runs is found. A line torn by a power cut breaks the chain there without stopping the node. Decision-log entries are Ed25519-signed and hash-chained per node; a tampered entry is rejected before merge, including an unsigned forgery that reuses a dot, and a replica that sees one dot with two different, validly signed contents stops rather than choose. A decision made offline at an edge arrives at the hub with a valid signature. Truncating the newest lines of the AI audit log while the node is down leaves a shorter chain that still verifies.",
               "props": [
                 {
                   "name": "evidence-test",
@@ -829,6 +829,21 @@
                   "name": "evidence-test",
                   "ns": "urn:sentinel:oscal",
                   "value": "tests/ai/test_audit.py::test_deleting_a_line_is_detected"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/ai/test_audit.py::test_deleting_the_newest_line_while_running_is_found"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/ai/test_audit.py::test_an_entry_after_a_torn_line_is_kept_and_the_chain_never_verifies_again"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/test_ops_hostile_peer.py::test_a_forgery_that_reuses_a_dot_is_rejected_and_recorded_not_raised"
                 },
                 {
                   "name": "evidence-test",
@@ -2401,7 +2416,7 @@
             {
               "component-uuid": "a0709e7a-2515-5622-bb85-376d91a1b365",
               "uuid": "3621dabe-bcd2-5d48-94f5-add956debdb5",
-              "description": "The leafnode link between an edge and its hub is not encrypted: the configuration templates leave a place for TLS (LEAF_TLS, REMOTE_TLS) but none is configured, and the harness runs the link in the clear over loopback.",
+              "description": "The leafnode link between an edge and its hub is not encrypted: the configuration templates leave a place for TLS (LEAF_TLS, REMOTE_TLS) but none is configured, and the harness runs the link in the clear over loopback. An unauthenticated peer on that link can also push annotation registers, which are unsigned (ADR-005 signs only the decision log), and erase or overwrite a triage status, assignee or note.",
               "props": [
                 {
                   "name": "evidence-file",

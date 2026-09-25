@@ -80,3 +80,8 @@ node. `422` on a unit the node cannot compute for. Its `detail` names the
 
 `GET /api/passes/tracks?norad_id=40115&start=...&end=...` (at most 30 min) →
 `{"norad_id": 40115, "positions_ecef_m": [[x, y, z], ...], "step_s": 20, "note": "visualization only"}`.
+
+A track is drawn only within 3 days of the element set's epoch, on either
+side, the age at which a set is STALE. An interval beyond that answers 422:
+"the element set is stale over this interval: a track is drawn only within
+3 days of its epoch".

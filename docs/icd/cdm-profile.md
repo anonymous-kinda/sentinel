@@ -213,12 +213,17 @@ result with a `RefusalReason`, not an admission code; see
 CCSDS 508.0-B-1 has no event identifier, so the rule is explicit.
 
 - **Grouping.** A CDM joins an existing event when it names the same ordered
-  pair (`OBJECT1` designator, `OBJECT2` designator) and its `TCA` is within
-  60 s of the event's reference TCA, which is the TCA of the event's first CDM.
+  pair (`OBJECT1` designator, `OBJECT2` designator), has the same data class,
+  and its `TCA` is within 60 s of the event's reference TCA, which is the TCA
+  of the event's first CDM. An event holds one data class: a screening CDM
+  (DERIVED, geometry only) never becomes the latest CDM of a REAL event.
   The pair is ordered, so a CDM with the objects swapped starts a different
   event.
 - **New id.** `<OBJECT1 designator>-<OBJECT2 designator>-<TCA as YYYYMMDDThhmmss>`,
   for example `99001-99118-20260924T200000`. Designators are used as given.
+  When an event of another data class already holds that id, the new event's
+  id has its data class appended, for example
+  `99001-99118-20260924T070000-DERIVED`.
   In a bus subject, any character other than a letter, a digit, `-` or `_`
   becomes `_`.
 - **Assigned once.** Identity is assigned on the node where a CDM is first

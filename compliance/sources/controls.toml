@@ -264,14 +264,20 @@ rationale = "The decision log is the record of what operators decided; it must b
 [[control.by]]
 component = "node"
 status = "partial"
-statement = """The AI audit log is hash-chained: editing or deleting a line is detected at that line. \
-Decision-log entries are Ed25519-signed and hash-chained per node; a tampered entry is rejected \
-before merge, and a replica that sees one dot with two different contents stops rather than choose. \
+statement = """The AI audit log is hash-chained: editing or deleting a line is detected at that line, \
+and verification re-reads the file against the hashes the process has seen, so an edit, deletion or \
+truncation made while the node runs is found. A line torn by a power cut breaks the chain there \
+without stopping the node. Decision-log entries are Ed25519-signed and hash-chained per node; a \
+tampered entry is rejected before merge, including an unsigned forgery that reuses a dot, and a \
+replica that sees one dot with two different, validly signed contents stops rather than choose. \
 A decision made offline at an edge arrives at the hub with a valid signature. Truncating the newest \
-lines of the AI audit log leaves a shorter chain that still verifies."""
+lines of the AI audit log while the node is down leaves a shorter chain that still verifies."""
 tests = [
     "tests/ai/test_audit.py::test_editing_a_line_is_detected_at_that_line",
     "tests/ai/test_audit.py::test_deleting_a_line_is_detected",
+    "tests/ai/test_audit.py::test_deleting_the_newest_line_while_running_is_found",
+    "tests/ai/test_audit.py::test_an_entry_after_a_torn_line_is_kept_and_the_chain_never_verifies_again",
+    "tests/test_ops_hostile_peer.py::test_a_forgery_that_reuses_a_dot_is_rejected_and_recorded_not_raised",
     "tests/property/test_crdt.py::test_tampered_entry_is_rejected_not_merged",
     "tests/property/test_crdt.py::test_same_dot_with_different_content_raises",
 ]
@@ -832,7 +838,9 @@ component = "nats"
 status = "planned"
 statement = """The leafnode link between an edge and its hub is not encrypted: the configuration \
 templates leave a place for TLS (LEAF_TLS, REMOTE_TLS) but none is configured, and the harness \
-runs the link in the clear over loopback."""
+runs the link in the clear over loopback. An unauthenticated peer on that link can also push \
+annotation registers, which are unsigned (ADR-005 signs only the decision log), and erase or \
+overwrite a triage status, assignee or note."""
 files = ["deploy/nats/hub.conf.tmpl", "deploy/nats/edge.conf.tmpl"]
 plan = """Configure leafnode mTLS with per-node certificates, and measure the handshake on the LIMITED \
 link profile before relying on it (the harness has already shown the default leaf timeouts are \
