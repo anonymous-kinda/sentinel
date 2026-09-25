@@ -68,14 +68,14 @@ answered with 422 and the code. It never becomes an event.
 | `TCA` | relative metadata | Must be present and a CCSDS time. |
 | `OBJECT` | each object | `OBJECT1`, then `OBJECT2`, exactly two blocks. |
 | `REF_FRAME` | each object | One of the accepted frames (below). |
-| `X` `Y` `Z` `X_DOT` `Y_DOT` `Z_DOT` | each object | Present, finite, and in the required units. |
+| `X` `Y` `Z` `X_DOT` `Y_DOT` `Z_DOT` | each object | Present, finite, in the required units, and within the physical bounds (below). |
 
 **Checked when present.**
 
 | Keyword | Rule |
 |---|---|
 | `CREATION_DATE` | Must be a CCSDS time. It also stamps the record's creation time in the sync manifest; without it, the time of receipt is used. |
-| `CR_R` `CT_R` `CT_T` `CN_R` `CN_T` `CN_N` | Position covariance in the object's RTN frame. All six finite, or none: a partial covariance is rejected rather than completed by invention. None is accepted with a warning, and the engine then refuses a Pc (`NO_COVARIANCE`). A `NaN` counts as absent. |
+| `CR_R` `CT_R` `CT_T` `CN_R` `CN_T` `CN_N` | Position covariance in the object's RTN frame. All six finite, or none: a partial covariance is rejected rather than completed by invention. None is accepted with a warning, and the engine then refuses a Pc (`NO_COVARIANCE`). A `NaN` counts as absent. Each term must be within the physical bounds (below). |
 | `MISS_DISTANCE` | Cross-checked against the states. A disagreement greater than max(2 m, 0.5 % of the state miss distance) is rejected: one of them is wrong. |
 | `RELATIVE_SPEED`, `RELATIVE_POSITION_R/T/N`, `RELATIVE_VELOCITY_R/T/N` | Only the unit label is checked. The values are not used, because Sentinel recomputes them from the states. |
 
@@ -137,6 +137,37 @@ Any other value is rejected with `UNSUPPORTED_REF_FRAME`. ITRF is refused
 rather than approximated, because converting it needs Earth-orientation data.
 Covariance is read in each object's RTN frame, as the standard defines it.
 
+## Physical bounds
+
+A CDM screens objects in orbit about the Earth. A state that no such object
+can have is wrong, not unusual: the engine would still compute a Pc from a
+state faster than light. Such a message is quarantined with
+`IMPLAUSIBLE_STATE`, before any of its numbers are converted to metres. The
+bounds come from physics and are set generously, so that no real CDM comes
+near them.
+
+| Quantity | Admitted | Why |
+|---|---|---|
+| Position magnitude | 6,356.752 km to 1,500,000 km | The lower bound is the WGS-84 polar radius, the closest the Earth's surface comes to its centre. A point inside it is underground at every latitude. The upper bound is the Earth's Hill sphere, a·(m⊕ / 3M☉)^(1/3) ≈ 1.5 million km, beyond which the Sun's pull wins and nothing orbits the Earth. It holds the Moon (at most 405,500 km away) and the Earth–Moon L2 point (about 449,000 km) with a margin of three. |
+| Speed | at most 100 km/s | Every orbit about the Earth is slower than escape speed, which is highest at the lowest radius admitted: √(2μ/b) = 11.2 km/s. A departing probe is faster (New Horizons left at 16.3 km/s). Nothing bound to the Sun passes the Earth faster than about 73 km/s: solar escape speed at 1 au (42.1 km/s) plus the Earth's orbital speed (29.8 km/s), raised slightly by the Earth's own pull. 100 km/s is about nine times escape speed and still 3,000 times slower than light. |
+| Each position covariance term | magnitude at most `2.25e+18` m**2 | The Hill-sphere radius squared, (1.5 × 10⁹ m)². A coordinate confined to ±R has a variance of at most R² (Popoviciu's inequality), and no covariance term is larger than the variances beside it (Cauchy–Schwarz). A larger term describes no object inside the admitted region. |
+
+- **Order.** The state is checked once it is known to be finite, position
+  before speed. The covariance is checked after `PARTIAL_COVARIANCE`. A `NaN`
+  or infinite term keeps its meaning above: absent, or partial.
+- **A unit error is caught too.** A position written in metres under a `km`
+  label reads as at least 6.36 million km, beyond the Hill sphere.
+- **No real CDM comes near.** Every NASA CARA fixture is admitted
+  (`tests/test_cdm_codec.py`). They lie between 6,700 and 46,000 km, move
+  below 10 km/s, and carry no covariance term above 10¹³ m**2.
+- **Known limit: Sun–Earth libration orbits.** Spacecraft about the Sun–Earth
+  L1 and L2 points sit near 1.5 million km, and their halo orbits swing
+  hundreds of thousands of kilometres either side. They straddle the upper
+  bound. A CDM for one is outside this profile and is quarantined, never
+  assessed.
+- The trajectory view (`sentinel/conjunction/trajectory.py`) draws arcs only
+  within the same radius band.
+
 ## Rejection codes
 
 Quarantined: the input would make the answer wrong.
@@ -153,6 +184,7 @@ Quarantined: the input would make the answer wrong.
 | `WRONG_UNIT` | validator | A state or covariance term is labelled with a unit other than the one required. |
 | `MISSING_STATE` | validator | An object lacks one of `X` `Y` `Z` `X_DOT` `Y_DOT` `Z_DOT`. |
 | `NONFINITE_STATE` | validator | A state component is `NaN` or infinite. |
+| `IMPLAUSIBLE_STATE` | validator | A state or position covariance no Earth-orbiting object can have: a position inside the Earth or beyond its Hill sphere, a speed above 100 km/s, or a covariance term wider than the Hill sphere squared. See "Physical bounds" above. |
 | `PARTIAL_COVARIANCE` | validator | Some but not all of the six position covariance terms are present and finite. |
 | `MISS_DISTANCE_MISMATCH` | validator | The header `MISS_DISTANCE` disagrees with the distance between the two states by more than max(2 m, 0.5 %). |
 

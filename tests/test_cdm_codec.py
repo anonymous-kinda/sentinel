@@ -25,6 +25,7 @@ from sentinel.cdm.timefmt import format_ccsds_time, parse_ccsds_time
 
 CARA = pathlib.Path(__file__).resolve().parent.parent / "fixtures" / "cara"
 ALL_CDMS = sorted(CARA.glob("*/*.cdm"))
+FIXTURE_CDMS = sorted(CARA.parent.rglob("*.cdm"))
 ALFANO_01 = CARA / "SampleCDMs" / "AlfanoTestCase01.cdm"
 OPERATIONAL = CARA / "PcTestCaseCDMs" / "000025994_conj_000037558_20210324_151047_20210323_154356.cdm"
 
@@ -71,6 +72,12 @@ def test_every_nasa_cdm_parses_and_round_trips(path):
     assert parse(emit(message)) == message
     assert message.objects[0].text("OBJECT") == "OBJECT1"
     assert message.objects[1].text("OBJECT") == "OBJECT2"
+
+
+@pytest.mark.parametrize("path", FIXTURE_CDMS, ids=[p.name for p in FIXTURE_CDMS])
+def test_every_real_cdm_under_fixtures_is_admitted(path):
+    """The admission gates, the physical bounds among them, quarantine no real CDM."""
+    to_conjunction(parse_bytes(path.read_bytes()))
 
 
 def test_comments_and_units_survive_the_round_trip():

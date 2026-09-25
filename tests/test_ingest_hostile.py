@@ -19,12 +19,22 @@ from sentinel.api import create_app
 from sentinel.api.settings import Settings
 from sentinel.bus import InProcessBus
 from sentinel.cdm import CdmRejected, parse, to_conjunction
+from sentinel.cdm.validate import (
+    EARTH_HILL_SPHERE_KM,
+    MAX_POSITION_VARIANCE_M2,
+    MAX_SPEED_KM_S,
+    WGS84_POLAR_RADIUS_KM,
+)
 from sentinel.clock import FixedClock
 from sentinel.conjunction.service import ConjunctionService
 from sentinel.conjunction.store import ConjunctionStore
 from sentinel.conjunction.trajectory import TrajectoryUnavailable
 
 from .test_cdm_codec import OPERATIONAL, _replace
+
+# numpy answers an overflow with a warning and an inf, then carries on. A
+# hostile CDM must be judged before its numbers can overflow, not after.
+pytestmark = pytest.mark.filterwarnings("error::RuntimeWarning")
 
 NOW = dt.datetime(2026, 9, 23, 12, tzinfo=dt.UTC)
 BASE = OPERATIONAL.read_text()
@@ -44,6 +54,14 @@ def _mutate(key: str, value: str, occurrence: int = 1, text: str = BASE) -> str:
 # absurd state and the engine.
 NO_HEADER_MISS = _drop(BASE, "MISS_DISTANCE")
 
+
+def _state(position_km: tuple[float, float, float], velocity_km_s: tuple[float, float, float]) -> str:
+    text = NO_HEADER_MISS
+    for key, value in zip(("X", "Y", "Z", "X_DOT", "Y_DOT", "Z_DOT"), (*position_km, *velocity_km_s)):
+        text = _mutate(key, repr(value), text=text)
+    return text
+
+
 HOSTILE = {
     "originator-pc-not-a-number": _mutate("COLLISION_PROBABILITY", "abc"),
     "originator-pc-nan": _mutate("COLLISION_PROBABILITY", "NaN"),
@@ -55,12 +73,13 @@ HOSTILE = {
     "position-1e305-km": _mutate("X", "1e305", text=NO_HEADER_MISS),
     "position-1e305-km-with-header-miss": _mutate("X", "1e305"),
     "position-at-earth-centre": _mutate("Z", "0.001", text=_mutate("Y", "0.001", text=_mutate("X", "0.001", text=NO_HEADER_MISS))),
+    "position-past-the-float-limit": _state((1.7e308, 1.7e308, 0.0), (7.5, 0.0, 0.0)),
     "velocity-1e305-km-s": _mutate("X_DOT", "1e305", text=NO_HEADER_MISS),
     "covariance-1e308": _mutate("CR_R", "1e308"),
     "covariance-minus-1e308": _mutate("CR_R", "-1e308"),
     "falling-through-the-earth": _mutate("Z_DOT", "-1000", text=_mutate("Y_DOT", "0", text=_mutate("X_DOT", "0", text=NO_HEADER_MISS))),
-    "radial-through-the-centre": _mutate("Z_DOT", "-100", text=_mutate("Y_DOT", "0", text=_mutate("X_DOT", "0", text=(
-        _mutate("Z", "7000", text=_mutate("Y", "0", text=_mutate("X", "0", text=NO_HEADER_MISS))))))),
+    # A plausible state (a straight fall from 7,000 km) whose arc still meets the Earth's centre.
+    "radial-through-the-centre": _state((0.0, 0.0, 7000.0), (0.0, 0.0, -7.5)),
 }
 
 
@@ -134,7 +153,7 @@ def test_one_poisoned_cdm_leaves_the_rest_of_the_node_working():
     ("COLLISION_PROBABILITY", "NaN", "UNREADABLE"),
     ("COLLISION_PROBABILITY", "-inf", "UNREADABLE"),
     ("MISS_DISTANCE", "abc", "UNREADABLE"),
-    ("X", "1e306", "NONFINITE_STATE"),        # finite in km, infinite in the engine's metres
+    ("X", "1e306", "IMPLAUSIBLE_STATE"),      # finite in km, infinite in metres: judged before conversion
     ("TCA", "0001-01-01T00:00:00.000", "BAD_TCA"),
     ("TCA", "1957-10-03T23:59:59.999", "BAD_TCA"),
     ("TCA", "9999-366T00:00:00", "BAD_TCA"),
@@ -146,10 +165,6 @@ def test_unreadable_or_impossible_header_values_are_quarantined_with_a_reason(ke
     assert (result.status, result.code) == ("rejected", code)
 
 
-@pytest.mark.xfail(strict=True, reason=(
-    "admission gap: no code for a physically impossible state; needs an IMPLAUSIBLE_STATE row in "
-    "docs/icd/cdm-profile.md (off-limits to this change), then the check in cdm/validate.py"
-))
 @pytest.mark.parametrize("key,value", [
     ("X", "1e100"),          # beyond Earth's sphere of influence: finite, but not an Earth orbit
     ("X", "1.6e6"),          # just beyond Earth's Hill sphere (~1.5 million km)
@@ -163,6 +178,26 @@ def test_a_state_no_earth_orbiting_object_can_have_is_quarantined(key, value):
         text = _mutate("Z", "0.001", text=_mutate("Y", "0.001", text=text))
     with pytest.raises(CdmRejected) as excinfo:
         to_conjunction(parse(text))
+    assert excinfo.value.code == "IMPLAUSIBLE_STATE"
+
+
+@pytest.mark.parametrize("text", [
+    _state((WGS84_POLAR_RADIUS_KM, 0.0, 0.0), (0.0, 7.9, 0.0)),
+    _state((EARTH_HILL_SPHERE_KM, 0.0, 0.0), (0.0, 0.5, 0.0)),
+    _state((7000.0, 0.0, 0.0), (0.0, MAX_SPEED_KM_S, 0.0)),
+    _mutate("CR_R", repr(MAX_POSITION_VARIANCE_M2)),
+], ids=["on-the-surface", "at-the-hill-sphere", "at-the-speed-bound", "at-the-variance-bound"])
+def test_the_physical_bounds_themselves_are_admitted(text):
+    to_conjunction(parse(text))
+
+
+def test_a_position_in_metres_under_a_km_label_is_quarantined():
+    """No Earth orbit is closer than 6,357 km: in metres, that reads as 6.4 million km."""
+    primary = parse(BASE).objects[0]
+    position_m = tuple(1000.0 * primary.number(key) for key in ("X", "Y", "Z"))
+    velocity_km_s = tuple(primary.number(key) for key in ("X_DOT", "Y_DOT", "Z_DOT"))
+    with pytest.raises(CdmRejected) as excinfo:
+        to_conjunction(parse(_state(position_m, velocity_km_s)))
     assert excinfo.value.code == "IMPLAUSIBLE_STATE"
 
 

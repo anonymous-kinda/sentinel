@@ -2,9 +2,9 @@
 
 Every rejection and warning code the code can produce is in the profile's
 tables, and every code the tables list is one the code can still produce.
-Units, frames and the data-class marks are held to the constants that
-enforce them. The codes are read from the source (sentinel/cdm and the
-service's quarantine calls), not restated here.
+Units, frames, the physical bounds and the data-class marks are held to
+the constants that enforce them. The codes are read from the source
+(sentinel/cdm and the service's quarantine calls), not restated here.
 """
 
 from sentinel.cdm.model import POSITION_COVARIANCE_KEYS, STATE_POSITION_KEYS, STATE_VELOCITY_KEYS
@@ -13,7 +13,11 @@ from sentinel.cdm.validate import (
     _POSITION_UNIT,
     _SUMMARY_UNITS,
     _VELOCITY_UNIT,
+    EARTH_HILL_SPHERE_KM,
     INERTIAL_FRAMES,
+    MAX_POSITION_VARIANCE_M2,
+    MAX_SPEED_KM_S,
+    WGS84_POLAR_RADIUS_KM,
 )
 from sentinel.conjunction.service import EVENT_TCA_WINDOW_S, ORIGINATOR_DATA_CLASS
 from sentinel.screening.derived_cdm import DEMONSTRATION_COMMENT
@@ -52,6 +56,19 @@ def documented_unit_rules(doc: str) -> set[tuple[str, str, str]]:
     return rules
 
 
+def physical_bounds() -> set[str]:
+    """What the "Admitted" column must say, formatted from the constants."""
+    return {
+        f"{WGS84_POLAR_RADIUS_KM:,.3f} km to {EARTH_HILL_SPHERE_KM:,.0f} km",
+        f"at most {MAX_SPEED_KM_S:,.0f} km/s",
+        f"magnitude at most `{MAX_POSITION_VARIANCE_M2:.3g}` m**2",
+    }
+
+
+def documented_bounds(doc: str) -> set[str]:
+    return {admitted for _quantity, admitted, *_ in table_rows(doc, "Physical bounds")}
+
+
 def documented_marks(doc: str) -> set[tuple[str, str]]:
     return {
         (backticked(originator)[0], backticked(data_class)[0])
@@ -65,6 +82,7 @@ def profile_problems(doc: str) -> list[str]:
     problems += compare(column(doc, "Warning codes"), warning_codes(), "warning code")
     problems += compare(column(doc, "Frames"), set(INERTIAL_FRAMES), "frame")
     problems += compare(documented_unit_rules(doc), unit_rules(), "unit rule")
+    problems += compare(documented_bounds(doc), physical_bounds(), "physical bound")
     problems += compare(documented_marks(doc), set(ORIGINATOR_DATA_CLASS.items()), "data-class mark")
     if DEMONSTRATION_COMMENT not in doc:
         problems.append("the DERIVED demonstration COMMENT is not quoted")
@@ -93,3 +111,8 @@ def test_a_stale_profile_is_caught():
     assert profile_problems(retired) == ["rejection code RETIRED_CODE is documented but not in the code"]
     relabelled = doc.replace("| `km/s` |", "| `m/s` |", 1)
     assert "unit rule ('X_DOT', 'km/s', 'WRONG_UNIT') is not documented" in profile_problems(relabelled)
+    faster = doc.replace("| at most 100 km/s |", "| at most 200 km/s |", 1)
+    assert profile_problems(faster) == [
+        "physical bound at most 100 km/s is not documented",
+        "physical bound at most 200 km/s is documented but not in the code",
+    ]
