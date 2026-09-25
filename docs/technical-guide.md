@@ -323,6 +323,7 @@ The pipeline, in `sentinel/ai/assistant.py`:
 | Template narrator | `sentinel/ai/narrate.py` | always available; tested grounded on every tool and exercise event |
 | Claude narrator | `sentinel/ai/narrate_claude.py` | model pinned to `claude-opus-5`; no retries |
 | Tier policy | `sentinel/ai/policy.py` | a pure function of the measured link, the marking and operator opt-in |
+| Position guard | `sentinel/ai/opsec.py` | a question that holds a position is kept off hosted AI (ADR-010); the unit is read from the pass module through `node.extensions`, read-only |
 | Grounding guard | `sentinel/ai/grounding.py` | numbers must match, at the precision stated, a number in the facts or the question. Numbers glued to units are checked too. |
 | Eval | `sentinel/ai/evaluation.py`, `sentinel/ai/calibration.py`, `scripts/ai_eval.py` | routers scored through the same gate on `evals/routing.jsonl` |
 | HTTP | `sentinel/api/ai_routes.py` | `GET /api/ai/status`, `POST /api/ai/ask`, `POST /api/ai/confirm`, `GET /api/ai/audit`, `GET /api/ai/audit/verify` |
@@ -334,6 +335,8 @@ The pipeline, in `sentinel/ai/assistant.py`:
 | CONNECTED, DEGRADED | Jev, if `TYPESAFE_API_KEY` is set | Claude, if `ANTHROPIC_API_KEY` is set |
 | LIMITED | Jev, if configured | template |
 | DENIED, UNKNOWN | deterministic | template |
+
+**A position never goes to a hosted service.** Jev and Claude receive the question's text, so a question that holds a position is routed and phrased on the node, and the tier's reason cites ADR-010. Either rule is enough. The first is a decimal number that states the latitude or longitude of the unit the node holds, at the precision typed (`34.05` for 34.0522; a whole number alone is not matched). The second is position notation for any unit: an MGRS reference, a degree sign, a pair with hemisphere letters, or a pair of decimal degrees to three places. A false positive costs one local answer; none of the 60 eval requests is one. Nothing logs the matched text. The question itself stays in the node-local audit file, as every ask does.
 
 An edge measures its hub link and uses that as the WAN state. A hub or standalone node has no upstream link to measure; it is treated as CONNECTED, and `/api/ai/status` says the state is assumed. A hosted call that fails for any reason falls back to the local tier inside the same answer, and the answer lists the fallback.
 

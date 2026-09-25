@@ -16,6 +16,7 @@ import dataclasses
 import importlib
 import os
 import pathlib
+from collections.abc import Callable
 
 from fastapi import FastAPI, HTTPException, Request
 
@@ -58,6 +59,18 @@ def _link_state(node) -> tuple:
     return (lambda: "CONNECTED"), f"assumed: no upstream link on a {node.settings.role} node"
 
 
+def _unit_position(node) -> Callable[[], tuple[float, float] | None]:
+    """Read-only: the (lat, lon) of the unit the pass module holds, if any.
+    Looked up per question, because the pass module registers after this one
+    and its unit changes while the node runs. Nothing here stores or logs it."""
+
+    def position() -> tuple[float, float] | None:
+        unit = getattr(node.extensions.get("passes"), "unit", None)
+        return None if unit is None else (unit.lat_deg, unit.lon_deg)
+
+    return position
+
+
 def _question(body) -> str:
     text = str(body.get("text") or "").strip() if isinstance(body, dict) else ""
     if not 0 < len(text) <= MAX_QUESTION_CHARS:
@@ -95,6 +108,7 @@ def register(app: FastAPI, node) -> None:
         jev=jev,
         llm=llm,
         read_only=settings.read_only,
+        unit_position=_unit_position(node),
     )
     node.extensions["ai"] = assistant
     node.extensions.setdefault("modules", []).append("ai")

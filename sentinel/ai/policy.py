@@ -34,6 +34,7 @@ def canonical_marking(marking: str) -> str:
 
 
 _CLEARED = frozenset(canonical_marking(m) for m in HOSTED_MARKINGS)
+QUESTION_HOLDS_POSITION = "The question holds a position: it is routed and phrased on this node only (ADR-010)"
 
 
 @dataclasses.dataclass(frozen=True)
@@ -43,6 +44,7 @@ class TierInputs:
     jev_configured: bool
     claude_configured: bool
     cloud_opt_in: bool
+    question_holds_position: bool = False
 
 
 @dataclasses.dataclass(frozen=True)
@@ -58,6 +60,8 @@ def _hosted_allowed(inputs: TierInputs) -> str | None:
         return MARKING_NOT_CLEARED
     if not inputs.cloud_opt_in:
         return "Hosted AI not approved on this node"
+    if inputs.question_holds_position:
+        return QUESTION_HOLDS_POSITION
     return None
 
 

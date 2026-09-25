@@ -7,6 +7,7 @@ withheld, and that nothing is written until a person confirms.
 """
 
 import asyncio
+import logging
 
 import pytest
 
@@ -17,6 +18,7 @@ from sentinel.ai.tools import ToolError
 from sentinel.audit import AuditLog
 from sentinel.clock import FixedClock
 from sentinel.conjunction.exercise import generate
+from sentinel.obs import JsonFormatter
 
 from .conftest import EPOCH, NOW, build_registry
 
@@ -87,6 +89,27 @@ def test_denied_or_classified_never_calls_a_hosted_service(registry, link, marki
     a = ask(make(registry, link=link, marking=marking, jev=jev, llm=llm), "/events red")
     assert jev.calls == 0 and llm.calls == 0
     assert a.status == "answered" and a.route["provider"] == "deterministic" and a.narrated_by == "template"
+
+
+def test_a_question_holding_the_units_position_never_leaves_the_node(registry, caplog):
+    """ADR-010. With hosted AI on, a question carrying the held unit's
+    coordinates reaches neither Jev nor Claude and no log line. The node-local
+    audit file, the record of what was asked, keeps it."""
+    caplog.set_level(logging.DEBUG)
+    jev, llm = ScriptedRouter(jev_route("list_events", {}, 0.9)), ScriptedNarrator("8 events.")
+    audit = AuditLog(None)
+    assistant = make(registry, jev=jev, llm=llm, audit=audit, unit_position=lambda: (34.0522, -118.2437))
+
+    a = ask(assistant, "which events matter to us at 34.05 north?")
+    assert jev.calls == 0 and llm.calls == 0
+    assert (a.tier["router"], a.tier["narrator"]) == ("deterministic", "template") and "position" in a.tier["reason"]
+    assert a.status == "answered" and a.fallbacks == []
+    assert "34.05" in audit.entries()[-1]["question"]
+    logged = "\n".join(JsonFormatter().format(record) for record in caplog.records)
+    assert "34.05" not in logged
+
+    ask(assistant, "which events matter to us?")
+    assert jev.calls == 1 and llm.calls == 1, "the same node sends a question with no position to hosted AI"
 
 
 def test_a_jev_outage_falls_back_to_the_local_router(registry):

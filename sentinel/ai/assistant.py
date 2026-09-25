@@ -9,9 +9,10 @@
                                         facts do not is withheld
          --audit----------------------> one hash-chained line per ask
 
-The tier policy picks router and narrator from the measured link state
-and the classification marking; a hosted service that fails falls back
-to the local one, and the answer says so. A tool that writes yields a
+The tier policy picks router and narrator from the measured link state,
+the classification marking and whether the question holds a position
+(opsec.py); a hosted service that fails falls back to the local one, and
+the answer says so. A tool that writes yields a
 draft, and only `confirm` - a person - records it.
 """
 
@@ -27,6 +28,7 @@ from ..obs import get_logger
 from .catalog import DECISIONS, TOOLS
 from .grounding import check_grounding
 from .narrate import Narrator, NarratorUnavailable, TemplateNarrator
+from .opsec import Position, holds_position
 from .policy import TierInputs, decide
 from .router import DeterministicRouter, Route, Router, RouterUnavailable, RoutingContext
 from .tools import ToolError, ToolRegistry
@@ -104,7 +106,11 @@ class Assistant:
         min_confidence: float = MIN_CONFIDENCE,
         max_drafts: int = MAX_DRAFTS,
         read_only: bool = False,
+        unit_position: Callable[[], Position | None] = lambda: None,
     ):
+        """`unit_position`: the (lat, lon) of the unit this node holds, read at
+        each question; a question that states it is never sent to a hosted
+        service (ADR-010)."""
         self.tools = tools
         self.marking = marking
         self.cloud_opt_in = cloud_opt_in
@@ -114,15 +120,24 @@ class Assistant:
         self.max_drafts = max_drafts
         self.read_only = read_only
         self._link_state = link_state
+        self._unit_position = unit_position
         self._routers: dict[str, Router] = {"deterministic": DeterministicRouter(), **({"jev": jev} if jev else {})}
         self._narrators: dict[str, Narrator] = {"template": TemplateNarrator(), **({"claude": llm} if llm else {})}
         self._drafts: dict[str, _Draft] = {}
 
     # ------------------------------------------------------------------ tier
-    def tier(self) -> dict:
+    def tier(self, question: str = "") -> dict:
+        """The tier for this question; with none, the node's own tier."""
         link_state = self._link_state()
         decision = decide(
-            TierInputs(link_state, self.marking, "jev" in self._routers, "claude" in self._narrators, self.cloud_opt_in)
+            TierInputs(
+                link_state,
+                self.marking,
+                "jev" in self._routers,
+                "claude" in self._narrators,
+                self.cloud_opt_in,
+                question_holds_position=holds_position(question, self._unit_position()),
+            )
         )
         return {
             "router": decision.router,
@@ -134,7 +149,7 @@ class Assistant:
 
     # ------------------------------------------------------------------- ask
     async def ask(self, text: str, author: str) -> Answer:
-        answer = await self._answer(text, self.tier())
+        answer = await self._answer(text, self.tier(text))
         record = {
             "kind": "ask",
             "author": author,

@@ -48,6 +48,15 @@ def test_reasons_name_the_constraint():
     assert "DENIED" in decide(inputs(link_state="DENIED")).reason
 
 
+def test_a_question_that_holds_a_position_stays_on_the_node():
+    """ADR-010: a unit's position never leaves its edge, and a hosted service
+    would receive the question's text."""
+    decision = decide(inputs(question_holds_position=True))
+    assert (decision.router, decision.narrator) == ("deterministic", "template")
+    assert "position" in decision.reason and "ADR-010" in decision.reason
+    assert decide(inputs()).router == "jev", "the same node routes hosted when the question holds none"
+
+
 # ---------------------------------------------------------------- marking
 @pytest.mark.parametrize(
     "marking",

@@ -56,6 +56,16 @@ def _dotted_continuation(text: str, start: int) -> bool:
     return start >= 2 and text[start - 1] == "." and text[start - 2].isdigit()
 
 
+def states(token: str, value: float) -> bool:
+    """Does the number `token` state `value`, at the precision it is written?"""
+    stated, sig = _parse(token)
+    return math.isfinite(stated) and _same_at(stated, value, sig)
+
+
+def _same_at(stated: float, value: float, sig: int) -> bool:
+    return math.isclose(_round_sig(value, sig), _round_sig(stated, sig), rel_tol=1e-9, abs_tol=0.0)
+
+
 def _parse(token: str) -> tuple[float, int]:
     """(value, significant digits stated)."""
     m = _NUMBER.fullmatch(token)
@@ -110,7 +120,6 @@ def check_grounding(text: str, evidence: Any, question: str = "") -> GroundingRe
         if not math.isfinite(stated):
             unsupported.append(token)
             continue
-        target = _round_sig(stated, sig)
-        if not any(math.isclose(_round_sig(v, sig), target, rel_tol=1e-9, abs_tol=0.0) for v in pool):
+        if not any(_same_at(stated, v, sig) for v in pool):
             unsupported.append(token)
     return GroundingResult(not unsupported, unsupported)
