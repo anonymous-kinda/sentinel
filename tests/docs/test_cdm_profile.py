@@ -13,6 +13,7 @@ from sentinel.cdm.validate import (
     _POSITION_UNIT,
     _SUMMARY_UNITS,
     _VELOCITY_UNIT,
+    EARLIEST_TCA,
     EARTH_HILL_SPHERE_KM,
     INERTIAL_FRAMES,
     MAX_POSITION_VARIANCE_M2,
@@ -86,6 +87,8 @@ def profile_problems(doc: str) -> list[str]:
     problems += compare(documented_marks(doc), set(ORIGINATOR_DATA_CLASS.items()), "data-class mark")
     if DEMONSTRATION_COMMENT not in doc:
         problems.append("the DERIVED demonstration COMMENT is not quoted")
+    if f"{EARLIEST_TCA:%Y-%m-%d}" not in doc:
+        problems.append(f"the earliest TCA, {EARLIEST_TCA:%Y-%m-%d}, is not stated")
     if f"{EVENT_TCA_WINDOW_S:g} s" not in doc:
         problems.append(f"the {EVENT_TCA_WINDOW_S:g} s event window is not stated")
     return problems
@@ -111,6 +114,8 @@ def test_a_stale_profile_is_caught():
     assert profile_problems(retired) == ["rejection code RETIRED_CODE is documented but not in the code"]
     relabelled = doc.replace("| `km/s` |", "| `m/s` |", 1)
     assert "unit rule ('X_DOT', 'km/s', 'WRONG_UNIT') is not documented" in profile_problems(relabelled)
+    later = doc.replace(f"{EARLIEST_TCA:%Y-%m-%d}", "1958-01-31")
+    assert profile_problems(later) == [f"the earliest TCA, {EARLIEST_TCA:%Y-%m-%d}, is not stated"]
     faster = doc.replace("| at most 100 km/s |", "| at most 200 km/s |", 1)
     assert profile_problems(faster) == [
         "physical bound at most 100 km/s is not documented",

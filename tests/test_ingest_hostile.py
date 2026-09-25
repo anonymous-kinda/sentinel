@@ -158,6 +158,7 @@ def test_one_poisoned_cdm_leaves_the_rest_of_the_node_working():
     ("TCA", "1957-10-03T23:59:59.999", "BAD_TCA"),
     ("TCA", "9999-366T00:00:00", "BAD_TCA"),
     ("CREATION_DATE", "9999-366T00:00:00", "BAD_CREATION_DATE"),
+    ("CREATION_DATE", "1957-10-03T23:59:59.999", "BAD_CREATION_DATE"),
 ])
 def test_unreadable_or_impossible_header_values_are_quarantined_with_a_reason(key, value, code):
     service = _service()
@@ -201,16 +202,20 @@ def test_a_position_in_metres_under_a_km_label_is_quarantined():
     assert excinfo.value.code == "IMPLAUSIBLE_STATE"
 
 
-def test_a_repeated_keyword_is_ambiguous_and_quarantined():
+@pytest.mark.parametrize("key,repeat", [
+    ("X", "X = 31.5 [km]"),                        # within an object block
+    ("TCA", "TCA = 2021-03-26T00:00:00.000"),      # within the header and relative metadata
+])
+def test_a_repeated_keyword_is_ambiguous_and_quarantined(key, repeat):
     """Two values for one keyword: which one the sender meant is a guess,
     and a reader that takes the last would compute a different answer."""
     lines = BASE.splitlines()
-    first_x = next(i for i, line in enumerate(lines) if line.split("=")[0].strip() == "X")
-    lines.insert(first_x + 1, "X = 31.5 [km]")
+    first = next(i for i, line in enumerate(lines) if line.split("=")[0].strip() == key)
+    lines.insert(first + 1, repeat)
     service = _service()
     result = _ingest(service, "\n".join(lines) + "\n")
     assert (result.status, result.code) == ("rejected", "PARSE_ERROR")
-    assert "X appears twice" in result.detail
+    assert f"{key} appears twice" in result.detail
 
 
 def test_an_event_whose_arcs_cannot_be_drawn_answers_422_not_500(tmp_path):
