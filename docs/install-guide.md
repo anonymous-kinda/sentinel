@@ -26,7 +26,7 @@ These files cross the gap together, through your site's software approval proces
 Check the verifier first. These digests are the pins in `deploy/tools.lock` (cosign 3.1.3 for x86_64; use the aarch64 row on an aarch64 host).
 
 ```bash
-VER=0.2.0; ARCH=x86_64
+VER=0.3.0; ARCH=x86_64
 ID="https://github.com/OWNER/sentinel/.github/workflows/release.yml@refs/tags/v$VER"
 echo "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71  cosign" | sha256sum --strict -c -
 echo "6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66  trusted_root.json" | sha256sum --strict -c -
