@@ -52,6 +52,12 @@ A request's timeout is 6 s + 1.5 × expected bytes ÷ max(measured rate,
 responders" is expected over a DDIL link: it counts as a link failure, and
 the next cycle tries again.
 
+A record's expected bytes are its size in the manifest. A manifest's are
+the size of the last manifest received, at least 4000, doubled for each
+manifest timeout in a row up to 256 KiB. A manifest that outgrew the wait
+still reaches the edge over a thin link, and the first one that arrives
+brings the wait back to its own size.
+
 ## Summary
 
 A manifest is a CBOR array of summaries, one per item, concatenated across

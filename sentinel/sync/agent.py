@@ -46,6 +46,8 @@ log = get_logger(__name__)
 
 LINK_ERRORS = (RequestTimeout, NoResponders, ConnectionError, OSError)
 RETRY_MAX_PULLS = 32        # the most pulls a refused record sits out
+MANIFEST_MIN_BYTES = 4000   # the manifest wait is sized for at least this
+MANIFEST_MAX_BYTES = 256 * 1024     # and for at most this, however many were lost
 # What reading a summary sync cannot read raises. Each is skipped on its own.
 MALFORMED = (TypeError, ValueError, KeyError, OverflowError)
 _SHA16 = re.compile(r"[0-9a-f]{16}")
@@ -181,6 +183,8 @@ class SyncAgent:
         self.summary_only: set[str] = set()
         self.manifest_digest: str | None = None
         self._received_digest: str | None = None
+        self._manifest_bytes = MANIFEST_MIN_BYTES      # the size of the manifest last received
+        self._manifests_lost = 0                       # manifest timeouts in a row
         self.last_cycle: dict[str, Any] = {}
         self.started_wall = time.monotonic()
         self._last_state: LinkState | None = None
@@ -259,15 +263,33 @@ class SyncAgent:
     # ---------------------------------------------------------------- manifest
     async def fetch_manifest(self) -> list[dict[str, Any]] | None:
         request = codec.encode({"from": self.node_id, "known": self.manifest_digest})
+        expected_bytes = self._manifest_expected_bytes()
         t0 = time.monotonic()
-        reply = await self.bus.request(subjects.sync_manifest(self.hub_id), request, timeout=self._timeout(4000))
+        try:
+            reply = await self.bus.request(
+                subjects.sync_manifest(self.hub_id), request, timeout=self._timeout(expected_bytes)
+            )
+        except RequestTimeout:
+            self._manifests_lost += 1
+            log.info("Manifest request timed out", hub_id=self.hub_id, expected_bytes=expected_bytes,
+                     next_expected_bytes=self._manifest_expected_bytes())
+            raise
         rtt = time.monotonic() - t0
         self.link.observe_success(rtt, len(reply.data), rtt)
+        self._manifests_lost = 0
         if reply.headers.get("Sentinel-Unchanged") == "1":
             return None
+        self._manifest_bytes = max(len(reply.data), MANIFEST_MIN_BYTES)
         self._received_digest = reply.headers.get("Sentinel-Digest")
         manifest: list[dict[str, Any]] = codec.decode(reply.data)
         return manifest
+
+    def _manifest_expected_bytes(self) -> int:
+        """Size the manifest wait from the last one received, doubled for each
+        timeout in a row: a manifest that outgrew the wait still gets through
+        a thin link, and one that is merely lost does not stall the cycle for
+        long."""
+        return min(self._manifest_bytes << self._manifests_lost, MANIFEST_MAX_BYTES)
 
     def apply_manifest(self, manifest: list[dict[str, Any]]) -> None:
         """Store the hub's summaries and rebuild the want-list. Only then is the

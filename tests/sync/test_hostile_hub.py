@@ -426,10 +426,6 @@ class ThinLinkBus(InProcessBus):
         return reply
 
 
-@pytest.mark.xfail(strict=True, reason=CORE + (
-    "fetch_manifest() always allows the time for 4000 bytes (_timeout(4000)); a manifest "
-    "that needs longer to cross the measured link times out every cycle, identically, "
-    "forever, and the edge never sees a single summary"))
 def test_a_manifest_larger_than_4_kb_still_reaches_the_edge_on_a_limited_link():
     rate = 1000.0                                  # ~8 kbit/s: the LIMITED scenario
     now = dt.datetime(2026, 9, 24, 12, 0, tzinfo=dt.UTC)
@@ -453,6 +449,45 @@ def test_a_manifest_larger_than_4_kb_still_reaches_the_edge_on_a_limited_link():
         except LINK_ERRORS:
             agent.link.observe_failure()
     assert agent.manifest_digest is not None and agent.queue, "the edge never received the manifest"
+
+
+class LossyManifestBus(InProcessBus):
+    """Loses every manifest reply while `lost`, and records how long the
+    edge was prepared to wait for each."""
+
+    def __init__(self):
+        super().__init__()
+        self.lost = True
+        self.waits: list[float] = []
+
+    async def request(self, subject, data, timeout, headers=None):
+        if subject == subjects.sync_manifest("hub"):
+            self.waits.append(timeout)
+            if self.lost:
+                raise RequestTimeout(subject)
+        return await super().request(subject, data, timeout, headers)
+
+
+def test_the_manifest_wait_grows_after_each_timeout_up_to_a_cap_and_resets_when_one_arrives():
+    """A longer wait costs the cycle behind it (operator data waits too, and
+    a cut link is measured only when the request gives up), so it grows only
+    while manifests are being lost, stops at a cap, and returns to the size
+    of the manifest last received."""
+    bus = LossyManifestBus()
+    run(SyncServer(bus, SmallRecords([{"e": "A", "dl": 1_790_000_000, "q": 0, "c": []}]), None, "hub").start())
+    agent = SyncAgent(bus, SmallRecords(), None, FixedClock(EPOCH), "alpha", "hub", LinkMonitor(rate_bytes_per_s=1000.0))
+
+    for _ in range(12):
+        with contextlib.suppress(RequestTimeout):
+            run(agent.fetch_manifest())
+    grown = bus.waits
+    assert grown == sorted(grown) and grown[1] > grown[0], "it waits longer after each timeout"
+    assert grown[-1] == grown[-2] == grown[-3], "up to a cap"
+
+    bus.lost = False
+    run(agent.fetch_manifest())
+    run(agent.fetch_manifest())
+    assert bus.waits[-1] == grown[0], "a manifest arrived: back to the wait its size needs"
 
 
 def test_the_composite_routes_a_summary_without_an_item_id_to_rejection_not_to_a_crash(link):
