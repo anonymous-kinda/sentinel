@@ -8,12 +8,21 @@ import pathlib
 
 ROLES = ("hub", "edge", "standalone")
 
+# The spellings a boolean variable accepts, in any case. Anything else is
+# refused: reading `SENTINEL_READ_ONLY=enabled` as false would start a
+# public node writable, and a guess either way is a misconfiguration nobody
+# was told about.
+FLAG_VALUES = {"1": True, "true": True, "yes": True, "on": True, "0": False, "false": False, "no": False, "off": False}
+
 
 def _flag(name: str, default: bool) -> bool:
     value = os.environ.get(name)
     if value is None:
         return default
-    return value.strip().lower() in {"1", "true", "yes", "on"}
+    try:
+        return FLAG_VALUES[value.strip().lower()]
+    except KeyError:
+        raise ValueError(f"{name} must be one of {', '.join(FLAG_VALUES)} (any case), not {value!r}") from None
 
 
 @dataclasses.dataclass(frozen=True)

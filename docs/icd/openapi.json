@@ -536,7 +536,7 @@
     },
     "/api/events/{event_id}/dilution-curve": {
       "get": {
-        "description": "Pc as the covariance is scaled by k (log10 grid), with the maximizing scale k*.\n`diluted` is true when k* < 1: the Pc would rise if the data were better.\n`available: false` when the curve cannot be computed.",
+        "description": "Pc as the covariance is scaled by k (log10 grid), with the maximizing scale k*.\n`diluted` is true when k* < 1: the Pc would rise if the data were better.\n`available: false` when the curve cannot be computed; 404 when the event is unknown.",
         "operationId": "dilution_curve_api_events__event_id__dilution_curve_get",
         "parameters": [
           {
@@ -581,7 +581,7 @@
     },
     "/api/events/{event_id}/encounter": {
       "get": {
-        "description": "Miss vector, projected covariance ellipse and hard-body radius in the encounter\nplane, for display. `available: false` with a reason when there is no covariance or\nno hard-body radius.",
+        "description": "Miss vector, projected covariance ellipse and hard-body radius in the encounter\nplane, for display. `available: false` with a reason when there is no covariance or\nno hard-body radius, or the event's CDM has not arrived yet; 404 when the event is\nunknown.",
         "operationId": "encounter_api_events__event_id__encounter_get",
         "parameters": [
           {

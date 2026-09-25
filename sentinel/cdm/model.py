@@ -148,7 +148,8 @@ class CdmMessage:
         This is a convention, not part of CCSDS 508.0-B-1: CARA and 19 SDS
         carry data the standard has no keyword for in COMMENT lines. Accepted
         units are metres (explicit or unlabelled, which is how CARA writes
-        it). Any other label is ambiguous and is not guessed at.
+        it). Any other label is ambiguous and is not guessed at. Raises
+        ValueError for a value that is not a number, such as ``1.2.3``.
         """
         for text in self.preamble.comments():
             m = _HBR_COMMENT.match(text)
@@ -157,7 +158,10 @@ class CdmMessage:
             unit = (m["unit"] or "m").strip().lower()
             if unit != "m":
                 return None
-            value = float(m["value"])
+            try:
+                value = float(m["value"])
+            except ValueError as exc:
+                raise ValueError(f"COMMENT HBR = {m['value']} is not a number") from exc
             return value if math.isfinite(value) and value > 0 else None
         return None
 

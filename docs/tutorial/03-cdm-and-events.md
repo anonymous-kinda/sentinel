@@ -204,6 +204,12 @@ The one place that knows both the CDM's vocabulary and the engine's. `to_conjunc
 
 *Easy to get wrong:* no radius is ever invented here. A default radius is an engine configuration choice (`AssessmentConfig.default_radius_m`), recorded as `hbr_defaulted`, and a node sets none.
 
+### `sentinel/cdm/admission.py`
+
+The one path from raw bytes to a validated `Conjunction`. The node's ingest and the CLI both take it, so they cannot disagree about a message. `admit(raw, hbr_override_m)` returns `Admitted(message, conversion)` or raises `CdmRejected` with the code the node quarantines under. `read_message` turns bytes that are not UTF-8 into `UNREADABLE` and a `CdmParseError` into `PARSE_ERROR`. Any other `ValueError` or `KeyError` during conversion also becomes `UNREADABLE`, for example a `COMMENT HBR = 1.2.3` or an `AREA_PC = abc`, and the reason names the value. `sentinel cdm emit` needs only the structure, so it calls `read_message` alone.
+
+*Easy to get wrong:* reading a CDM with `parse_bytes` and `to_conjunction` directly. An unreadable value then escapes as a plain `ValueError`, and the caller must classify it itself or end in a traceback. Where an answer reaches a user, go through `admit`.
+
 ### `sentinel/conjunction/store.py`
 
 `ConjunctionStore` is a SQLite projection. The raw CDM bytes are the source of truth; the tables are `cdm_messages`, `events`, `assessments` (keyed by sha256 and engine version), `remote_summaries` (what a hub asserted, chapter 7) and `quarantine`. A lock serialises access. CDMs, events and quarantine rows are inserted with `INSERT OR IGNORE`, so a repeat is harmless; assessments and hub summaries are replaced. `cdms_for_event` orders by `CREATION_DATE`, then arrival, which is how "latest" is defined.
@@ -218,10 +224,9 @@ The one place that knows both the CDM's vocabulary and the engine's. `to_conjunc
 
 ```
 raw bytes ─ sha256 already stored? ── yes ──► duplicate (no-op)
-          ─ parse_bytes + to_conjunction
-                CdmParseError ──────────────► quarantine PARSE_ERROR
-                CdmRejected ────────────────► quarantine with its code
-                other ValueError / KeyError ► quarantine UNREADABLE
+          ─ admit (sentinel/cdm/admission.py)
+                CdmRejected ────────────────► quarantine with its code:
+                                              PARSE_ERROR, UNREADABLE or the validator's
           ─ ORIGINATOR mark ────────────────► data class
           ─ _event_for ─────────────────────► event (joined or new)
           ─ store.add_cdm (raw bytes kept)
@@ -229,7 +234,7 @@ raw bytes ─ sha256 already stored? ── yes ──► duplicate (no-op)
           ─ publish node.<id>.cdm.accepted.<event_id>
 ```
 
-`_reject` writes the quarantine row and publishes `node.<id>.cdm.rejected`. `_event_for` implements the identity rule; when `event_id` is passed (an edge fetching from its hub), it takes that id without re-deriving it. `_new_event_id` appends the data class when another class already holds the plain id.
+`_reject` writes the quarantine row, logs the warning `CDM quarantined` with the code, sha256 and source (never the content, which the detail can quote), and publishes `node.<id>.cdm.rejected`. `_event_for` implements the identity rule; when `event_id` is passed (an edge fetching from its hub), it takes that id without re-deriving it. `_new_event_id` appends the data class when another class already holds the plain id.
 
 `_assess_sha` looks up the stored assessment for `(sha256, engine_version)` and computes it only on a miss. `engine_version` is `sentinel.__version__` plus a 12-character hash of the `AssessmentConfig`, so changing a threshold re-assesses every CDM from its raw bytes the next time it is viewed. `_parsed` keeps recently parsed messages in a bounded cache.
 
@@ -238,7 +243,8 @@ The views are computed on request, not at ingest:
 - `event_summary`: the latest CDM's assessment, triaged, with MCP, band, worst case, consequence and the originator's Pc beside Sentinel's.
 - `list_events(scope)`: active, past or all, sorted by triage order. On an edge it also lists events known only from the hub's summaries.
 - `event_detail`: the summary plus every CDM's own assessment and warnings, and the engine version and policy that produced them.
-- `encounter`, `dilution_curve` and `trajectory`: the console's plots (chapter 5).
+- `encounter`, `dilution_curve` and `trajectory`: the console's plots (chapter 5). `dilution_curve` integrates with the engine configuration's panel cap (`quadrature_panels_cap`), so its curve agrees with the assessment beside it under any configuration.
+- `knows`: whether the node has heard of an event at all, from its own CDMs or from a hub's summary. The API answers 404 for an event it does not know, and `available: false` for a known one without the data.
 - `manifest`: the compact summaries a hub offers edges, cached against `store.version` (chapter 7).
 
 *Easy to get wrong:* the assessment cache trusts the engine version. With a persistent database (`SENTINEL_DB` set to a file), a change to `sentinel/risk/` that keeps both the version and the configuration serves the old cached results. A release that changes the engine must bump `sentinel.__version__`.
@@ -263,7 +269,7 @@ The exercise scenario: eight scripted events (`SCENARIO`), each a sequence of CD
 | `EX-BAN` | 300 km along-track sigma: refused `CURVILINEAR_UNCERTAINTY` |
 | `EX-NPD` | a correlation above 1, so not a covariance: refused `INVALID_COVARIANCE` |
 
-`build_message` builds circular-orbit states with the requested miss vector in the encounter plane, an RTN covariance with a typical radial/along-track correlation, and `COMMENT HBR = 20 [m]`. Every message is labelled at the source: `ORIGINATOR = SENTINEL-EXERCISE`, a comment line saying it is not a real conjunction, designators in the 99xxx range and names ending `(EXERCISE)`. `generate(epoch)` returns the whole scenario sorted by release time. A node's exercise feeder ingests each message when its clock reaches the release time, so updates dated after start-up arrive while you watch.
+`build_message` builds circular-orbit states with the requested miss vector in the encounter plane, an RTN covariance with a typical radial/along-track correlation, and `COMMENT HBR = 20 [m]`. Every message is labelled at the source: `ORIGINATOR = SENTINEL-EXERCISE`, a comment line saying it is not a real conjunction, designators in the 99xxx range and names ending `(EXERCISE)`. `generate(epoch)` returns the whole scenario sorted by release time. Every time a message carries is UTC, its `MESSAGE_ID` and so its file name included, whatever timezone the epoch is written in; a naive epoch is refused rather than read as the host's local time. A node's exercise feeder ingests each message when its clock reaches the release time, so updates dated after start-up arrive while you watch.
 
 *Easy to get wrong:* the scenario is a demonstration, not a validation. Its numbers are whatever the engine computes from synthetic geometry; the engine's correctness comes from chapter 2's CARA comparison.
 
@@ -362,7 +368,7 @@ uv run sentinel assess $SCRATCH/ex/EX-GEO-01-20260924T020000.cdm
 uv run sentinel assess $SCRATCH/ex/EX-DIL-05-20260924T120336.cdm
 ```
 
-Sixteen files, named by script, update number and creation time. Give `--epoch` a UTC offset; see "How it fails". Open any file: `ORIGINATOR = SENTINEL-EXERCISE` and the EXERCISE comment are in the header. EX-GEO is refused for its 0.3 m/s relative speed. EX-DIL's last update prints `DILUTED` with `k*` well below 1.
+Sixteen files, named by script, update number and UTC creation time. An `--epoch` without a timezone is read as UTC, as `sentinel screen` reads `--start`, so `--epoch 2026-09-24T12:00:00` writes the same files. Open any file: `ORIGINATOR = SENTINEL-EXERCISE` and the EXERCISE comment are in the header. EX-GEO is refused for its 0.3 m/s relative speed. EX-DIL's last update prints `DILUTED` with `k*` well below 1.
 
 **9. Run the rungs that hold this chapter's code.**
 
@@ -399,13 +405,13 @@ uv run pytest -q tests/test_cdm_codec.py tests/test_ingest_hostile.py tests/conj
 
 ## How it fails
 
-- **Unreadable or wrong input** is quarantined, never assessed. The node answers 422 with the code, stores the bytes, code, detail and source in `quarantine` (`GET /api/quarantine`), and publishes `cdm.rejected`, which the console receives on its live stream. The node writes no log line for a rejection; the quarantine table and the bus event are the record.
+- **Unreadable or wrong input** is quarantined, never assessed. The node answers 422 with the code, stores the bytes, code, detail and source in `quarantine` (`GET /api/quarantine`), publishes `cdm.rejected`, which the console receives on its live stream, and logs the warning `CDM quarantined` with the code, sha256 and source.
 - **Incomplete input** is accepted, with its warnings returned by the ingest call and stored with the CDM (`history[].warnings`).
 - **A refused assessment** is still an event. Its band is UNASSESSED and its consequence WATCH, so it asks for attention rather than looking safe.
 - **Repeats** are free: the same bytes are a 200 no-op. A body over 1 MB is refused with 413; the node stops reading at the limit.
 - **A state the globe cannot draw** returns 422 from the trajectory route; the event and its assessment are unaffected.
 - **A denied link** does not stop ingest or assessment: both are local. What crosses a link is chapter 7.
-- **The CLI is thinner than the node.** The node quarantines any `ValueError` during conversion as `UNREADABLE`. `sentinel cdm parse` and `sentinel assess` catch only `CdmRejected`, `CdmParseError` and I/O errors, so at the time of writing a few unreadable inputs end in a Python traceback: bytes that are not UTF-8, a `COMMENT HBR` value that is not a number, and (for `assess`) an unreadable `AREA_PC`. `sentinel exercise generate` likewise needs a timezone on `--epoch`.
+- **The CLI judges a file as the node would.** `sentinel assess` and `sentinel cdm parse` read it through the same `admit`, so whatever the node would quarantine, a parse error included, prints `REJECTED` with the node's code and reason on standard error and exits 2, never with a traceback.
 - **A known gap.** At the time of writing, a CDM in which one object's velocity is zero, or exactly parallel to its position, passes admission and then makes the engine raise (chapter 2, "How it fails"). The node stores the CDM before assessing it, so the ingest request fails with HTTP 500, and every later `GET /api/events` fails too, because listing events assesses each one. The catalogue in `tests/test_ingest_hostile.py` has no such variant yet. A fix needs one there, and a gate in `sentinel/risk/engine.py` or a bound in `sentinel/cdm/validate.py`.
 
 ## Check yourself

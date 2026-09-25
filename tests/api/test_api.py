@@ -91,6 +91,30 @@ def test_refused_event_has_no_curve_but_still_has_geometry(client):
     assert len(traj["primary"]) == len(traj["secondary"]) == 81
 
 
+@pytest.mark.parametrize("view", ["", "/encounter", "/dilution-curve", "/trajectory"])
+def test_an_unknown_event_is_404_on_every_view_not_missing_data(client, view):
+    """An event the node has never heard of is not an event without a
+    covariance: a mistyped id must not read as "no covariance or HBR"."""
+    r = client.get(f"/api/events/NO-SUCH-EVENT{view}")
+    assert r.status_code == 404
+    assert r.json()["detail"] == "no such event"
+
+
+def test_a_known_event_without_the_data_still_says_so(client):
+    nocov = next(e for e in client.get("/api/events").json() if e["secondary"]["id"] == "99560")
+    encounter = client.get(f"/api/events/{nocov['event_id']}/encounter")
+    curve = client.get(f"/api/events/{nocov['event_id']}/dilution-curve")
+    assert (encounter.status_code, encounter.json()) == (200, {"available": False, "reason": "no covariance or HBR"})
+    assert (curve.status_code, curve.json()) == (200, {"available": False})
+
+
+def test_an_event_known_only_from_the_hubs_summary_has_no_geometry_yet(client):
+    """On an edge, an event listed by the hub is known before its CDM arrives."""
+    client.app.state.node.store.put_remote_summary("HUB-ONLY", {"e": "HUB-ONLY"}, "hub", EPOCH.isoformat())
+    assert client.get("/api/events/HUB-ONLY/encounter").json() == {"available": False, "reason": "no covariance or HBR"}
+    assert client.get("/api/events/HUB-ONLY/dilution-curve").json() == {"available": False}
+
+
 @pytest.mark.parametrize(
     ("secondary", "reason"),
     [("99207", "LOW_RELATIVE_VELOCITY"), ("99881", "CURVILINEAR_UNCERTAINTY")],
@@ -143,6 +167,20 @@ def test_console_is_served_under_a_same_origin_content_security_policy(client):
     assert "connect-src 'self'" in csp
     assert "'unsafe-eval'" not in csp.replace("'wasm-unsafe-eval'", "")
     assert "frame-ancestors 'none'" in csp
+
+
+@pytest.mark.parametrize("page", ["/docs", "/docs/oauth2-redirect", "/redoc"])
+def test_no_api_page_the_nodes_own_csp_would_blank(tmp_path, page):
+    """FastAPI's Swagger UI and ReDoc pages load their scripts from a CDN
+    and start them with an inline script. The node's CSP blocks both, so
+    the pages rendered blank. They are not served; the schema they would
+    have shown stays at /openapi.json (and in docs/icd/openapi.json)."""
+    app = create_app(Settings(exercise=False, library=False, web_dist=None, var_dir=str(tmp_path)), start_background=False)
+    with TestClient(app) as c:
+        assert c.get(page).status_code == 404
+        schema = c.get("/openapi.json")
+    assert schema.status_code == 200
+    assert "/api/health" in schema.json()["paths"]
 
 
 def test_link_endpoint_logs_emulator_failure_instead_of_hiding_it(tmp_path, caplog):

@@ -238,7 +238,18 @@ def _object(index: int, spec: ObjectSpec, r_km, v_km_s, sigma, non_pd) -> CdmSec
     return CdmSection(tuple(entries))
 
 
+def _in_utc(when: dt.datetime) -> dt.datetime:
+    """The same instant in UTC. A naive time is refused: astimezone() would
+    read it as the host's local time."""
+    if when.tzinfo is None:
+        raise ValueError("refusing a naive epoch; exercise times are UTC")
+    return when.astimezone(dt.UTC)
+
+
 def build_message(script: EventScript, index: int, update: Update, epoch: dt.datetime) -> CdmMessage:
+    """One CDM of an event's sequence. Every time it carries is UTC, the
+    MESSAGE_ID's included, whatever timezone `epoch` is written in."""
+    epoch = _in_utc(epoch)
     tca = epoch + dt.timedelta(hours=script.tca_offset_h)
     tca = tca.replace(microsecond=(tca.microsecond // 1000) * 1000)
     created = epoch + dt.timedelta(hours=update.offset_h)
