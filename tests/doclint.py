@@ -166,25 +166,40 @@ def _exists(base: Path, relative: str, root: Path) -> bool:
 
 def commands(md: Markdown) -> list[list[str]]:
     """Each shell command in the document's code, as argv, with `$`, env and `uv run` removed."""
+    return [argv for words in _shell_words(md) if (argv := _strip_prefixes(words))]
+
+
+def scripts_outside_the_project(md: Markdown) -> list[str]:
+    """`python scripts/x.py` run without `uv run`, in order. The system
+    interpreter has none of the project's dependencies, so on a fresh clone
+    the command fails where `uv run python scripts/x.py` works."""
     found = []
+    for words in _shell_words(md):
+        argv = _strip_shell_prefixes(words)
+        if argv[:1] in (["python"], ["python3"]) and argv[1:2] and argv[1].endswith(".py"):
+            found.append(" ".join(argv[:2]))
+    return _unique(found)
+
+
+def _shell_words(md: Markdown) -> Iterator[list[str]]:
+    """Each shell command in the document's code, as words, comments removed."""
     for chunk in md.code:
         for line in chunk.splitlines():
             for segment in _SEPARATOR.split(_COMMENT.sub("", line)):
-                argv = _strip_prefixes(segment.split())
-                if argv:
-                    found.append(argv)
-    return found
+                yield segment.split()
 
 
 def _strip_prefixes(words: list[str]) -> list[str]:
+    words = _strip_shell_prefixes(words)
+    if words[:2] == ["uv", "run"]:
+        return _strip_shell_prefixes(words[2:])
+    return words
+
+
+def _strip_shell_prefixes(words: list[str]) -> list[str]:
     i = 0
-    while i < len(words):
-        if words[i] in {"$", "exec", "time"} or _ENV_ASSIGNMENT.match(words[i]):
-            i += 1
-        elif words[i] == "uv" and words[i + 1 : i + 2] == ["run"]:
-            i += 2
-        else:
-            break
+    while i < len(words) and (words[i] in {"$", "exec", "time"} or _ENV_ASSIGNMENT.match(words[i])):
+        i += 1
     return words[i:]
 
 
