@@ -87,6 +87,9 @@ MAX_RADIUS_KM = 3.0e6
 MAX_SPEED_KM_S = 100.0
 # A coordinate confined to +/-R has a variance of at most R**2 (Popoviciu).
 MAX_POSITION_VARIANCE_M2 = (MAX_RADIUS_KM * 1000.0) ** 2
+# Below this sine of the angle between r and v, the orbital plane is undefined
+# to double precision.
+MIN_SINE_R_V = 1e-12
 
 
 class CdmRejected(ValueError):
@@ -152,6 +155,19 @@ def _check_plausible_state(position_km: np.ndarray, velocity_km_s: np.ndarray, i
     speed_km_s = math.hypot(*velocity_km_s)
     if speed_km_s > MAX_SPEED_KM_S:
         raise CdmRejected("IMPLAUSIBLE_STATE", f"|v| = {speed_km_s:.6g} km/s exceeds {MAX_SPEED_KM_S:g} km/s", index)
+    # An orbit has angular momentum. With r x v = 0 (no velocity, or velocity
+    # along the position) the RTN frame the covariance is written in does not
+    # exist. The magnitudes are bounded above, so the cross product is finite.
+    if speed_km_s == 0.0 or _sine_of_angle(position_km, velocity_km_s) < MIN_SINE_R_V:
+        raise CdmRejected(
+            "IMPLAUSIBLE_STATE",
+            "position and velocity are parallel or the velocity is zero: no orbital plane, so no RTN frame",
+            index,
+        )
+
+
+def _sine_of_angle(a: np.ndarray, b: np.ndarray) -> float:
+    return float(np.linalg.norm(np.cross(a, b)) / (np.linalg.norm(a) * np.linalg.norm(b)))
 
 
 def _check_plausible_covariance(section: CdmSection, index: int) -> None:

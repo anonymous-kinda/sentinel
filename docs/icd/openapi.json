@@ -59,7 +59,7 @@
   "info": {
     "description": "The HTTP interface of one Sentinel node: hub, edge or standalone. Every node serves its own console from its own data (ADR-009), so nothing here depends on the link to another node. Times are ISO 8601 UTC and units are field-name suffixes (`_m`, `_m_s`, `_km`, `_s`). A read-only node answers every write with 403. The acting operator is named by the `X-Sentinel-Operator` header, set by the front proxy. Interface control documents: docs/icd/README.md.",
     "title": "Sentinel",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "openapi": "3.1.0",
   "paths": {
