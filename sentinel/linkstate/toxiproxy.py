@@ -6,9 +6,11 @@ The console exposes presets only when the node runs with
 SENTINEL_DEMO_CONTROLS=1 and the request comes from localhost; the harness
 drives the same API.
 
-Note: Toxiproxy's slicer and bandwidth toxics shape a TCP stream; real
-packet loss, which TCP retransmits, is emulated with `tc netem` in the
-nightly harness job instead.
+Note: the presets use Toxiproxy's latency, bandwidth and timeout toxics,
+which shape a TCP stream. Packet loss below TCP, which TCP would
+retransmit, is not emulated anywhere: there is no `tc netem`. The nightly
+harness job runs the same presets and only lengthens the denial (900 s
+rather than 20 s, .github/workflows/harness.yml).
 """
 
 from __future__ import annotations
