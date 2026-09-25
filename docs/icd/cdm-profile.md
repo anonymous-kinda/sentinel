@@ -162,11 +162,16 @@ near them.
 - **No real CDM comes near.** Every NASA CARA fixture is admitted
   (`tests/test_cdm_codec.py`). They lie between 6,700 and 46,000 km, move
   below 10 km/s, and carry no covariance term above 10¹³ m**2.
-- **Known limit: Sun–Earth libration orbits.** Spacecraft about the Sun–Earth
-  L1 and L2 points sit near 1.5 million km, and their halo orbits swing
-  hundreds of thousands of kilometres either side. They straddle the upper
-  bound. A CDM for one is outside this profile and is quarantined, never
-  assessed.
+- **Sun–Earth libration orbits are admitted.** Spacecraft about the Sun–Earth
+  L1 and L2 points sit near 1.5 million km, and their halo orbits reach about
+  1.8 million km. The 3 million km bound holds them with margin
+  (`tests/test_ingest_hostile.py`).
+- **An orbit has angular momentum.** A velocity of zero, or one along the
+  position (the sine of the angle between them below `1e-12`), leaves no
+  orbital plane. The covariance is written in RTN, which that plane defines,
+  so the message is quarantined as `IMPLAUSIBLE_STATE`. The engine also
+  refuses such a state (`INVALID_COVARIANCE`, stage `rtn_frame`) if one ever
+  reaches it another way.
 - The trajectory view (`sentinel/conjunction/trajectory.py`) draws arcs only
   within the same radius band.
 
@@ -186,7 +191,7 @@ Quarantined: the input would make the answer wrong.
 | `WRONG_UNIT` | validator | A state or covariance term is labelled with a unit other than the one required. |
 | `MISSING_STATE` | validator | An object lacks one of `X` `Y` `Z` `X_DOT` `Y_DOT` `Z_DOT`. |
 | `NONFINITE_STATE` | validator | A state component is `NaN` or infinite. |
-| `IMPLAUSIBLE_STATE` | validator | A state or position covariance no Earth-orbiting object can have: a position inside the Earth or beyond 3 million km, a speed above 100 km/s, or a covariance term wider than that radius squared. See "Physical bounds" above. |
+| `IMPLAUSIBLE_STATE` | validator | A state or position covariance no Earth-orbiting object can have: a position inside the Earth or beyond 3 million km, a speed above 100 km/s, no angular momentum (a zero velocity, or one along the position), or a covariance term wider than that radius squared. See "Physical bounds" above. |
 | `PARTIAL_COVARIANCE` | validator | Some but not all of the six position covariance terms are present and finite. |
 | `MISS_DISTANCE_MISMATCH` | validator | The header `MISS_DISTANCE` disagrees with the distance between the two states by more than max(2 m, 0.5 %). |
 

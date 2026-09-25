@@ -62,6 +62,15 @@ def _state(position_km: tuple[float, float, float], velocity_km_s: tuple[float, 
     return text
 
 
+def _pair(r1_km, v1_km_s, r2_km, v2_km_s) -> str:
+    """Both objects' states, with no header miss distance to cross-check."""
+    text = NO_HEADER_MISS
+    for occurrence, (position, velocity) in ((1, (r1_km, v1_km_s)), (2, (r2_km, v2_km_s))):
+        for key, value in zip(("X", "Y", "Z", "X_DOT", "Y_DOT", "Z_DOT"), (*position, *velocity)):
+            text = _mutate(key, repr(value), occurrence, text=text)
+    return text
+
+
 POSITION_COVARIANCE = ("CR_R", "CT_R", "CT_T", "CN_R", "CN_T", "CN_N")
 
 
@@ -81,6 +90,10 @@ HOSTILE = {
     # Admitted, and refused by the engine (UNRESOLVED_INTEGRAL): a sigma so
     # far below the hard-body radius that the integral cannot be resolved.
     "covariance-too-small-to-integrate": _scaled_covariance(1e-36),
+    # r x v = 0 for object 1, with a geometry consistent at TCA, so the engine
+    # reaches the RTN frame the covariance is written in, which does not exist.
+    "velocity-zero": _pair((7000.0, 0.0, 0.0), (0.0, 0.0, 0.0), (7000.0, 0.0, 0.2), (0.0, 7.5, 0.0)),
+    "velocity-along-the-position": _pair((7000.0, 0.0, 0.0), (0.001, 0.0, 0.0), (7000.0, 0.0, 0.2), (0.0, 7.5, 0.0)),
     "originator-pc-not-a-number": _mutate("COLLISION_PROBABILITY", "abc"),
     "originator-pc-nan": _mutate("COLLISION_PROBABILITY", "NaN"),
     "originator-pc-infinite": _mutate("COLLISION_PROBABILITY", "inf"),
@@ -239,7 +252,8 @@ def test_a_repeated_keyword_is_ambiguous_and_quarantined(key, repeat):
 def test_an_event_whose_arcs_cannot_be_drawn_answers_422_not_500(tmp_path):
     settings = Settings(exercise=False, library=False, web_dist=None, var_dir=str(tmp_path))
     with TestClient(create_app(settings, clock=FixedClock(NOW)), raise_server_exceptions=False) as client:
-        accepted = client.post("/api/ingest/cdm", content=HOSTILE["radial-through-the-centre"].encode())
+        # Admitted, but its arcs run past the last date Python can represent.
+        accepted = client.post("/api/ingest/cdm", content=HOSTILE["tca-at-the-end-of-9999"].encode())
         assert accepted.status_code == 201, accepted.text
         r = client.get(f"/api/events/{accepted.json()['event_id']}/trajectory")
     assert r.status_code == 422
@@ -259,3 +273,12 @@ def test_a_spacecraft_on_a_sun_earth_l1_or_l2_orbit_is_admitted(radius_km):
     """JWST, SOHO and Gaia-class orbits sit 1.2 to 1.8 million km from the Earth,
     straddling its Hill sphere. A real CDM for one must never be quarantined."""
     to_conjunction(parse(_state((radius_km, 0.0, 0.0), (0.0, 0.3, 0.0))))
+
+
+@pytest.mark.parametrize("velocity_km_s", [(0.0, 0.0, 0.0), (7.5, 0.0, 0.0), (-3.0, 0.0, 0.0)])
+def test_a_state_with_no_rtn_frame_is_quarantined_with_a_reason(velocity_km_s):
+    """The covariance is given in RTN, which needs r x v != 0. A velocity of
+    zero, or along the position, leaves the covariance with no frame."""
+    with pytest.raises(CdmRejected) as excinfo:
+        to_conjunction(parse(_pair((7000.0, 0.0, 0.0), velocity_km_s, (7000.0, 0.0, 0.2), (0.0, 7.5, 0.0))))
+    assert excinfo.value.code == "IMPLAUSIBLE_STATE"
