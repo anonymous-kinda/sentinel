@@ -150,7 +150,7 @@ class ToolRegistry:
     def _sync_queue(self, args: dict) -> dict:
         status = self.sync_status()
         queue = status.get("queue", [])
-        return {"count": len(queue), "queue": queue, "summary_only": status.get("summary_only", [])}
+        return {"count": len(queue), "queue": queue, "summary_only_ids": status.get("summary_only", [])}
 
     def _draft_decision(self, args: dict) -> dict:
         s = self._summary(args)

@@ -324,7 +324,7 @@ The pipeline, in `sentinel/ai/assistant.py`:
 | Claude narrator | `sentinel/ai/narrate_claude.py` | model pinned to `claude-opus-5`; no retries |
 | Tier policy | `sentinel/ai/policy.py` | a pure function of the measured link, the marking and operator opt-in |
 | Position guard | `sentinel/ai/opsec.py` | a question that holds a position is kept off hosted AI (ADR-010); the unit is read from the pass module through `node.extensions`, read-only |
-| Grounding guard | `sentinel/ai/grounding.py` | numbers must match, at the precision stated, a number in the facts or the question. Numbers glued to units are checked too. |
+| Grounding guard | `sentinel/ai/grounding.py` | numbers must match, at the precision stated, a number in the facts or the question. Numbers glued to units are checked too. Identifiers are not quantities: a field named `*_id`, `*_ids`, `*_by`, `sha*`, `*hash` or `digest` grounds only a whole mention of itself, so "41" inside a sha256 grounds no "41 m". |
 | Eval | `sentinel/ai/evaluation.py`, `sentinel/ai/calibration.py`, `scripts/ai_eval.py` | routers scored through the same gate on `evals/routing.jsonl` |
 | HTTP | `sentinel/api/ai_routes.py` | `GET /api/ai/status`, `POST /api/ai/ask`, `POST /api/ai/confirm`, `GET /api/ai/audit`, `GET /api/ai/audit/verify` |
 
