@@ -117,10 +117,6 @@ def substituted_by(link: Link) -> Tamper:
     return tamper
 
 
-@pytest.mark.xfail(strict=True, reason=CORE + (
-    "_fetch() ingests the reply before checking any hash, compares only the hub's own "
-    "Sentinel-Sha256 header (a missing header counts as a match), never the sha16 the "
-    "manifest announced, and marks the item ARRIVED either way"))
 @pytest.mark.parametrize("mode", ["corrupted", "header-stripped", "substituted"])
 def test_the_edge_admits_only_the_bytes_it_asked_for(link, mode):
     tamper = {"corrupted": corrupted, "header-stripped": header_stripped}.get(mode) or substituted_by(link)
@@ -132,6 +128,21 @@ def test_the_edge_admits_only_the_bytes_it_asked_for(link, mode):
     for arrival in link.agent.arrivals:
         assert link.edge.records.has(arrival["sha"]), f"{arrival['sha']} marked arrived but never received"
         assert arrival["hash_ok"], "a record whose hash did not match was admitted"
+
+
+def test_intact_bytes_without_their_sha256_header_are_not_a_match(link):
+    """hash_ok is a comparison with the hub's claim; with no claim there is
+    nothing to compare, so the record is refused and asked for again."""
+
+    def strip_hash(body, headers):
+        headers.pop("Sentinel-Sha256")
+        return body, headers
+
+    tamper_fetch(link, strip_hash)
+    run(link.agent.cycle())
+    assert link.agent.arrivals == []
+    assert list(link.edge.conj.store.all_cdms()) == []
+    assert {item.status for item in link.agent.queue} == {"QUEUED"}
 
 
 def test_a_missing_data_class_header_cannot_relabel_exercise_data_as_real(link):

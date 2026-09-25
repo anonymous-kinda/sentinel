@@ -144,7 +144,7 @@ link is spent on records that can still arrive in time.
 
 | State | Meaning |
 |---|---|
-| `QUEUED` | Waiting, or put back after the hub answered with `Sentinel-Error`. |
+| `QUEUED` | Waiting, or put back after the hub answered with `Sentinel-Error` or with a reply the edge refused (Headers, below). |
 | `FETCHING` | Request in flight. |
 | `ARRIVED` | Fetched and admitted; dropped from the queue at the end of the pull. |
 | `SUMMARY_ONLY` | Admission control: it cannot arrive before its deadline at the measured rate. |
@@ -216,7 +216,7 @@ manifest and never leave the node (ADR-010).
 | `Sentinel-Schema` | manifest reply with a body | `sentinel.manifest/1`. |
 | `Sentinel-Event-Id` | fetch reply | The item id the hub assigned. The edge uses it and never re-derives it; otherwise updates fetched out of order would split one event into two. |
 | `Sentinel-Data-Class` | fetch reply | `REAL`, `DERIVED` or `EXERCISE`. A generator's ORIGINATOR mark still wins on admission (`docs/icd/cdm-profile.md`). |
-| `Sentinel-Sha256` | fetch reply | The full sha256 of the record bytes. The edge hashes what it received and records the comparison as `hash_ok`. |
+| `Sentinel-Sha256` | fetch reply | The full sha256 of the record bytes. The edge hashes what it received and admits the record only if that hash begins with the `sha16` it asked for and equals this header. A missing header is not a match. Anything else is refused before ingest: logged as `Sync record refused` with `hash_ok` false, and re-queued. Every arrival therefore carries `hash_ok` true. |
 | `Nats-Msg-Id` | fetch reply | The same sha256, as a NATS message id. The agent does not read it. |
 | `Sentinel-Kind` | fetch and ops replies; node-local events | `record.full` on a fetch reply, `ops.exchange` on an ops reply. |
 | `Sentinel-Error` | any reply | `not-found` when the hub holds no record with that prefix (the item is re-queued). `responder-failed` when the hub's responder raised (NATS transport). |

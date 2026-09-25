@@ -27,11 +27,12 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import datetime as dt
+import hashlib
 import json
 import time
 from typing import Any
 
-from ..bus import Bus, NoResponders, RequestTimeout, subjects
+from ..bus import Bus, Msg, NoResponders, RequestTimeout, subjects
 from ..clock import Clock
 from ..crdt import codec
 from ..linkstate import LinkMonitor, LinkState
@@ -68,6 +69,16 @@ class WantItem:
             "status": self.status,
             "eta_s": self.eta_s,
         }
+
+
+def _is_the_record_asked_for(item: WantItem, reply: Msg) -> bool:
+    """Whether a fetch reply's bytes are the record the manifest named.
+
+    Their sha256 must begin with the sha16 the edge asked for and equal the
+    hub's Sentinel-Sha256. A missing header is not a match.
+    """
+    sha256 = hashlib.sha256(reply.data).hexdigest()
+    return sha256.startswith(item.sha16) and reply.headers.get("Sentinel-Sha256") == sha256
 
 
 class SyncAgent:
@@ -260,13 +271,15 @@ class SyncAgent:
         if reply.headers.get("Sentinel-Error"):
             item.status = "QUEUED"
             return
+        if not _is_the_record_asked_for(item, reply):
+            self._refuse(item, "hash_mismatch", hash_ok=False, hub_sha256=reply.headers.get("Sentinel-Sha256"))
+            return
         outcome = await self.records.ingest(
             reply.data,
             f"sync:{self.hub_id}",
             reply.headers.get("Sentinel-Data-Class", "REAL"),
             reply.headers.get("Sentinel-Event-Id"),
         )
-        hash_ok = outcome["sha256"] == reply.headers.get("Sentinel-Sha256", outcome["sha256"])
         item.status = "ARRIVED"
         self.summary_only.discard(item.event_id)
         arrival = {
@@ -278,12 +291,20 @@ class SyncAgent:
             "wall_s": round(time.monotonic() - self.started_wall, 2),
             "node_time": self.clock.now().isoformat(),
             "deadline": None if item.key.deadline is None else item.key.deadline.isoformat(),
-            "hash_ok": hash_ok,
+            "hash_ok": True,
             "status": outcome["status"],
             "verification": outcome.get("verification"),
         }
         self.arrivals.append(arrival)
         await self._publish("sync.arrival", arrival)
+
+    def _refuse(self, item: WantItem, reason: str, **fields: Any) -> None:
+        """Put back a record whose reply the edge will not admit, and say why."""
+        item.status = "QUEUED"
+        log.warning(
+            "Sync record refused",
+            hub_id=self.hub_id, item_id=item.event_id[:80], sha16=item.sha16, reason=reason, **fields,
+        )
 
     # ------------------------------------------------------------------ status
     def status(self) -> dict[str, Any]:
