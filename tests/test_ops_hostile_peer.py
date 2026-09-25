@@ -215,6 +215,41 @@ def test_an_untrusted_peer_cannot_erase_an_annotation(tmp_path):
     assert hub.annotations("EV1")["triage_status"]["values"], "an unsigned register erased the value"
 
 
+CLAIMED_CONTEXT = (
+    "design gap (ADR-005, SECURITY.md gap 4): a register's context is an unsigned claim, and "
+    "MVMap.merge_register joins it into the map-wide context this replica advertises as what it "
+    "has seen. Bounding that context changes what anti-entropy compares and how a node that lost "
+    "its database recovers its own dot counter: an ADR-005 amendment, not a bug fix")
+
+
+def claimed(context: dict) -> dict:
+    """A register that holds one well-formed annotation and claims `context`."""
+    from sentinel.crdt import DotContext
+
+    value = {"v": "x", "by": "m", "node": "mallory", "at": NOW.isoformat()}
+    return Register({Dot("mallory", 1): value}, DotContext({**context, "mallory": 1})).to_wire()
+
+
+@pytest.mark.xfail(strict=True, reason=CLAIMED_CONTEXT)
+def test_a_claimed_context_does_not_enter_the_context_a_replica_advertises(tmp_path):
+    hub = ops("hub", tmp_path / "hub.db")
+    run(hub.merge_payload({"reg": {"EV9|note": claimed({"bravo": 1_000_000})}}))
+    assert hub.digest()["mv_vv"].get("bravo", 0) < 1_000_000
+
+
+@pytest.mark.xfail(strict=True, reason=CLAIMED_CONTEXT)
+def test_a_claimed_context_does_not_stop_another_nodes_annotations_replicating(tmp_path):
+    """The hub's advertised context covers bravo's writes, so bravo never
+    offers them: its annotation silently never reaches the hub. Bravo's own
+    dot counter then jumps past the claim when it pulls the hub's register."""
+    hub = ops("hub", tmp_path / "hub.db")
+    run(hub.merge_payload({"reg": {"EV9|note": claimed({"bravo": 1_000_000})}}))
+    bravo = ops("bravo", tmp_path / "bravo.db")
+    run(bravo.annotate("EV1", "assignee", "lt.kim", "op@bravo"))
+    exchange(hub, bravo)
+    assert hub.annotations("EV1")["assignee"]["values"], "bravo's annotation never reached the hub"
+
+
 def test_mvmap_keeps_what_the_peer_never_saw():
     """Control for the xfail above: the same register with an honest context erases nothing."""
     mine = MVMap("hub")
