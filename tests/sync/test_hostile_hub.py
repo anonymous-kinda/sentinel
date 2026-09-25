@@ -209,17 +209,58 @@ def hostile_manifest(link: Link, extra: list[dict]) -> None:
 
 
 BOGUS = {"e": "bogus", "dl": "soon", "q": 9, "c": [["0" * 16, 10, 0]]}
+PAST = 1_790_000_000                      # a readable deadline, already gone
+MALFORMED = {
+    "unreadable-deadline": BOGUS,
+    "not-a-map": ["not", "a", "summary"],
+    "no-item-id": {"dl": PAST, "q": 1, "c": [["0" * 16, 10, 0]]},
+    "numeric-item-id": {"e": 12, "dl": PAST, "q": 1, "c": [["0" * 16, 10, 0]]},
+    "empty-item-id": {"e": "", "dl": PAST, "q": 1, "c": [["0" * 16, 10, 0]]},
+    "unknown-consequence": {"e": "bogus", "dl": PAST, "q": 9, "c": [["0" * 16, 10, 0]]},
+    "deadline-out-of-range": {"e": "bogus", "dl": 10**20, "q": 1, "c": [["0" * 16, 10, 0]]},
+    "record-name-a-number": {"e": "bogus", "dl": PAST, "q": 1, "c": [[7, 10, 0]]},
+    "record-name-not-hex": {"e": "bogus", "dl": PAST, "q": 1, "c": [["%" * 16, 10, 0]]},
+    "record-too-short": {"e": "bogus", "dl": PAST, "q": 1, "c": [["0" * 16, 10]]},
+    "negative-size": {"e": "bogus", "dl": PAST, "q": 1, "c": [["0" * 16, -10**9, 0]]},
+}
 
 
-@pytest.mark.xfail(strict=True, reason=CORE + (
-    "fetch_manifest() stores the digest before apply_manifest() runs, and _rebuild_queue() "
-    "rejects the whole manifest on one malformed entry; the next cycle is told 'unchanged' "
-    "and the queue is never built, so no record ever arrives"))
-def test_one_malformed_manifest_entry_does_not_stop_the_edge_fetching_the_rest(link):
-    hostile_manifest(link, [BOGUS])
+@pytest.mark.parametrize("entry", MALFORMED.values(), ids=MALFORMED.keys())
+def test_one_malformed_manifest_entry_does_not_stop_the_edge_fetching_the_rest(link, entry):
+    hostile_manifest(link, [entry])
     for _ in range(2):
-        with contextlib.suppress(TypeError, ValueError, KeyError):  # run() logs these
+        with contextlib.suppress(TypeError, ValueError, KeyError, *LINK_ERRORS):  # run() logs these
             run(link.agent.cycle())
+    held = {row.sha256[:16] for row in link.edge.conj.store.all_cdms()}
+    assert announced(link.hub) <= held
+
+
+@pytest.mark.parametrize("entry", MALFORMED.values(), ids=MALFORMED.keys())
+def test_a_malformed_manifest_entry_puts_nothing_in_the_queue(link, entry):
+    """Sync reads four generic fields; an entry whose fields it cannot read
+    as documented (a string item id, a deadline, a consequence 0-3, records
+    of [16 hex digits, bytes >= 0, created]) is skipped, and only that one."""
+    link.agent.apply_manifest([entry, *link.hub.records.manifest()])
+    assert {item.sha16 for item in link.agent.queue} == announced(link.hub)
+
+
+def test_a_manifest_that_failed_to_apply_is_fetched_again(link, monkeypatch):
+    """The digest the edge sends back names the manifest it applied, not
+    the last one it was sent: otherwise the hub answers 'unchanged' and the
+    queue is never built."""
+    store_summaries = link.edge.records.put_summaries
+    calls = []
+
+    def fails_once(summaries, origin):
+        calls.append(origin)
+        if len(calls) == 1:
+            raise RuntimeError("summary store unavailable")
+        store_summaries(summaries, origin)
+
+    monkeypatch.setattr(link.edge.records, "put_summaries", fails_once)
+    with contextlib.suppress(RuntimeError):        # run() logs it; the next cycle is what matters
+        run(link.agent.cycle())
+    run(link.agent.cycle())
     held = {row.sha256[:16] for row in link.edge.conj.store.all_cdms()}
     assert announced(link.hub) <= held
 

@@ -29,6 +29,7 @@ import dataclasses
 import datetime as dt
 import hashlib
 import json
+import re
 import time
 from typing import Any
 
@@ -45,6 +46,42 @@ log = get_logger(__name__)
 
 LINK_ERRORS = (RequestTimeout, NoResponders, ConnectionError, OSError)
 RETRY_MAX_PULLS = 32        # the most pulls a refused record sits out
+# What reading a summary sync cannot read raises. Each is skipped on its own.
+MALFORMED = (TypeError, ValueError, KeyError, OverflowError)
+_SHA16 = re.compile(r"[0-9a-f]{16}")
+
+
+@dataclasses.dataclass(frozen=True)
+class SummaryFields:
+    """The four generic fields sync reads from one summary, checked."""
+
+    item_id: str
+    deadline: dt.datetime
+    consequence: Consequence
+    records: list[tuple[str, int, int]]         # (sha16, bytes, created epoch), oldest first
+
+
+def read_summary(compact: Any) -> SummaryFields:
+    """Read a summary's generic fields as docs/icd/sync-envelope.md defines
+    them. Raises one of MALFORMED if sync cannot."""
+    if not isinstance(compact, dict):
+        raise TypeError("summary is not a map")
+    item_id = compact["e"]
+    if not isinstance(item_id, str) or not item_id:
+        raise TypeError("item id is not a string")
+    deadline = dt.datetime.fromtimestamp(compact["dl"], dt.UTC)
+    consequence = Consequence(int(compact["q"]))
+    records = [_read_record(entry) for entry in compact.get("c", [])]
+    return SummaryFields(item_id, deadline, consequence, records)
+
+
+def _read_record(entry: Any) -> tuple[str, int, int]:
+    sha16, size, created = entry
+    if not isinstance(sha16, str) or not _SHA16.fullmatch(sha16):
+        raise ValueError("record name is not 16 hex digits")
+    if int(size) < 0:
+        raise ValueError("record size is negative")
+    return sha16, int(size), int(created)
 
 
 @dataclasses.dataclass
@@ -143,6 +180,7 @@ class SyncAgent:
         self.arrivals: list[dict[str, Any]] = []
         self.summary_only: set[str] = set()
         self.manifest_digest: str | None = None
+        self._received_digest: str | None = None
         self.last_cycle: dict[str, Any] = {}
         self.started_wall = time.monotonic()
         self._last_state: LinkState | None = None
@@ -227,38 +265,32 @@ class SyncAgent:
         self.link.observe_success(rtt, len(reply.data), rtt)
         if reply.headers.get("Sentinel-Unchanged") == "1":
             return None
-        self.manifest_digest = reply.headers.get("Sentinel-Digest")
+        self._received_digest = reply.headers.get("Sentinel-Digest")
         manifest: list[dict[str, Any]] = codec.decode(reply.data)
         return manifest
 
     def apply_manifest(self, manifest: list[dict[str, Any]]) -> None:
+        """Store the hub's summaries and rebuild the want-list. Only then is the
+        manifest's digest sent back as `known`: one that failed to apply is
+        fetched again, not reported unchanged."""
         self.records.put_summaries(manifest, self.hub_id)
         self._rebuild_queue(manifest)
+        self.manifest_digest = self._received_digest
 
     def _rebuild_queue(self, manifest: list[dict[str, Any]]) -> None:
         now = self.clock.now()
         items: list[WantItem] = []
         for compact in manifest:
-            # Generic fields only: item id, deadline, consequence, records.
-            deadline = dt.datetime.fromtimestamp(compact["dl"], dt.UTC)
-            consequence = Consequence(int(compact["q"]))
-            cdms = compact.get("c", [])
-            for index, (sha16, size, created) in enumerate(cdms):
-                if self.records.has(sha16):
-                    continue
-                latest = index == len(cdms) - 1
-                if not latest:
-                    klass = PriorityClass.P4_BULK
-                elif consequence >= Consequence.SERIOUS and (deadline - now).total_seconds() <= self.urgent_window_s:
-                    klass = PriorityClass.P1_URGENT
-                else:
-                    klass = PriorityClass.P2_ROUTINE
-                items.append(
-                    WantItem(
-                        compact["e"], sha16, int(size), int(created), latest,
-                        TriageKey(compact["e"], klass, deadline, consequence),
-                    )
+            try:
+                fields = read_summary(compact)
+            except MALFORMED as exc:
+                item_id = compact.get("e") if isinstance(compact, dict) else None
+                log.warning(
+                    "Manifest entry skipped",
+                    hub_id=self.hub_id, item_id=str(item_id)[:80], error=type(exc).__name__, detail=str(exc)[:200],
                 )
+                continue
+            items += self._wanted(fields, now)
         if self.mode == "fifo":
             items.sort(key=lambda i: (i.created, i.sha16))
         else:
@@ -266,6 +298,26 @@ class SyncAgent:
             items = [by_key[id(k)] for k in order([i.key for i in items])]
         self.queue = items
         self._backoff.retain({i.sha16 for i in items})
+
+    def _wanted(self, fields: SummaryFields, now: dt.datetime) -> list[WantItem]:
+        """The records a summary names that this node lacks, each in its priority class."""
+        items: list[WantItem] = []
+        for index, (sha16, size, created) in enumerate(fields.records):
+            if self.records.has(sha16):
+                continue
+            latest = index == len(fields.records) - 1
+            if not latest:
+                klass = PriorityClass.P4_BULK
+            elif (
+                fields.consequence >= Consequence.SERIOUS
+                and (fields.deadline - now).total_seconds() <= self.urgent_window_s
+            ):
+                klass = PriorityClass.P1_URGENT
+            else:
+                klass = PriorityClass.P2_ROUTINE
+            key = TriageKey(fields.item_id, klass, fields.deadline, fields.consequence)
+            items.append(WantItem(fields.item_id, sha16, size, created, latest, key))
+        return items
 
     # --------------------------------------------------------------- full CDMs
     async def pull(self, budget_s: float | None = None) -> int:

@@ -72,6 +72,11 @@ Sync reads nothing else. Whatever else a module puts in a summary travels
 with it, is stored as the hub's assertion (`put_summaries`), and is the
 module's business.
 
+A summary whose four fields sync cannot read as above (a non-empty string
+id, an epoch deadline, a consequence 0-3, records of 16 lowercase hex
+digits, bytes ≥ 0 and a created epoch) queues nothing. It is logged as
+`Manifest entry skipped`, and the rest of the manifest is applied.
+
 ### Conjunction summary
 
 What the conjunction module adds, so an edge can show every event before
@@ -217,7 +222,7 @@ manifest and never leave the node (ADR-010).
 
 | Header | On | Value |
 |---|---|---|
-| `Sentinel-Digest` | manifest reply | sha256 of the manifest's canonical CBOR. The edge sends it back as `known`. |
+| `Sentinel-Digest` | manifest reply | sha256 of the manifest's canonical CBOR. The edge sends it back as `known` once it has applied that manifest, so a manifest that failed to apply is fetched again. |
 | `Sentinel-Unchanged` | manifest reply | `1` when `known` matched: the body is empty. |
 | `Sentinel-Schema` | manifest reply with a body | `sentinel.manifest/1`. |
 | `Sentinel-Event-Id` | fetch reply | The item id the hub assigned. The edge uses it and never re-derives it; otherwise updates fetched out of order would split one event into two. |
