@@ -269,7 +269,7 @@ Its documented weaknesses are arithmetic, dates and prompt injection, and each i
 
 **Buys.** The urgent record first, and numbers the edge has checked rather than trusted. A stream mirror delivers in FIFO order, which the LIMITED scenario measures at 15.0× slower for the record that matters, as a ratio of medians over 5 runs per mode. And an event is VERIFIED only when the edge's own engine has reproduced the hub's result, field by field.
 
-**Costs.** A sync protocol of our own where JetStream is off the shelf, so it needs its own hostile-input tests. A review found real bugs there: the edge admitted fetched bytes without checking them against what the manifest announced (`tests/sync/test_hostile_hub.py`). Each record also costs a round trip, so reference data competes with urgent CDMs on a thin link (below).
+**Costs.** A sync protocol of our own where JetStream is off the shelf, so it needs its own hostile-input tests. A review found real bugs there, now fixed: the edge admitted fetched bytes without checking them against what the manifest announced, and one unreadable record blocked every record behind it (`tests/sync/test_hostile_hub.py`). Each record also costs a round trip, so reference data competes with urgent CDMs on a thin link (below).
 
 **Status:** Accepted (2026-09-23).
 
