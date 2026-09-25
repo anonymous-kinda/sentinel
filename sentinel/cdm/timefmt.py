@@ -58,13 +58,16 @@ def parse_ccsds_time(text: str) -> _dt.datetime:
         if not 1 <= day_of_year <= 366:
             raise ValueError(f"day of year out of range in CCSDS time {text!r}")
         base = _dt.datetime(int(m["y"]), 1, 1, tzinfo=_UTC)
-        return base + _dt.timedelta(
-            days=day_of_year - 1,
-            hours=int(m["h"]),
-            minutes=int(m["mi"]),
-            seconds=int(m["s"]),
-            microseconds=_micro(m["frac"]),
-        )
+        try:
+            return base + _dt.timedelta(
+                days=day_of_year - 1,
+                hours=int(m["h"]),
+                minutes=int(m["mi"]),
+                seconds=int(m["s"]),
+                microseconds=_micro(m["frac"]),
+            )
+        except OverflowError as exc:
+            raise ValueError(f"CCSDS time beyond the year 9999: {text!r}") from exc
     raise ValueError(f"not a CCSDS ASCII time: {text!r}")
 
 

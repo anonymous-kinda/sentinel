@@ -20,9 +20,15 @@ import pathlib
 import tempfile
 from typing import Any
 
-from .model import Unit
+from .model import MAX_HOURS, Unit
 
 MAX_UNIT_ID_CHARS = 64
+# A ground unit sits between the lowest dry land (the Dead Sea shore, about
+# -430 m) and the highest summit (8,849 m), with a margin.
+MIN_ALT_M = -500.0
+MAX_ALT_M = 9000.0
+# A gap longer than the longest interval the node computes can never be found.
+MAX_REACTION_TIME_MIN = MAX_HOURS * 60.0
 FIELDS = tuple(field.name for field in dataclasses.fields(Unit))
 DEFAULTS = {f.name: f.default for f in dataclasses.fields(Unit) if f.default is not dataclasses.MISSING}
 REQUIRED = tuple(name for name in FIELDS if name not in DEFAULTS)
@@ -65,8 +71,10 @@ def validate_unit(unit: Unit) -> None:
         raise UnitRejected("lat_deg", "must be within [-90, 90]")
     if not -180.0 <= unit.lon_deg <= 180.0:
         raise UnitRejected("lon_deg", "must be within [-180, 180]")
-    if not unit.reaction_time_min > 0.0:
-        raise UnitRejected("reaction_time_min", "must be positive")
+    if not MIN_ALT_M <= unit.alt_m <= MAX_ALT_M:
+        raise UnitRejected("alt_m", f"must be within [{MIN_ALT_M:g}, {MAX_ALT_M:g}]")
+    if not 0.0 < unit.reaction_time_min <= MAX_REACTION_TIME_MIN:
+        raise UnitRejected("reaction_time_min", f"must be positive and at most {MAX_REACTION_TIME_MIN:g}")
 
 
 def _unit_id(value: Any) -> str:

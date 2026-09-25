@@ -14,7 +14,7 @@ import json
 import pathlib
 from collections.abc import AsyncIterator, Callable
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -25,6 +25,7 @@ from ..conjunction.exercise import generate
 from ..conjunction.service import ConjunctionService
 from ..conjunction.store import ConjunctionStore
 from ..conjunction.sync_adapter import ConjunctionRecords
+from ..conjunction.trajectory import TrajectoryUnavailable
 from ..linkstate import LinkMonitor
 from ..linkstate.toxiproxy import PRESETS as TOXIPROXY_PRESETS
 from ..obs import get_logger
@@ -36,6 +37,7 @@ from ..passes.sync_adapter import PREFIX as ELEMENT_PREFIX
 from ..passes.sync_adapter import ElementRecords
 from ..sync import SyncAgent, SyncServer
 from . import apidoc
+from .bodies import BodyLimit, json_object, refuse_writes_on_read_only
 from .identity import operator_of
 from .records import CompositeRecords
 from .settings import Settings
@@ -246,8 +248,10 @@ def create_app(
         description=apidoc.DESCRIPTION,
         openapi_tags=apidoc.TAGS,
         lifespan=lifespan,
+        dependencies=[Depends(refuse_writes_on_read_only)],
     )
     app.state.node = node
+    app.add_middleware(BodyLimit)
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
@@ -331,7 +335,10 @@ def create_app(
     def trajectory(event_id: str) -> dict:
         """Earth-fixed arcs of both objects around TCA. Visualization only; 404 when the
         event is unknown."""
-        data = node.conjunctions.trajectory(event_id)
+        try:
+            data = node.conjunctions.trajectory(event_id)
+        except TrajectoryUnavailable as exc:
+            raise HTTPException(422, "the two-body arcs cannot be drawn for this event") from exc
         if data is None:
             raise HTTPException(404, "no such event")
         return data
@@ -347,11 +354,7 @@ def create_app(
         """The admission policy of docs/icd/cdm-profile.md: wrong input is quarantined with
         a code, incomplete input is accepted with warnings. Admitted as REAL data unless its
         ORIGINATOR marks it EXERCISE or DERIVED."""
-        if settings.read_only:
-            raise HTTPException(403, "this node is read-only")
         raw = await request.body()
-        if len(raw) > 1_000_000:
-            raise HTTPException(413, "a CDM is a few kilobytes; refusing a megabyte")
         result = await node.conjunctions.ingest(raw, "api-upload", "REAL")
         response.status_code = {"accepted": 201, "duplicate": 200, "rejected": 422}[result.status]
         return dataclasses.asdict(result)
@@ -359,10 +362,6 @@ def create_app(
     # ------------------------------------------------------- operator data
     def operator(request: Request) -> str:
         return operator_of(request, settings.node_id)
-
-    def writable() -> None:
-        if settings.read_only:
-            raise HTTPException(403, "this node is read-only")
 
     @app.get("/api/events/{event_id}/ops", tags=[apidoc.OPERATOR_DATA], summary="Decision log and annotations for an event")
     def event_ops(event_id: str) -> dict:
@@ -388,8 +387,7 @@ def create_app(
     async def decision(event_id: str, request: Request) -> dict:
         """Appends a signed DECISION to the log, bound to the event's current CDM. 422 on a
         decision outside the list; 403 on a read-only node."""
-        writable()
-        body = await request.json()
+        body = await json_object(request)
         if body.get("decision") not in DECISIONS:
             raise HTTPException(422, f"decision must be one of {DECISIONS}")
         return await node.ops.append(
@@ -407,8 +405,7 @@ def create_app(
     )
     async def note(event_id: str, request: Request) -> dict:
         """Appends a signed NOTE to the log. 403 on a read-only node."""
-        writable()
-        body = await request.json()
+        body = await json_object(request)
         return await node.ops.append(event_id, "NOTE", {"text": str(body.get("text", ""))[:2000]}, operator(request))
 
     @app.post(
@@ -428,8 +425,7 @@ def create_app(
         and shown as a conflict, never silently resolved. A write over a conflict supersedes
         every value and appends a signed RESOLUTION entry naming them. 422 on an unknown field
         or triage status; 403 on a read-only node."""
-        writable()
-        body = await request.json()
+        body = await json_object(request)
         try:
             return await node.ops.annotate(event_id, body.get("field"), body.get("value"), operator(request))
         except ValueError as exc:
@@ -472,7 +468,7 @@ def create_app(
             raise HTTPException(403, "link emulation controls are disabled on this node")
         if node.toxiproxy is None:
             raise HTTPException(503, "no link emulator configured")
-        body = await request.json()
+        body = await json_object(request)
         try:
             status = node.toxiproxy.apply(str(body.get("preset")))
         except ValueError as exc:

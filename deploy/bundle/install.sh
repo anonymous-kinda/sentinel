@@ -17,6 +17,17 @@ cd "$HERE"
 
 echo "==> verifying bundle integrity (SHA256SUMS)"
 sha256sum --quiet --strict -c SHA256SUMS
+# sha256sum checks only the files the list names. Everything below is
+# installed by directory or by glob, so a file added after signing would
+# ride along unverified: refuse anything in those paths the list does not name.
+unlisted=$(LC_ALL=C comm -23 \
+  <(find web fixtures bin wheels systemd ! -type d 2>/dev/null | LC_ALL=C sort) \
+  <(sed -E 's/^[0-9a-f]{64}  //' SHA256SUMS | LC_ALL=C sort))
+if [[ -n "$unlisted" ]]; then
+  echo "install: refusing files that SHA256SUMS does not list:" >&2
+  echo "$unlisted" >&2
+  exit 1
+fi
 
 PY=${PYTHON:-$(command -v python3.12 || true)}
 if [[ -z "$PY" ]]; then

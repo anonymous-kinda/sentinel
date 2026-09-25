@@ -8,6 +8,12 @@ when a module is added.
 
 from __future__ import annotations
 
+import re
+
+# A record is named by leading hex digits of its sha256; anything else
+# ("%", "_", "") would be read as a pattern or match every record.
+_SHA_PREFIX = re.compile(r"[0-9a-f]{1,64}")
+
 
 class CompositeRecords:
     def __init__(self, default, by_prefix: dict):
@@ -27,17 +33,26 @@ class CompositeRecords:
         return [entry for records in self._all for entry in records.manifest()]
 
     def get(self, sha16: str):
+        if not _is_sha_prefix(sha16):
+            return None
         return next((found for records in self._all if (found := records.get(sha16)) is not None), None)
 
     def has(self, sha16: str) -> bool:
-        return any(records.has(sha16) for records in self._all)
+        return _is_sha_prefix(sha16) and any(records.has(sha16) for records in self._all)
 
     def put_summaries(self, summaries: list[dict], origin: str) -> None:
+        """A summary with no readable item id goes to the default module,
+        which rejects and logs what it cannot show."""
         grouped: dict[int, list[dict]] = {}
         for summary in summaries:
-            grouped.setdefault(id(self._for(summary["e"])), []).append(summary)
+            item_id = summary.get("e") if isinstance(summary, dict) else None
+            grouped.setdefault(id(self._for(item_id if isinstance(item_id, str) else None)), []).append(summary)
         for records in self._all:
             records.put_summaries(grouped.get(id(records), []), origin)
 
     async def ingest(self, raw: bytes, source: str, data_class: str, item_id: str | None) -> dict:
         return await self._for(item_id).ingest(raw, source, data_class, item_id)
+
+
+def _is_sha_prefix(value: object) -> bool:
+    return isinstance(value, str) and _SHA_PREFIX.fullmatch(value) is not None

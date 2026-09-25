@@ -38,14 +38,12 @@ from .element_store import ElementStore, element_epoch
 from .elements import SECONDS_PER_DAY, ElementSet, Match, Skipped, match_catalog
 from .gaps import Gap, next_unobserved, unobserved_gaps
 from .geometry import STALE_AFTER_DAYS
-from .model import Imager, PassProvider, PassWindow, Unit
+from .model import MAX_HOURS, MIN_HOURS, Imager, PassProvider, PassWindow, Unit
 from .providers.skyfield_local import SkyfieldProvider
 from .unit import UnitFile, UnitRejected, validate_unit
 
 log = get_logger(__name__)
 
-MIN_HOURS = 1
-MAX_HOURS = 72
 CACHE_ENTRIES = 16
 UPDATED = "passes.updated"
 # An edge's first sync brings every element set in a burst, one record at a

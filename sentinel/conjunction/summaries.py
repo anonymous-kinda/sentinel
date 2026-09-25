@@ -14,6 +14,7 @@ text that can be read over a voice net:
 from __future__ import annotations
 
 import datetime as dt
+import json
 import math
 
 from .policy import ConjunctionPolicy
@@ -124,6 +125,33 @@ def expand_summary(compact: dict, now: dt.datetime, policy: ConjunctionPolicy) -
         "verification": "HUB_ASSERTED",
         "voice": voice_line(compact),
     }
+
+
+# What a malformed summary raises when it is expanded for display.
+_UNSHOWABLE = (KeyError, TypeError, ValueError, OverflowError, IndexError, AttributeError, OSError)
+
+
+def summary_problem(compact: object, now: dt.datetime, policy: ConjunctionPolicy) -> str | None:
+    """Why a hub-asserted summary cannot be shown, or None when it can.
+
+    Another node's summary is data this node did not compute. It is stored
+    only if this node can expand it into a view the API can serve: one
+    unreadable summary must not take down the event list.
+    """
+    if not isinstance(compact, dict) or not isinstance(compact.get("e"), str) or not compact["e"]:
+        return "no event id"
+    try:
+        shown = expand_summary(compact, now, policy)
+        json.dumps(shown, allow_nan=False)
+    except _UNSHOWABLE as exc:
+        return type(exc).__name__
+    if not isinstance(shown["latest_cdm_sha256"], str):
+        return "record hash is not text"
+    for key in ("pc", "pc_max"):
+        value = shown["assessment"][key]
+        if value is not None and not 0.0 <= value <= 1.0:
+            return "probability outside [0, 1]"
+    return None
 
 
 def _consequence(compact: dict) -> str:

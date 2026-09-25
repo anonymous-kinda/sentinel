@@ -7,7 +7,9 @@ Wrong (CdmRejected - the message is quarantined with a reason):
   input that would make the engine's answer silently incorrect. A state in
   metres labelled as kilometres, a non-inertial frame treated as inertial,
   three covariance terms out of six, a header miss distance that disagrees
-  with the states it summarises.
+  with the states it summarises, a state whose separation is not finite in
+  metres, a TCA before there were satellites, or a number the node reads or
+  displays that is not a finite number.
 
 Incomplete (a CdmWarning - the message is accepted):
   input that limits what can be concluded, without corrupting it. No
@@ -21,6 +23,7 @@ Incomplete (a CdmWarning - the message is accepted):
 from __future__ import annotations
 
 import dataclasses
+import datetime as dt
 import math
 
 import numpy as np
@@ -66,6 +69,10 @@ _SUMMARY_UNITS = {
 MISS_DISTANCE_TOLERANCE_ABS_M = 2.0
 MISS_DISTANCE_TOLERANCE_REL = 0.005
 
+# No conjunction precedes the first artificial satellite (Sputnik 1,
+# launched 1957-10-04). CARA's own sample cases sit at J2000.
+EARLIEST_TCA = dt.datetime(1957, 10, 4, tzinfo=dt.UTC)
+
 
 class CdmRejected(ValueError):
     """The message would produce a wrong answer. Quarantine it."""
@@ -96,10 +103,17 @@ def _check_unit(section: CdmSection, key: str, expected: str, index: int) -> Non
         )
 
 
+def _number(section: CdmSection, key: str, index: int | None = None) -> float | None:
+    try:
+        return section.number(key)
+    except ValueError as exc:
+        raise CdmRejected("UNREADABLE", f"{key} is not a number", index) from exc
+
+
 def _state_vector(section: CdmSection, index: int) -> tuple[np.ndarray, np.ndarray]:
     values = []
     for key in (*STATE_POSITION_KEYS, *STATE_VELOCITY_KEYS):
-        value = section.number(key)
+        value = _number(section, key, index)
         if value is None:
             raise CdmRejected("MISSING_STATE", f"{key} is absent", index)
         if not math.isfinite(value):
@@ -108,11 +122,36 @@ def _state_vector(section: CdmSection, index: int) -> tuple[np.ndarray, np.ndarr
     return np.array(values[:3]), np.array(values[3:])
 
 
+def _relative_state_m(states: list[tuple[np.ndarray, np.ndarray]]) -> tuple[float, float]:
+    """Separation (m) and relative speed (m/s) in the engine's units. A state
+    finite in km can still overflow there, and the engine would report inf."""
+    (r1, v1), (r2, v2) = states
+    miss_m = float(np.linalg.norm((r2 - r1) * 1000.0))
+    speed_m_s = float(np.linalg.norm((v2 - v1) * 1000.0))
+    if not (math.isfinite(miss_m) and math.isfinite(speed_m_s)):
+        raise CdmRejected("NONFINITE_STATE", "the relative state of the two objects is not finite in metres")
+    return miss_m, speed_m_s
+
+
+def _read_time(message: CdmMessage, key: str) -> None:
+    """Raises ValueError for a time that is not CCSDS, or that no conjunction can have."""
+    text = message.preamble.text(key)
+    if text is not None and parse_ccsds_time(text) < EARLIEST_TCA:
+        raise ValueError(f"{key} {text} precedes the first artificial satellite")
+
+
+def _check_originator_pc(message: CdmMessage) -> None:
+    """The originator's Pc is served beside Sentinel's: it must be a finite number."""
+    pc = _number(message.preamble, "COLLISION_PROBABILITY")
+    if pc is not None and not math.isfinite(pc):
+        raise CdmRejected("UNREADABLE", f"COLLISION_PROBABILITY = {pc} is not a finite number")
+
+
 def covariance_status(section: CdmSection, index: int) -> str:
     """'present', 'absent', or raises for a partial covariance."""
     finite = []
     for key in POSITION_COVARIANCE_KEYS:
-        value = section.number(key)
+        value = _number(section, key, index)
         finite.append(value is not None and math.isfinite(value))
     if all(finite):
         return "present"
@@ -132,20 +171,17 @@ def validate(message: CdmMessage) -> list[CdmWarning]:
     warnings: list[CdmWarning] = []
 
     # --- header / relative metadata --------------------------------------
-    tca_text = message.preamble.text("TCA")
-    if tca_text is None:
+    if message.preamble.text("TCA") is None:
         raise CdmRejected("MISSING_TCA", "TCA is absent")
     try:
-        parse_ccsds_time(tca_text)
+        _read_time(message, "TCA")
     except ValueError as exc:
         raise CdmRejected("BAD_TCA", str(exc)) from exc
-
-    created = message.preamble.text("CREATION_DATE")
-    if created is not None:
-        try:
-            parse_ccsds_time(created)
-        except ValueError as exc:
-            raise CdmRejected("BAD_CREATION_DATE", str(exc)) from exc
+    try:
+        _read_time(message, "CREATION_DATE")
+    except ValueError as exc:
+        raise CdmRejected("BAD_CREATION_DATE", str(exc)) from exc
+    _check_originator_pc(message)
 
     for key, expected in _SUMMARY_UNITS.items():
         field = message.preamble.get(key)
@@ -190,10 +226,9 @@ def validate(message: CdmMessage) -> list[CdmWarning]:
             )
 
     # --- cross-check: the header must describe these states --------------
-    header_miss = message.miss_distance_m
+    state_miss, _ = _relative_state_m(states)
+    header_miss = _number(message.preamble, "MISS_DISTANCE")
     if header_miss is not None and math.isfinite(header_miss):
-        (r1, _), (r2, _) = states
-        state_miss = float(np.linalg.norm((r2 - r1) * 1000.0))
         tolerance = max(MISS_DISTANCE_TOLERANCE_ABS_M, MISS_DISTANCE_TOLERANCE_REL * state_miss)
         if abs(state_miss - header_miss) > tolerance:
             raise CdmRejected(

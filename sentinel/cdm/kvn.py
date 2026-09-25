@@ -44,6 +44,7 @@ def parse(text: str) -> CdmMessage:
     """Parse KVN text into a CdmMessage. Raises CdmParseError on structure."""
     preamble: list[Entry] = []
     objects: list[list[Entry]] = []
+    keys_in_block: set[str] = set()
 
     for lineno, line in enumerate(text.splitlines(), start=1):
         entry = _parse_line(line, lineno)
@@ -56,7 +57,14 @@ def parse(text: str) -> CdmMessage:
                     f"line {lineno}: expected OBJECT = {expected}, got {entry.value!r}"
                 )
             objects.append([entry])
+            keys_in_block = set()
             continue
+        if isinstance(entry, KvnField):
+            # Two values for one keyword: which was meant is a guess, and a
+            # reader that keeps the last would compute a different answer.
+            if entry.key in keys_in_block:
+                raise CdmParseError(f"line {lineno}: {entry.key} appears twice in one block")
+            keys_in_block.add(entry.key)
         (objects[-1] if objects else preamble).append(entry)
 
     if len(objects) != 2:
