@@ -88,11 +88,11 @@ In `supplychain/toolslock.py`:
 
 - `parse` rejects a row with the wrong column count or a digest that is not 64 lowercase hex characters. A malformed lock is an error before anything downloads.
 - `select` returns the rows for one architecture plus the `noarch` rows. It raises `LockError` when a requested name has no pin, so asking for a tool the lock does not cover is never a silent partial fetch.
-- `fetch` does the work. It downloads, hashes the whole download, compares it with the pin, extracts the member if there is one, writes the file (mode 644 for JSON trust material, 755 otherwise), and writes a stamp file `.<name>.sha256` beside it. On a mismatch it logs `Pinned download digest mismatch` with the tool, the architecture and both digests as fields, raises, and writes nothing.
+- `fetch` does the work. It downloads, hashes the whole download, compares it with the pin, extracts the member if there is one, writes the file (mode 644 for JSON trust material, 755 otherwise), and writes a stamp file `.<name>.sha256` beside it. On a mismatch it logs `Pinned download digest mismatch` with the tool, the architecture and both digests as fields, raises, and writes nothing. A download that fails (no network, a DNS or HTTP error, a timeout) raises `DownloadError`, a `LockError` that names the tool, its version, the URL and the reason, after logging `Pinned tool download failed` with the same fields. It writes nothing either.
 
 **The part that is easy to get wrong** is reuse. `fetch` skips the download when the file is already there, but only if the stamp equals `_stamp(pin, current bytes)`. The stamp holds two digests: the pin that was verified, and the digest of the file *as written*. The second is needed because a file extracted from an archive has no pin of its own. So every reuse re-hashes the file on disk. An earlier version trusted the stamp alone, so a binary swapped after download was reused and shipped in a bundle whose manifest still quoted the pinned digest. `tests/supplychain/test_toolslock.py::test_a_reused_tool_is_the_verified_one_not_whatever_is_on_disk` is the regression test.
 
-`scripts/fetch_tools.py` is a thin CLI over `select` and `fetch`: `--arch` (default: this host) and optional names. Files land in `.tools/<arch>/`, and trust material in `.tools/noarch/`. `make tools` fetches the two binaries the harness runs. `make supply-tools` fetches cosign, syft, trivy, the linters and the trust root.
+`scripts/fetch_tools.py` is a thin CLI over `select` and `fetch`: `--arch` (default: this host) and optional names. Files land in `.tools/<arch>/`, and trust material in `.tools/noarch/`. Any `LockError` ends the run with its one-line message and exit status 1, never a traceback; `tests/supplychain/test_fetch_tools.py` holds that with a fake opener that is offline. `make tools` fetches the two binaries the harness runs. `make supply-tools` fetches cosign, syft, trivy, the linters and the trust root.
 
 ### 2. The bundle: `scripts/build_bundle.py`, `supplychain/bundle.py`, `supplychain/checksums.py`
 
@@ -236,7 +236,7 @@ cp build/toxiproxy.bak .tools/x86_64/toxiproxy
 unshare -rn make tools                                        # quiet reuse again
 ```
 
-The third command ends in a `URLError` traceback ("Temporary failure in name resolution"). That is the proof: `fetch` noticed the file no longer matched its stamp and went to download a fresh copy. With a network, it would have replaced the file.
+The third command logs `Pinned tool download failed`, prints `cannot download toxiproxy <version> (x86_64) from <url>: [Errno -3] Temporary failure in name resolution` and exits 1. That is the proof: `fetch` noticed the file no longer matched its stamp and went to download a fresh copy. With a network, it would have replaced the file.
 
 **The supply-chain unit tests, with no network at all:**
 
@@ -361,7 +361,7 @@ These are stated plainly because the configuration exists and is checked, which 
 | A malformed row in `deploy/tools.lock` | `parse` raises before any download | `tools.lock line N: expected 6 columns...` |
 | A tool with no pin for the requested arch | `select` raises; nothing is fetched | `no pin for arch aarch64: <name>` |
 | A download that does not match its pin | Logged with both digests; nothing written | `SHA-256 mismatch for <tool> <arch>: got ..., pinned ...` |
-| A cached tool changed on disk | Not reused; downloaded again | With no network, a `URLError` traceback rather than a one-line message |
+| A cached tool changed on disk | Not reused; downloaded again | With no network, `cannot download <tool> <version> (<arch>) from <url>: <reason>` and exit 1 |
 | `web/dist` not built | `build` exits before staging | `web/dist is missing: run make web first` |
 | A shipped fixture missing from the source | The copy raises; the build fails | Python traceback naming the path |
 | No `.sigstore.json` beside the bundle | Refused before cosign | `no signature bundle: ... (an unsigned artifact is never installed)` |

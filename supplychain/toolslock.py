@@ -17,6 +17,7 @@ import io
 import pathlib
 import re
 import tarfile
+import urllib.error
 import urllib.request
 from collections.abc import Callable, Iterable
 
@@ -30,7 +31,12 @@ _COLUMNS = ("name", "version", "arch", "sha256", "url", "member")
 
 
 class LockError(Exception):
-    """A pin is malformed, missing, or a download does not match it."""
+    """A pin is malformed or missing, or its file cannot be fetched or does not match it."""
+
+
+class DownloadError(LockError):
+    """A pinned file could not be downloaded: no network, a DNS or HTTP error,
+    a timeout. It names the tool and the URL; nothing is written."""
 
 
 @dataclasses.dataclass(frozen=True)
@@ -90,8 +96,7 @@ def fetch(pin: ToolPin, dest_dir: pathlib.Path, opener: Opener = urllib.request.
     stamp = dest_dir / f".{pin.name}.sha256"
     if dest.exists() and stamp.exists() and stamp.read_text().strip() == _stamp(pin, dest.read_bytes()):
         return dest
-    with opener(pin.url, timeout=120) as response:
-        blob = response.read()
+    blob = _download(pin, opener)
     digest = hashlib.sha256(blob).hexdigest()
     if digest != pin.sha256:
         log.error("Pinned download digest mismatch", tool=pin.name, arch=pin.arch, got=digest, pinned=pin.sha256)
@@ -103,6 +108,25 @@ def fetch(pin: ToolPin, dest_dir: pathlib.Path, opener: Opener = urllib.request.
     stamp.write_text(_stamp(pin, payload) + "\n")
     log.info("Pinned tool installed", tool=pin.name, version=pin.version, arch=pin.arch, sha256=pin.sha256)
     return dest
+
+
+def _download(pin: ToolPin, opener: Opener) -> bytes:
+    try:
+        with opener(pin.url, timeout=120) as response:
+            return response.read()
+    except OSError as error:  # URLError, HTTPError, timeouts and resets are all OSError
+        reason = _reason(error)
+        log.error("Pinned tool download failed", tool=pin.name, arch=pin.arch, url=pin.url, error=reason)
+        raise DownloadError(f"cannot download {pin.name} {pin.version} ({pin.arch}) from {pin.url}: {reason}") from error
+
+
+def _reason(error: OSError) -> str:
+    """The status of an HTTP error, the socket error a URLError wraps, or the error itself."""
+    if isinstance(error, urllib.error.HTTPError):
+        return f"HTTP {error.code} {error.reason}"
+    if isinstance(error, urllib.error.URLError):
+        return str(error.reason)
+    return str(error)
 
 
 def _stamp(pin: ToolPin, installed: bytes) -> str:

@@ -6,6 +6,8 @@ for the requested architecture); nothing unverified is ever written.
 
 import hashlib
 import pathlib
+import urllib.error
+from email.message import Message
 
 import pytest
 
@@ -144,3 +146,45 @@ def test_a_reused_tool_is_the_verified_one_not_whatever_is_on_disk(tmp_path, mem
     dest.write_bytes(b"swapped after download")
 
     assert fetch(p, tmp_path / "out").read_bytes() == data
+
+
+class _Unreadable:
+    """A response whose body never arrives: the connection times out mid-read."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def read(self):
+        raise TimeoutError("The read operation timed out")
+
+
+def _raises(error: Exception):
+    def opener(url, timeout):
+        raise error
+
+    return opener
+
+
+@pytest.mark.parametrize(
+    ("opener", "reason"),
+    [
+        (_raises(urllib.error.URLError(OSError(-3, "Temporary failure in name resolution"))),
+         "Temporary failure in name resolution"),
+        (_raises(urllib.error.HTTPError("https://example.invalid/t", 404, "Not Found", Message(), None)), "HTTP 404"),
+        (lambda url, timeout: _Unreadable(), "timed out"),
+    ],
+    ids=["offline", "http-error", "read-timeout"],
+)
+def test_a_failed_download_is_one_clear_error_naming_the_tool_and_the_url(tmp_path, opener, reason):
+    """Offline, `make tools` ended in a URLError traceback. A download that
+    fails says which pinned file, from where, and why; nothing is written."""
+    p = pin("toxiproxy", "x86_64", "https://example.invalid/toxiproxy-linux-amd64")
+    with pytest.raises(LockError) as caught:
+        fetch(p, tmp_path / "out", opener=opener)
+    message = str(caught.value)
+    assert "toxiproxy" in message and "https://example.invalid/toxiproxy-linux-amd64" in message
+    assert reason in message
+    assert not (tmp_path / "out").exists()
