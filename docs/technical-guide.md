@@ -829,7 +829,7 @@ The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and t
 | `harness/cluster.py` exits with `missing: run make tools` | `nats-server` or `toxiproxy` not in `.tools/<arch>/` | `make tools` |
 | `python -m harness.report` prints `not writing ddil-results.md: no result for ...` | A scenario has no result in `harness/results/`, so the report would drop it | `make ddil` |
 | The Passes tab lists every imager as skipped, or `GET /api/passes/catalog` is empty on an edge | Element sets have not arrived: the hub holds none (its log says `Element snapshot missing`) or lacks those imagers, or sync has not run yet | `GET /api/sync` on the edge; `SENTINEL_ELEMENTS` and `SENTINEL_SYNC_ELEMENTS` on the hub |
-| `GET /api/passes` returns 409 or 503 | 409: no unit is set. 503: an element set for a catalogued imager cannot be propagated | `PUT /api/passes/unit`; the node log `Pass computation refused` |
+| `GET /api/passes` returns 409 or 503 | 409: no unit is set. 503: an element set for a catalogued imager cannot be used, because its mean motion is not positive or its orbit is outside low Earth orbit (`docs/icd/passes-api.md`) | `PUT /api/passes/unit`; the node log `Pass computation refused` |
 | A node will not start: `SENTINEL_SYNC_ELEMENTS must be one of` | The value is not `catalog` or `all` | the configuration reference above |
 | A node will not start: `SENTINEL_ROLE must be one of` | The value is not `hub`, `edge` or `standalone` | the configuration reference above |
 | Requests reach a node you did not start | `make serve` and `make demo-local` use fixed ports 8000 and 8001; if another process holds them, your node fails to bind and your requests go to the other one | `node_id` and `role` in `GET /api/node`; `ss -ltn` |
