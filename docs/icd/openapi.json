@@ -732,7 +732,7 @@
     },
     "/api/events/{event_id}/trajectory": {
       "get": {
-        "description": "Earth-fixed arcs of both objects around TCA. Visualization only; 404 when the\nevent is unknown, 422 when two-body arcs cannot be drawn for its states (a state\nbelow the Earth's surface or beyond its Hill sphere, a propagation that fails, or\nan arc past the last representable date).",
+        "description": "Earth-fixed arcs of both objects around TCA. Visualization only; 404 when the\nevent is unknown, 422 when two-body arcs cannot be drawn for its states (a state\nbelow the Earth's surface or beyond the admitted 3 million km, a propagation that fails, or\nan arc past the last representable date).",
         "operationId": "trajectory_api_events__event_id__trajectory_get",
         "parameters": [
           {
