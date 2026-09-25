@@ -57,7 +57,7 @@ describe("controls have names", () => {
       "GET /api/events?scope=active": ok([summary()]),
       [`GET /api/events/${EVENT}`]: ok(detail()),
       [`GET /api/events/${EVENT}/encounter`]: ok({ available: false }),
-      [`GET /api/events/${EVENT}/dilution-curve`]: ok({ log10_k: [-1, 0, 1], pc: [1e-6, 3.6e-5, 1e-5], k_star: 0.9, pc_at_k1: 3.6e-5, pc_max: 4e-5 }),
+      [`GET /api/events/${EVENT}/dilution-curve`]: ok({ model_applies: true, log10_k: [-1, 0, 1], pc: [1e-6, 3.6e-5, 1e-5], k_star: 0.9, pc_at_k1: 3.6e-5, pc_max: 4e-5 }),
       [`GET /api/events/${EVENT}/trajectory`]: "pending",
       [`GET /api/events/${EVENT}/ops`]: ok({ entries: [], annotations: { triage_status: { values: [], conflict: false } }, current_ref: null, decisions: ["MONITOR"] }),
     });
