@@ -165,24 +165,26 @@ def test_mvmap_keeps_what_the_peer_never_saw():
 
 @pytest.mark.xfail(strict=True, reason=CORE + (
     "MVMap.missing_for enumerates every dot a register's context covers (DotContext.dots()), "
-    "so one register pushed with a context of {node: 10**9} makes every later anti-entropy "
-    "exchange build a billion-element set: the hub stops answering every edge"))
-def test_a_register_context_claiming_a_huge_history_cannot_stall_anti_entropy(tmp_path):
-    import signal
-
+    "so an exchange costs as much as the history a peer merely claims: one register pushed "
+    "with a context of {node: 10**9} makes the hub build a billion-element set per exchange "
+    "and stop answering every edge"))
+def test_the_cost_of_an_exchange_does_not_grow_with_the_history_a_peer_claims(tmp_path, monkeypatch):
+    """Counted in Dots constructed, for a claim of a million: enough to show
+    the enumeration, not enough to exhaust the test runner's memory."""
     from sentinel.crdt import DotContext
+    from sentinel.crdt import dots as dots_module
 
     hub = ops("hub", tmp_path / "hub.db")
-    claim = Register({}, DotContext({"bravo": 10**9})).to_wire()
+    claim = Register({}, DotContext({"bravo": 10**6})).to_wire()
     run(hub.merge_payload({"reg": {"EV1|assignee": claim}}))
 
-    def expire(_signum, _frame):
-        raise TimeoutError("payload_for did not answer within 5 s")
+    made = {"n": 0}
+    real_init = dots_module.Dot.__init__
 
-    previous = signal.signal(signal.SIGALRM, expire)
-    signal.alarm(5)
-    try:
-        hub.payload_for(DotContext().to_wire(), DotContext().to_wire())
-    finally:
-        signal.alarm(0)
-        signal.signal(signal.SIGALRM, previous)
+    def counting_init(self, *args, **kwargs):
+        made["n"] += 1
+        real_init(self, *args, **kwargs)
+
+    monkeypatch.setattr(dots_module.Dot, "__init__", counting_init)
+    hub.payload_for(DotContext().to_wire(), DotContext().to_wire())
+    assert made["n"] < 1_000, f"{made['n']} dots enumerated for one exchange"

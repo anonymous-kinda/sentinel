@@ -41,9 +41,19 @@ def numbers_in_text(text: str) -> list[str]:
 
 def _unread_digits(text: str) -> list[str]:
     """Digits no number token covers: ".9", or the "9" of "0,9". The number
-    pattern does not read them, so they would otherwise go unchecked."""
+    pattern does not read them, so they would otherwise go unchecked. The
+    one exception is a dotted continuation of a number ("1.13.0", "3.1.3"):
+    a version, whose leading part is itself checked."""
     spans = [m.span() for m in _NUMBER.finditer(text)]
-    return [m.group(0) for m in _DIGITS.finditer(text) if not any(a <= m.start() and m.end() <= b for a, b in spans)]
+    return [
+        m.group(0)
+        for m in _DIGITS.finditer(text)
+        if not any(a <= m.start() and m.end() <= b for a, b in spans) and not _dotted_continuation(text, m.start())
+    ]
+
+
+def _dotted_continuation(text: str, start: int) -> bool:
+    return start >= 2 and text[start - 1] == "." and text[start - 2].isdigit()
 
 
 def _parse(token: str) -> tuple[float, int]:

@@ -88,6 +88,11 @@ def test_digits_inside_a_grounded_identifier_are_still_accepted():
     assert check_grounding(f"Event {FACTS['event_id']}: Pc 6.3×10⁻³, miss 200 m.", FACTS).ok
 
 
+def test_a_version_is_read_by_its_checked_leading_number():
+    assert check_grounding("Routed by jev-1.13.0.", {"model": "jev-1.13.0"}).ok
+    assert not check_grounding("Routed by jev-2.13.0.", {"model": "jev-1.13.0"}).ok
+
+
 # ------------------------------------------------------------- the audit
 def test_no_api_key_reaches_the_audit_record(registry, tmp_path, monkeypatch):
     """Keys live in the environment and the SDK clients; the audit records
