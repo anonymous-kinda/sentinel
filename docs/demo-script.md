@@ -69,7 +69,7 @@ for f in dist/wave2/*.cdm; do curl -s -o /dev/null --data-binary @"$f" http://12
 
 **Do.**
 
-1. Edge: LINK chip, then **LIMITED** (about 8 kbit/s with 600 ms latency, on the real leaf link). The chip passes through DEGRADED and settles on `LINK LIMITED` in about 30 s; cut the wait.
+1. Edge: LINK chip, then **LIMITED** (about 8 kbit/s with 600 ms latency, on the real leaf link). The chip passes through DEGRADED and settles on `LINK LIMITED` in about 30 s, because the edge's rate estimate is still averaging the fast link it measured before; cut the wait.
 2. Edge: **Sync** tab. Under "Queue - fetch order", the urgent rows are sorted by "to deadline", smallest first. "Arrivals" fills in with `sha256 ✓ · verified`.
 3. Edge: **Operations**. The second-wave events appear marked `HUB-ASSERTED` before their full records arrive, then turn verified.
 4. Edge: open the first EX-DEB 412 event. The status shows **CONFLICT** with both values, MANEUVER PLANNING from the edge and WATCH from the hub. The decision shows **REVIEW REQUIRED**.

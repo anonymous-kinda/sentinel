@@ -102,11 +102,11 @@ make ddil            # every scenario on real processes -> docs/ddil-results.md
 
 The containers themselves have not run yet: the `compose-smoke` CI job is their first real run. The smoke test has passed against the process harness. See `docs/compose.md`.
 
-**Denied: the edge keeps working.** The console stays up (2.8 ms p95 while cut off). Operators triage events and record signed decisions locally, and the link state is *measured*, not configured.
+**Denied: the edge keeps working.** The console stays up (3.2 ms p95 while cut off). Operators triage events and record signed decisions locally, and the link state is *measured*, not configured.
 
 ![Edge node while the link is denied](docs/img/edge-denied.png)
 
-**Limited: what matters crosses first.** The edge gets a summary of every event (at most 256 bytes each) first: within 5.5 s in the latest run. Then full CDMs follow, earliest maneuver commit point first. Each is re-assessed locally and compared with what the hub asserted: an event is HUB-ASSERTED until then, VERIFIED once the local result matches, and MISMATCH if it doesn't. Measured on the same link with the same bytes, the most urgent full record arrives in **12.1 s with earliest-deadline-first vs 46.8 s in FIFO order** (3.9×, latest run in `docs/ddil-results.md`). That run uses the hub's default configuration, which also offers edges the 38 imaging-catalog element sets over the same link. ADR-008 records what reference data costs on a thin link.
+**Limited: what matters crosses first.** The edge gets a summary of every event (at most 256 bytes each) first: within 6.5 s, the median of 5 runs. Then full CDMs follow, earliest maneuver commit point first. Each is re-assessed locally and compared with what the hub asserted: an event is HUB-ASSERTED until then, VERIFIED once the local result matches, and MISMATCH if it doesn't. Measured on the same link with the same bytes, the most urgent full record arrives in **9.1 s with earliest-deadline-first vs 136.9 s in FIFO order** (15.0×, medians of 5 runs per mode; every run is listed in `docs/ddil-results.md`). Each run starts from the same backlog at the hub: the exercise CDMs and the 38 imaging-catalog element sets that the hub's default configuration offers edges. The leaf connects over the already-shaped link, and the scenario checks each run's link and the records it moved. Both orders move the whole backlog in about the same time, because the bytes and the link are the same; the order decides which record arrives first. ADR-006 explains why the comparison runs this way, and ADR-008 records what reference data costs on a thin link.
 
 ![Sync tab over a limited link](docs/img/edge-sync.png)
 
