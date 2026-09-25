@@ -181,7 +181,7 @@
     },
     "/api/ai/confirm": {
       "post": {
-        "description": "The operator confirms a draft once; it becomes a signed DECISION. The node holds\nthe 100 newest unconfirmed drafts. 404 `unknown_draft` for a draft it does not hold\n(never made, already confirmed, or forgotten after 100 newer ones), 409 when the\nevent's CDM changed since the draft (stale), 403 on a read-only node.",
+        "description": "The operator confirms a draft once; it becomes a signed DECISION. The node holds\nthe 100 newest unconfirmed drafts. 404 `unknown_draft` for a draft it does not hold\n(never made, already confirmed or refused, or forgotten after 100 newer ones), 409 when\nthe event's CDM changed since the draft (stale: the draft is spent, so redraft), 403 on\na read-only node. Every attempt the assistant receives, refused or failed, is a line in\nthe audit record.",
         "operationId": "ai_confirm_api_ai_confirm_post",
         "requestBody": {
           "content": {

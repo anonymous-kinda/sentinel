@@ -159,8 +159,10 @@ def register(app: FastAPI, node) -> None:
     async def ai_confirm(request: Request) -> dict:
         """The operator confirms a draft once; it becomes a signed DECISION. The node holds
         the 100 newest unconfirmed drafts. 404 `unknown_draft` for a draft it does not hold
-        (never made, already confirmed, or forgotten after 100 newer ones), 409 when the
-        event's CDM changed since the draft (stale), 403 on a read-only node."""
+        (never made, already confirmed or refused, or forgotten after 100 newer ones), 409 when
+        the event's CDM changed since the draft (stale: the draft is spent, so redraft), 403 on
+        a read-only node. Every attempt the assistant receives, refused or failed, is a line in
+        the audit record."""
         body = await json_object(request)
         try:
             return await assistant.confirm(

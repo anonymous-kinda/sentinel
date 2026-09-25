@@ -38,6 +38,8 @@ log = get_logger(__name__)
 MIN_CONFIDENCE = 0.5
 # Unconfirmed drafts a node holds; past this the oldest is forgotten.
 MAX_DRAFTS = 100
+# A draft id is 16 hex characters; the audit records no more than this of one sent.
+MAX_DRAFT_ID_CHARS = 64
 COMMANDS = "Try /events [red|amber] [48h], /assess <n>, /explain <n>, /link, /queue or /draft <n> <decision>."
 TOOL_QUESTIONS = {
     "missing_event": "Which event?",
@@ -172,7 +174,7 @@ class Assistant:
             "answer": answer.text,
             "facts_sha256": None if answer.facts is None else _sha256(answer.facts),
         }
-        answer.audit_seq = self.audit.append(record, at=self.clock.now().isoformat())["seq"]
+        answer.audit_seq = self._audit(record)["seq"]
         if answer.status == "draft":
             answer.draft_id = secrets.token_hex(8)
             self._hold_draft(answer.draft_id, _Draft(answer.facts, answer.route, answer.audit_seq))
@@ -273,20 +275,37 @@ class Assistant:
 
     # --------------------------------------------------------------- confirm
     async def confirm(self, draft_id: str, author: str, rationale: str = "") -> dict:
-        """A person turns a draft into a signed DECISION. Once only."""
+        """A person turns a draft into a signed DECISION. Once only: the first
+        attempt spends the draft, whatever comes of it. A draft refused as
+        stale can never become current again, so holding it would only invite
+        the same refusal. Every attempt is audited, refused ones too (ADR-007)."""
         draft = self._drafts.pop(draft_id, None)
-        if draft is None:
-            raise ToolError("unknown_draft", draft_id)
-        provenance = {
+        ask_seq = None if draft is None else draft.ask_seq
+        attempt = {"kind": "confirm", "author": author, "draft_id": draft_id[:MAX_DRAFT_ID_CHARS], "ask_seq": ask_seq}
+        try:
+            if draft is None:
+                raise ToolError("unknown_draft", draft_id)
+            entry = await self.tools.record_decision(draft.facts, author, rationale, self._provenance(draft))
+        except ToolError as exc:
+            self._audit({**attempt, "status": "refused", "reason": exc.code, "entry": None})
+            log.warning("AI draft confirm refused", reason=exc.code, ask_seq=ask_seq)
+            raise
+        except Exception as exc:
+            self._audit({**attempt, "status": "failed", "reason": type(exc).__name__, "entry": None})
+            log.error("AI draft confirm failed", error=type(exc).__name__, ask_seq=ask_seq)
+            raise
+        self._audit({**attempt, "status": "confirmed", "reason": None, "entry": entry["digest"]})
+        log.info("AI draft confirmed", event_id=draft.facts["event_id"], ask_seq=ask_seq)
+        return entry
+
+    @staticmethod
+    def _provenance(draft: _Draft) -> dict:
+        return {
             "router": draft.route["provider"],
             "confidence": draft.route["confidence"],
             "model": draft.route["detail"].get("model"),
             "ask_seq": draft.ask_seq,
         }
-        entry = await self.tools.record_decision(draft.facts, author, rationale, provenance)
-        self.audit.append(
-            {"kind": "confirm", "author": author, "draft_id": draft_id, "ask_seq": draft.ask_seq, "entry": entry["digest"]},
-            at=self.clock.now().isoformat(),
-        )
-        log.info("AI draft confirmed", event_id=draft.facts["event_id"], ask_seq=draft.ask_seq)
-        return entry
+
+    def _audit(self, record: dict) -> dict:
+        return self.audit.append(record, at=self.clock.now().isoformat())

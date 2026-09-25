@@ -132,6 +132,13 @@ def test_a_read_only_node_offers_no_draft_it_could_never_confirm(tmp_path):
     assert "read-only" in a["text"]
 
 
+def test_a_refused_confirm_is_in_the_audit_record(client):
+    assert client.post("/api/ai/confirm", json={"draft_id": "0123456789abcdef"}, headers=OP2).status_code == 404
+    last = client.get("/api/ai/audit").json()[-1]
+    assert (last["kind"], last["status"], last["reason"], last["author"]) == ("confirm", "refused", "unknown_draft", "op2")
+    assert client.get("/api/ai/audit/verify").json()["ok"]
+
+
 def test_confirming_an_evicted_draft_is_404_unknown_draft(client):
     client.app.state.node.extensions["ai"].max_drafts = 1
     first, second = (client.post("/api/ai/ask", json={"text": "/draft 118 monitor"}, headers=OP1).json() for _ in range(2))
