@@ -8,8 +8,9 @@ than stored.
 Integrity rules, in the spirit of "wrong raises, incomplete degrades":
 
   * An entry whose signature does not verify under the trust store, or
-    whose author node is not trusted, is rejected before merge and recorded.
-    Incomplete trust (an unknown node) degrades; nothing is lost silently.
+    whose author node is not trusted, is rejected before merge and recorded
+    once (SignedLog.rejected). Incomplete trust (an unknown node) degrades;
+    nothing is lost silently.
   * The same dot arriving, validly signed, with a different digest can
     only happen through a bug in a trusted node or a stolen key. It raises
     IntegrityError: the replica stops rather than choose which history to
@@ -21,6 +22,7 @@ Integrity rules, in the spirit of "wrong raises, incomplete degrades":
 from __future__ import annotations
 
 import dataclasses
+from collections import OrderedDict
 from collections.abc import Iterable, Mapping
 from typing import Any, TypedDict
 
@@ -29,6 +31,9 @@ from .dots import Dot, DotContext, WireDot
 from .signing import NodeKey, TrustStore
 
 KINDS = ("DECISION", "NOTE", "RESOLUTION", "AI_DRAFT_CONFIRMED")
+# Distinct rejected entries remembered, newest last: every entry an untrusted
+# edge writes through a long partition, few enough for /api/ops/digest.
+REJECTIONS_KEPT = 1000
 
 
 class IntegrityError(RuntimeError):
@@ -114,7 +119,7 @@ class SignedLog:
         self.entries: dict[Dot, Entry] = {}
         self.ctx = DotContext()
         self.lamport = 0
-        self.rejected: list[Rejection] = []
+        self._rejections: OrderedDict[tuple[Dot, str], Rejection] = OrderedDict()
 
     def append(
         self, kind: str, body: dict[str, Any], event_ref: dict[str, Any], author: str, wall_time: str
@@ -157,9 +162,7 @@ class SignedLog:
             # Verify before comparing: only a validly signed entry can make
             # the replica stop; a forgery that reuses a dot is rejected.
             if not self.verify(entry):
-                self.rejected.append(
-                    {"dot": entry.dot.to_wire(), "reason": "untrusted-or-bad-signature", "author": entry.author}
-                )
+                self._reject(entry)
                 continue
             if existing is not None:
                 raise IntegrityError(f"dot {entry.dot} arrived with a different digest")
@@ -169,6 +172,34 @@ class SignedLog:
             self.lamport = max(self.lamport, entry.lamport)
             added.append(entry)
         return added
+
+    @property
+    def rejected(self) -> list[Rejection]:
+        """Each distinct entry rejected, least recently offered first."""
+        return list(self._rejections.values())
+
+    def _reject(self, entry: Entry) -> None:
+        """Record a rejection once, however often the entry is offered.
+
+        A rejected dot never enters the context, so a peer offers it again on
+        every exchange. The resend is deliberate. Marking the dot as seen
+        would stop it, but a peer never offers a dot the context claims: an
+        entry whose author is trusted later would be lost for good, and a
+        forgery at any dot would keep the genuine entry out. The context also
+        has to stay "the entries held", which the store rebuilds it from.
+        So the record is keyed by (dot, digest), because a new forgery at a
+        known dot is new evidence. It is bounded, keeping the newest, against
+        a peer that forges without end.
+        """
+        key = (entry.dot, entry.digest())
+        if key in self._rejections:
+            self._rejections.move_to_end(key)
+            return
+        self._rejections[key] = {
+            "dot": entry.dot.to_wire(), "reason": "untrusted-or-bad-signature", "author": entry.author
+        }
+        if len(self._rejections) > REJECTIONS_KEPT:
+            self._rejections.popitem(last=False)
 
     def _check_chain(self, entry: Entry) -> None:
         before = self.entries.get(Dot(entry.dot.node, entry.dot.seq - 1))

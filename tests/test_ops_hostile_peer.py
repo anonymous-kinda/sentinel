@@ -84,6 +84,67 @@ def test_a_signature_that_is_not_hex_is_rejected_and_recorded_not_raised(sig):
     assert log.rejected[-1]["reason"] == "untrusted-or-bad-signature"
 
 
+# ------------------------------------------------------------ rejections
+def hub_without_a_trust_file(db) -> OpsService:
+    """What load_identity builds with no SENTINEL_TRUST_FILE: a hub that trusts only itself."""
+    return OpsService("hub", KEYS["hub"], TrustStore({"hub": TRUST["hub"]}), InProcessBus(), FixedClock(NOW),
+                      db_path=str(db))
+
+
+def exchange(hub: OpsService, edge: OpsService, times: int = 1) -> None:
+    """The edge's push, built from what the hub says it holds, as SyncAgent sends it."""
+    for _ in range(times):
+        run(hub.merge_payload(edge.payload_for(**hub.contexts())))
+
+
+def notes_from_alpha(tmp_path, count: int) -> OpsService:
+    edge = ops("alpha", tmp_path / "alpha.db")
+    for n in range(count):
+        run(edge.append("EV1", "NOTE", {"text": f"note {n}"}, "op@alpha"))
+    return edge
+
+
+def test_an_entry_offered_on_every_exchange_is_recorded_once(tmp_path):
+    """A rejected entry never enters the context, so the edge offers it again
+    on every exchange (every 2 s). Each offer appended another record: the
+    list, and /api/ops/digest, grew without bound."""
+    hub, edge = hub_without_a_trust_file(tmp_path / "hub.db"), notes_from_alpha(tmp_path, 3)
+    exchange(hub, edge, times=10)
+    assert len(hub.log.rejected) == 3
+
+
+def test_the_record_of_rejections_is_bounded_and_keeps_the_newest():
+    """Distinct forgeries are distinct records, so a peer that forges without
+    end needs a bound. The newest are kept: they say what is arriving now."""
+    template = authored("alpha", 1)[0]
+    flood = [dataclasses.replace(template, dot=Dot("stranger", n)) for n in range(1, 2_001)]
+    log = SignedLog("hub", KEYS["hub"], TrustStore(TRUST))
+    log.merge(flood)
+    assert len(log.rejected) <= 1_000
+    assert log.rejected[-1]["dot"] == ["stranger", 2_000]
+
+
+def test_a_rejected_entry_is_offered_again_so_trust_granted_later_lets_it_in(tmp_path):
+    """Why a rejection is not marked as seen: a peer never offers a dot the
+    context claims, so the entry would be lost to this replica for good."""
+    hub, edge = hub_without_a_trust_file(tmp_path / "hub.db"), notes_from_alpha(tmp_path, 3)
+    exchange(hub, edge, times=3)
+    hub.log.trust.add("alpha", TRUST["alpha"])
+    exchange(hub, edge)
+    assert len(hub.log.entries) == 3
+
+
+def test_a_forgery_at_a_dot_does_not_keep_the_genuine_entry_out(tmp_path):
+    """The other reason: anyone can forge an entry for any dot. Were a
+    rejected dot marked as seen, a forgery would suppress the genuine entry."""
+    hub, edge = ops("hub", tmp_path / "hub.db"), notes_from_alpha(tmp_path, 1)
+    [genuine] = edge.log.entries.values()
+    forged = dataclasses.replace(genuine, body={"text": "forged"}, sig="00" * 64)
+    run(hub.merge_payload({"log": [forged.to_wire()]}))
+    exchange(hub, edge)
+    assert hub.log.entries[genuine.dot] == genuine
+
+
 # ----------------------------------------------------- memory and disk
 def test_a_malformed_payload_merges_nothing_rather_than_half(tmp_path):
     """The entries are decoded lazily inside the merge: a genuine entry
