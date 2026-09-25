@@ -487,6 +487,35 @@ def test_the_manifest_wait_grows_after_each_timeout_up_to_a_cap_and_resets_when_
     assert bus.waits[-1] == grown[0], "a manifest arrived: back to the wait its size needs"
 
 
+class DeniedLink(LossyManifestBus):
+    """Loses every request, on every subject, while `lost`."""
+
+    async def request(self, subject, data, timeout, headers=None):
+        if self.lost and subject != subjects.sync_manifest("hub"):
+            raise RequestTimeout(subject)
+        return await super().request(subject, data, timeout, headers)
+
+
+def test_a_denial_never_lengthens_the_manifest_wait():
+    """The manifest wait grows only on a manifest lost after the operator-data
+    exchange got through in the same cycle. Through a denial that exchange
+    fails first, so however long the denial, the first manifest after it is
+    waited for as long as its size needs, and no longer."""
+    bus = DeniedLink()
+    clock = FixedClock(EPOCH)
+    hub_ops = OpsService("hub", KEYS["hub"], TrustStore(TRUST), bus, clock)
+    run(SyncServer(bus, SmallRecords([{"e": "A", "dl": 1_790_000_000, "q": 0, "c": []}]), hub_ops, "hub").start())
+    edge_ops = OpsService("alpha", KEYS["alpha"], TrustStore(TRUST), bus, clock)
+    agent = SyncAgent(bus, SmallRecords(), edge_ops, clock, "alpha", "hub", LinkMonitor(rate_bytes_per_s=1000.0))
+
+    for _ in range(10):
+        with contextlib.suppress(*LINK_ERRORS):
+            run(agent.cycle())
+    bus.lost = False
+    run(agent.cycle())
+    assert len(bus.waits) == 1 and bus.waits[0] == 6.0 + 1.5 * 4000 / 1000.0
+
+
 def test_the_composite_routes_a_summary_without_an_item_id_to_rejection_not_to_a_crash(link):
     genuine = link.hub.records.manifest()
     composite = CompositeRecords(link.edge.records, {ELEMENT_PREFIX: ElementRecords(ElementStore(), link.clock)})
