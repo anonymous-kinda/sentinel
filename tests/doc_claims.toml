@@ -24,23 +24,23 @@ patterns = ["Toxiproxy latency 600 +/- 200 ms each way, bandwidth 32 kB/s"]
 [[claim]]
 id = "readme-denied-console-p95"
 doc = "README.md"
-quoted = "(2.8 ms p95 while cut off)"
+quoted = "(3.2 ms p95 while cut off)"
 source = "docs/ddil-results.md"
-patterns = ["p95 2.8 ms over 40 requests"]
+patterns = ["p95 3.2 ms over 40 requests"]
 
 [[claim]]
 id = "readme-limited-summaries"
 doc = "README.md"
-quoted = "first: within 5.5 s in the latest run"
+quoted = "first: within 6.5 s, the median of 5 runs"
 source = "docs/ddil-results.md"
-patterns = ["summaries at 5.5 s"]
+patterns = ["summaries at 6.5 s", "medians over 5 runs per mode"]
 
 [[claim]]
 id = "readme-limited-edf-vs-fifo"
 doc = "README.md"
-quoted = "**12.1 s with earliest-deadline-first vs 46.8 s in FIFO order** (3.9×"
+quoted = "**9.1 s with earliest-deadline-first vs 136.9 s in FIFO order** (15.0×, medians of 5 runs per mode"
 source = "docs/ddil-results.md"
-patterns = ["EDF 12.1 s vs FIFO 46.8 s (3.9x)"]
+patterns = ["EDF 9.1 s (8.6–9.1) vs FIFO 136.9 s (135.4–141.7) (15.0x)", "medians over 5 runs per mode"]
 
 [[claim]]
 id = "readme-limited-catalog-element-sets"
@@ -52,44 +52,57 @@ patterns = ["38 element sets crossed"]
 [[claim]]
 id = "adr004-denied-console-p95"
 doc = "docs/system-design.md"
-quoted = "The DENIED scenario measures this: 2.8 ms p95 console latency"
+quoted = "The DENIED scenario measures this: 3.2 ms p95 console latency"
 source = "docs/ddil-results.md"
-patterns = ["p95 2.8 ms over 40 requests"]
+patterns = ["p95 3.2 ms over 40 requests"]
 
 [[claim]]
 id = "adr006-summaries-visible"
 doc = "docs/system-design.md"
-quoted = "At about 8 kbit/s, every event was visible as a summary within 5.5 s in the latest run"
+quoted = "At about 8 kbit/s, every event was visible as a summary within 6.5 s, the median of 5 runs"
 source = "docs/ddil-results.md"
-patterns = ["measured over ~8 kbit/s + 600 ms", "summaries at 5.5 s"]
+patterns = [
+    "over ~8 kbit/s + 600 ms",
+    "summaries at 6.5 s",
+    "medians over 5 runs per mode",
+]
 
 [[claim]]
 id = "adr006-edf-vs-fifo"
 doc = "docs/system-design.md"
-quoted = "same 13 CDMs: the most urgent event's full CDM arrives in **12.1 s with EDF vs 46.8 s with FIFO** (3.9×)"
+quoted = "the same 51 records (13 CDMs and 38 element sets): the most urgent event's full CDM arrives in **9.1 s with EDF vs 136.9 s with FIFO** (15.0×), medians of 5 runs per mode"
 source = "docs/ddil-results.md"
-patterns = ["same 13 records", "EDF 12.1 s vs FIFO 46.8 s (3.9x)"]
+patterns = [
+    "same 51 records (13 CDMs",
+    "and 38 element sets;",
+    "EDF 9.1 s (8.6–9.1) vs FIFO 136.9 s (135.4–141.7) (15.0x)",
+    "medians over 5 runs per mode",
+]
 
 [[claim]]
 id = "adr008-fifo-slower"
 doc = "docs/system-design.md"
-quoted = "measures at 3.9× slower"
+quoted = "measures at 15.0× slower for the record that matters, as a ratio of medians over 5 runs per mode"
 source = "docs/ddil-results.md"
-patterns = ["(3.9x)"]
+patterns = ["(15.0x)", "medians over 5 runs per mode"]
 
 [[claim]]
 id = "adr008-thin-link-summaries"
 doc = "docs/system-design.md"
-quoted = "every event summary arrived at 5.5 s, not sooner, because 38 more summaries ride in the manifest"
+quoted = "Every event summary arrived at 6.5 s (the median of 5 runs), not sooner, because 38 more summaries ride in the manifest"
 source = "docs/ddil-results.md"
-patterns = ["summaries at 5.5 s", "38 element sets crossed"]
+patterns = [
+    "summaries at 6.5 s",
+    "medians over 5 runs per mode",
+    "38 element sets crossed",
+]
 
 [[claim]]
 id = "findings-recovery-leaf"
 doc = "docs/system-design.md"
-quoted = "It now re-establishes the leaf in 11.8 s."
+quoted = "It now re-establishes the leaf in 10.5 s."
 source = "docs/ddil-results.md"
-patterns = ["leaf re-establishes over ~8 kbit/s after a denial (11.8 s)"]
+patterns = ["leaf re-establishes over ~8 kbit/s after a denial (10.5 s)"]
 
 # --- Summary size: asserted by the sync tests ---------------------------------
 
@@ -367,9 +380,13 @@ patterns = ["RISE_SET_TOLERANCE_S = 2.0", "MAX_ELEVATION_TOLERANCE_DEG = 0.1"]
 [[claim]]
 id = "guide-limited-edf-vs-fifo"
 doc = "docs/technical-guide.md"
-quoted = "every event was visible as a summary at 5.5 s, and the most urgent full CDM arrived in 12.1 s with earliest-deadline-first against 46.8 s in FIFO order"
+quoted = "every event was visible as a summary at 6.5 s, and the most urgent full CDM arrived in 9.1 s with earliest-deadline-first against 136.9 s in FIFO order: medians of 5 runs per mode"
 source = "docs/ddil-results.md"
-patterns = ["summaries at 5.5 s", "EDF 12.1 s vs FIFO 46.8 s"]
+patterns = [
+    "summaries at 6.5 s",
+    "EDF 9.1 s (8.6–9.1) vs FIFO 136.9 s (135.4–141.7) (15.0x)",
+    "medians over 5 runs per mode",
+]
 
 [[claim]]
 id = "guide-catalog-element-sets"
@@ -446,30 +463,40 @@ patterns = ["Worst relative error: **4.17e-14**"]
 [[claim]]
 id = "wp-denied-console"
 doc = "docs/white-paper.md"
-quoted = "the edge console answered 40 requests at 2.8 ms (95th percentile), and all 11 DENIED checks passed"
+quoted = "the edge console answered 40 requests at 3.2 ms (95th percentile), and all 11 DENIED checks passed"
 source = "docs/ddil-results.md"
-patterns = ["p95 2.8 ms over 40 requests", "| DENIED | PASS | 11/11 |"]
+patterns = ["p95 3.2 ms over 40 requests", "| DENIED | PASS | 11/11 |"]
 
 [[claim]]
 id = "wp-denied-convergence"
 doc = "docs/white-paper.md"
-quoted = "operator data converged in 2.41 s"
+quoted = "operator data converged in 1.37 s"
 source = "docs/ddil-results.md"
-patterns = ["| convergence_after_reconnect_s | 2.41 |"]
+patterns = ["| convergence_after_reconnect_s | 1.37 |"]
 
 [[claim]]
 id = "wp-limited-edf-vs-fifo"
 doc = "docs/white-paper.md"
-quoted = "Over about 8 kbit/s with 600 ms latency, every event was visible as a summary in 5.5 s. The most urgent full CDM arrived in 12.1 s with earliest-deadline-first, against 46.8 s in arrival order: 3.9 times sooner over the same link with the same 13 records."
+quoted = "Over about 8 kbit/s with 600 ms latency, every event was visible as a summary in 6.5 s. The most urgent full CDM arrived in 9.1 s with earliest-deadline-first, against 136.9 s in arrival order: 15.0 times sooner over the same link with the same 51 records. Each figure is the median of 5 runs per mode"
 source = "docs/ddil-results.md"
-patterns = ["measured over ~8 kbit/s + 600 ms", "summaries at 5.5 s", "EDF 12.1 s vs FIFO 46.8 s (3.9x)", "same 13 records"]
+patterns = [
+    "over ~8 kbit/s + 600 ms",
+    "summaries at 6.5 s",
+    "EDF 9.1 s (8.6–9.1) vs FIFO 136.9 s (135.4–141.7) (15.0x)",
+    "same 51 records",
+    "medians over 5 runs per mode",
+]
 
 [[claim]]
 id = "wp-limited-cost"
 doc = "docs/white-paper.md"
-quoted = "(86.8 s against 58.9 s): the order serves the urgent record, not the total. The run shares the link with the 38 public element sets"
+quoted = "Every record was delivered in 150.9 s in deadline order and 149.0 s in arrival order, and every event was verified in 47.6 s against 149.0 s. The backlog includes the 38 public element sets"
 source = "docs/ddil-results.md"
-patterns = ["| every event verified | 86.8 s | 58.9 s |", "38 element sets crossed"]
+patterns = [
+    "| every record delivered or held summary-only | 150.9 s (148.6–150.9) | 149.0 s (147.0–153.8) |",
+    "| every event verified | 47.6 s (46.1–47.9) | 149.0 s (147.0–153.8) |",
+    "and 38 element sets;",
+]
 
 [[claim]]
 id = "wp-summary-size"
@@ -488,13 +515,13 @@ patterns = ["| flaps | 8 |", "(hub 24, edge 24, written 24)"]
 [[claim]]
 id = "wp-degraded-recovery"
 doc = "docs/white-paper.md"
-quoted = "Over a degraded link (600 ± 200 ms latency, 32 kB/s) the nodes converged in 23.8 s. After a denial, the link re-established over the thin link in 11.8 s, and work done offline reached the hub in 13.4 s."
+quoted = "Over a degraded link (600 ± 200 ms latency, 32 kB/s) the nodes converged in 80.4 s. After a denial, the link re-established over the thin link in 10.5 s, and work done offline reached the hub in 12.3 s."
 source = "docs/ddil-results.md"
 patterns = [
     "Toxiproxy latency 600 +/- 200 ms each way, bandwidth 32 kB/s",
-    "converges over a degraded link (23.8 s)",
-    "leaf re-establishes over ~8 kbit/s after a denial (11.8 s)",
-    "(converged in 13.4 s)",
+    "converges over a degraded link (80.4 s)",
+    "leaf re-establishes over ~8 kbit/s after a denial (10.5 s)",
+    "(converged in 12.3 s)",
 ]
 
 [[claim]]
