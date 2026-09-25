@@ -450,11 +450,13 @@ class ConjunctionService:
             return None
         from ..risk.integrate import UnresolvedIntegral, maximize_pc_over_scale
 
+        # The engine's own panel cap, so the curve agrees with the assessment beside it.
+        cap = self.engine_config.quadrature_panels_cap
         try:
-            k_star, pc_max, _ = maximize_pc_over_scale(plane.cov_2d_m2, plane.mu_m, plane.hbr_m)
+            k_star, pc_max, _ = maximize_pc_over_scale(plane.cov_2d_m2, plane.mu_m, plane.hbr_m, panel_cap=cap)
             lk_star = math.log10(k_star)
             grid = np.linspace(min(0.0, lk_star) - 2.0, max(0.0, lk_star) + 2.0, samples)
-            curve, pc_at_k1 = pc_curve(plane, grid), plane.pc(1.0)
+            curve, pc_at_k1 = pc_curve(plane, grid, panel_cap=cap), plane.pc(1.0, panel_cap=cap)
         except UnresolvedIntegral:
             # The assessment already refuses (UNRESOLVED_INTEGRAL); there is no curve to draw.
             return None
