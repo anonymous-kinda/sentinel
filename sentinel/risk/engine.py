@@ -163,7 +163,12 @@ def assess(
         )
 
     # --- steps 1-4: refine TCA, unify frames, combine, project -----------
-    plane = build_encounter_plane(conjunction, hbr_m, refine_tca=config.refine_tca)
+    # The covariances are given in RTN, which needs r x v != 0. Without that
+    # frame there is no covariance to project: refuse, never raise.
+    try:
+        plane = build_encounter_plane(conjunction, hbr_m, refine_tca=config.refine_tca)
+    except ValueError as exc:
+        return refuse(RefusalReason.INVALID_COVARIANCE, stage="rtn_frame", detail=str(exc))
     cov_2d = plane.cov_2d_m2
     mu = plane.mu_m
 

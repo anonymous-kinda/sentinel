@@ -19,6 +19,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from scripts.ai_eval import EVAL_SET, exercise_service, routing_context  # noqa: E402
+from sentinel import localenv  # noqa: E402
 from sentinel.ai import live_check  # noqa: E402
 from sentinel.ai.evaluation import expected_args, load_cases  # noqa: E402
 from sentinel.ai.narrate_claude import ClaudeNarrator  # noqa: E402
@@ -53,4 +54,5 @@ def main(jev_transport=None, claude_transport=None) -> int:
 
 if __name__ == "__main__":
     configure_logging()
+    localenv.load()
     sys.exit(main())

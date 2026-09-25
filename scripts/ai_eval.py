@@ -20,6 +20,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from sentinel import localenv  # noqa: E402
 from sentinel.ai.evaluation import load_cases, run_eval  # noqa: E402
 from sentinel.ai.router import DeterministicRouter, RoutingContext  # noqa: E402
 from sentinel.ai.tools import event_facts  # noqa: E402
@@ -195,4 +196,5 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    localenv.load()
     main()
