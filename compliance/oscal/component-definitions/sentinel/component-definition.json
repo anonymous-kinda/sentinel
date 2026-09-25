@@ -1,6 +1,6 @@
 {
   "component-definition": {
-    "uuid": "2a60c367-2183-51ec-b4bc-62fb7f653b44",
+    "uuid": "b557f5fd-a46b-5953-85ae-04bd0a1121e9",
     "metadata": {
       "title": "Sentinel component definition",
       "last-modified": "2026-09-24T22:00:00Z",
@@ -1745,7 +1745,7 @@
               {
                 "uuid": "641f3af6-f7f9-588e-9018-650bb73b9b82",
                 "control-id": "cm-2",
-                "description": "The baseline is code under version control: hash-locked Python dependencies (uv.lock), third-party binaries pinned by version and SHA-256 (deploy/tools.lock), the bundle build (scripts/build_bundle.py), the Ansible roles, the Terraform and the NATS configuration templates. The Python baseline that CI tests is the declared one: the jobs that test, lint, type-check and assess install exactly uv.lock with uv sync --locked, which refuses a lock that no longer matches pyproject.toml, and a test fails any workflow that installs with pip or uv pip instead, since those resolve afresh. make install uses the same command. CI checks the Terraform (fmt, validate) and the playbook's syntax on every push.",
+                "description": "The baseline is code under version control: hash-locked Python dependencies (uv.lock), third-party binaries pinned by version and SHA-256 (deploy/tools.lock), the bundle build (scripts/build_bundle.py), the Ansible roles, the Terraform and the NATS configuration templates. The Python baseline that CI tests is the declared one: the jobs that test, lint, type-check and assess install exactly uv.lock with uv sync --locked, which refuses a lock that no longer matches pyproject.toml, and a test fails any workflow that installs with pip or uv pip instead, since those resolve afresh. Every workflow sets UV_LOCKED=1, so no uv command in any job can re-lock a stale lock silently (tests/test_workflows_pinned.py checks each job). make install uses the same command. CI checks the Terraform (fmt, validate) and the playbook's syntax on every push.",
                 "props": [
                   {
                     "name": "implementation-status",

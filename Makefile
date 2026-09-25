@@ -149,6 +149,8 @@ XCCDF ?=
 
 compliance: compliance-catalog  ## OSCAL package: pytest evidence -> assessment results + POA&M, trestle validate -a (XCCDF=scan results)
 	mkdir -p $(COMPLIANCE_BUILD)
+	@# The authored documents first: the suite checks them against the sources.
+	$(UV) run python scripts/oscal_evidence.py
 	$(UV) run pytest -q --junitxml=$(COMPLIANCE_BUILD)/junit.xml; echo $$? > $(COMPLIANCE_BUILD)/pytest.status
 	$(UV) run python scripts/oscal_evidence.py --junit $(COMPLIANCE_BUILD)/junit.xml \
 		$(if $(wildcard harness/results/*.json),--harness harness/results) $(if $(XCCDF),--xccdf $(XCCDF))
