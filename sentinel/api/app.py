@@ -45,6 +45,8 @@ from .validation_view import ValidationView
 
 log = get_logger("sentinel.node")
 
+# Events a stream subscriber may fall behind by before its stream is closed.
+STREAM_QUEUE_SLOTS = 256
 
 CSP = "; ".join(
     [
@@ -513,19 +515,32 @@ def create_app(
     )
     async def stream(request: Request) -> StreamingResponse:
         """This node's `node.<node_id>.>` bus events. Local to the node: it keeps working
-        when the link to any other node is down."""
-        queue: asyncio.Queue[Msg] = asyncio.Queue(maxsize=256)
+        when the link to any other node is down. A subscriber that falls 256 events behind
+        is never dropped from silently: the node logs it and closes that stream, and the
+        console reconnects and re-reads everything when its stream opens."""
+        queue: asyncio.Queue[Msg] = asyncio.Queue(maxsize=STREAM_QUEUE_SLOTS)
+        overflowed = asyncio.Event()
 
         async def enqueue(msg: Msg) -> None:
-            with contextlib.suppress(asyncio.QueueFull):
+            if overflowed.is_set():
+                return  # the stream is closing; the console re-reads everything on reconnect
+            try:
                 queue.put_nowait(msg)
+            except asyncio.QueueFull:
+                overflowed.set()
+                log.warning(
+                    "Stream subscriber overflowed",
+                    client=request.client.host if request.client else None,
+                    slots=STREAM_QUEUE_SLOTS,
+                    kind=msg.headers.get("Sentinel-Kind", msg.subject),
+                )
 
         subs = [await node.bus.subscribe(subjects.local_all(settings.node_id), enqueue)]
 
         async def events_out() -> AsyncIterator[str]:
             try:
                 yield "retry: 3000\n\n"
-                while not await request.is_disconnected():
+                while not overflowed.is_set() and not await request.is_disconnected():
                     try:
                         msg = await asyncio.wait_for(queue.get(), timeout=15)
                     except TimeoutError:

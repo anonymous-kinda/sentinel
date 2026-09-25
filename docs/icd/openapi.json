@@ -1386,7 +1386,7 @@
     },
     "/api/stream": {
       "get": {
-        "description": "This node's `node.<node_id>.>` bus events. Local to the node: it keeps working\nwhen the link to any other node is down.",
+        "description": "This node's `node.<node_id>.>` bus events. Local to the node: it keeps working\nwhen the link to any other node is down. A subscriber that falls 256 events behind\nis never dropped from silently: the node logs it and closes that stream, and the\nconsole reconnects and re-reads everything when its stream opens.",
         "operationId": "stream_api_stream_get",
         "responses": {
           "200": {
