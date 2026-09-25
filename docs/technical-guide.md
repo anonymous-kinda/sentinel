@@ -402,7 +402,7 @@ ADR-010 enforces this in four independent layers:
 |---|---|
 | Data model | Nothing implements `ReferenceRecords` for the unit or its passes, so sync cannot carry them |
 | Application | The only bus message is `node.<id>.passes.updated`, with no id and no coordinates; the service logs `Unit set` and `Unit cleared` with no fields; `UnitRejected` never echoes a submitted value |
-| Storage | One file, `<SENTINEL_VAR>/unit.json`: mode 0600, replaced atomically and durably (the file is fsynced before the rename and the directory after), never written to SQLite or the audit log (`UnitFile` in `sentinel/passes/unit.py`) |
+| Storage | One file, `<SENTINEL_VAR>/unit.json`: mode 0600, replaced atomically and durably (the file is fsynced before the rename and the directory after), never written by Sentinel to SQLite or the audit log (`UnitFile` in `sentinel/passes/unit.py`). A position an operator types into the assistant stays in the node-local AI audit file and is never sent to hosted AI (`sentinel/ai/opsec.py`) |
 | Transport | The edge's leafnode denies exporting `unit.>`, `passes.>` and `node.>` (`deploy/nats/edge.conf.tmpl`) |
 
 The OPSEC harness scenario (`harness/opsec.py`, `harness/scenarios.py`, `make opsec`) runs real hub and edge processes and captures every message the hub's `nats-server` carries. It checks that no message holds the unit in any encoding it could travel in, that canaries on the denied subjects never reach the hub, and that no hub file holds the unit. Controls show that none of those negatives is vacuous. The recorded run is in `docs/ddil-results.md`.

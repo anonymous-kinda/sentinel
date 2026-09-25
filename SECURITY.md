@@ -31,6 +31,7 @@ Only `main` is supported. Releases are built from `vX.Y.Z` tags
   statements in `deploy/vex/`.
 - The compliance generator in `compliance/`. A control reported as
   implemented when it is not is a security bug.
+- A question or tool fact that reaches a hosted AI service under a marking not on the allow-list, or while it holds a position.
 - Answers that are wrong rather than refused. A Pc returned where the
   applicability gate should refuse, a number in an AI-written answer that
   the tools did not produce, or an unsigned bundle that installs are all in

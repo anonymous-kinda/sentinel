@@ -198,7 +198,7 @@ A classified or disconnected site has to trust a bundle without reaching the int
 
 A language model is good at understanding what an operator is asking and at phrasing an answer, and unreliable at arithmetic. A decision aid that lets a model state a collision probability has put an unauditable number in front of someone deciding whether to burn propellant. Sentinel shows one way to put AI into a disconnected or classified system without that risk: **AI routes, code computes, AI phrases, the operator decides.**
 
-| Step | Hosted, when policy allows | With no keys, no link, or a classified marking |
+| Step | Hosted, when policy allows | With no keys, no link, or a caveated or classified marking |
 |---|---|---|
 | **Route** the request to one catalogued tool | [Jev](https://docs.typesafe.ai) (TypeSafe's System One model), answering typed questions whose options are exactly the tool catalog and the events on this node | slash commands and keyword rules |
 | **Compute** the facts | Sentinel's own validated code, never a model | the same |
@@ -207,7 +207,7 @@ A language model is good at understanding what an operator is asking and at phra
 
 - **It works with no keys.** Local rules and templates answer with no network. The air-gap bundle carries no hosted AI libraries.
 - **The tier follows the measured link and the marking.**
-  - Hosted AI needs an UNCLASSIFIED marking and operator opt-in.
+  - Hosted AI needs an allow-listed UNCLASSIFIED marking with no caveat (`UNCLASSIFIED//CUI` stays local), operator opt-in, and a question that holds no position.
   - Jev may run on a LIMITED link, because its answer is a few probabilities, not prose.
   - Claude needs CONNECTED or DEGRADED.
   - DENIED means local only.

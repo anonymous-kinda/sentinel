@@ -267,7 +267,8 @@ package SentinelRequirements {
     requirement <'REQ-AI-005'> tierFollowsLinkAndMarking {
         doc /* The AI tier is a pure function of the measured link, the
              * classification marking and operator opt-in: hosted AI needs an
-             * UNCLASSIFIED marking and opt-in; Jev may route on CONNECTED,
+             * allow-listed UNCLASSIFIED marking with no caveat, opt-in, and a
+             * question that holds no position; Jev may route on CONNECTED,
              * DEGRADED or LIMITED; Claude may phrase on CONNECTED or DEGRADED;
              * DENIED is local only. */
     }
@@ -278,7 +279,7 @@ package SentinelRequirements {
     }
 
     requirement <'REQ-AI-007'> unsureMeansAsk {
-        doc /* Below 0.5 confidence, or when an event tool has no event, the
+        doc /* Below 0.5 confidence in the tool or the event, or when an event tool has no event, the
              * assistant asks back with the top alternatives instead of acting. */
     }
 

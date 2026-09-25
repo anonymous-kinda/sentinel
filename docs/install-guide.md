@@ -71,7 +71,7 @@ Edit `/opt/sentinel/sentinel.env`:
 | `SENTINEL_ROLE` | `standalone` for a single node. `hub` or `edge` for nodes that sync (see below). |
 | `SENTINEL_NODE_ID` | This node's name. The default is the host name. |
 | `SENTINEL_HUB_ID` | On an edge: the hub's node id. |
-| `SENTINEL_MARKING` | Your site's classification marking, exactly as the banner must show it. Any marking that does not start with UNCLASSIFIED blocks hosted AI. |
+| `SENTINEL_MARKING` | Your site's classification marking, exactly as the banner must show it. Only `UNCLASSIFIED` or `UNCLASSIFIED // EXERCISE` allows hosted AI; any other marking, a caveated one such as `UNCLASSIFIED//CUI` included, keeps the assistant on the node. |
 | `SENTINEL_READ_ONLY` | `1` for a display-only node: no CDM uploads, no screening, no operator writes. |
 | `SENTINEL_AI` | `0` turns the assistant off. Left on, it runs local rules and templates only. The bundle carries no hosted AI libraries, and `SENTINEL_AI_CLOUD` stays `0`. |
 | `SENTINEL_EXERCISE` | `0` stops the scripted exercise scenario. |

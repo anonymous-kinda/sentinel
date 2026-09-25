@@ -1,6 +1,6 @@
 {
   "system-security-plan": {
-    "uuid": "cd53b1a7-e0b4-564e-ba98-5f09e3cc46b4",
+    "uuid": "fe61ba56-2ced-52ba-96d8-aac905e38996",
     "metadata": {
       "title": "Sentinel system security plan (draft)",
       "last-modified": "2026-09-24T22:00:00Z",
@@ -105,7 +105,7 @@
         "remarks": "Draft SSP, generated from compliance/sources. No authorization to operate has been sought or granted: this package is ATO-ready evidence, not an authorization. The security categorization is the maintainer's provisional one and has not been reviewed by an authorizing official."
       },
       "authorization-boundary": {
-        "description": "One Sentinel deployment: its hub and edge nodes (the sentinel service and each node's own nats-server), the node hosts (Ubuntu 24.04 LTS, configured by deploy/ansible), the AWS cloud hub infrastructure (deploy/aws/terraform: one VPC, one EC2 instance, its security group and IAM role), and the build and release pipeline that produces the installable bundle (.github/workflows, scripts/build_bundle.py). Outside the boundary: operators' browsers, GitHub, AWS itself, Let's Encrypt, upstream data sources (Space-Track, CelesTrak, NASA CARA's published files) and the hosted AI services (TypeSafe Jev, Anthropic Claude), which a node reaches only with operator opt-in on an UNCLASSIFIED marking."
+        "description": "One Sentinel deployment: its hub and edge nodes (the sentinel service and each node's own nats-server), the node hosts (Ubuntu 24.04 LTS, configured by deploy/ansible), the AWS cloud hub infrastructure (deploy/aws/terraform: one VPC, one EC2 instance, its security group and IAM role), and the build and release pipeline that produces the installable bundle (.github/workflows, scripts/build_bundle.py). Outside the boundary: operators' browsers, GitHub, AWS itself, Let's Encrypt, upstream data sources (Space-Track, CelesTrak, NASA CARA's published files) and the hosted AI services (TypeSafe Jev, Anthropic Claude), which a node reaches only with operator opt-in on an allow-listed UNCLASSIFIED marking with no caveat."
       },
       "network-architecture": {
         "description": "Each node runs the sentinel service on 127.0.0.1:8000 and its own nats-server on 127.0.0.1. On the cloud hub, Caddy terminates TLS on 443 (certificates from Let's Encrypt over HTTP-01 on 80) and proxies to the node; SSH (22) is open only to the admin network; the NATS leafnode port (7422) is closed unless edge networks are allow-listed, and TLS on that link is planned (SC-8). An edge's nats-server holds one leafnode connection to the hub; everything else on an edge is local to it."
@@ -399,7 +399,7 @@
             {
               "component-uuid": "cd16ef70-2e73-501e-9c7f-4caa10a38352",
               "uuid": "64448190-5fca-50ad-8515-2967fff9b716",
-              "description": "The assistant's tier policy is a pure function of the classification marking, operator opt-in (SENTINEL_AI_CLOUD) and the measured link state: hosted AI needs an UNCLASSIFIED marking and opt-in, and a DENIED link or any other marking means local only. With hosted AI not allowed, no request leaves the node.",
+              "description": "The assistant's tier policy is a pure function of the classification marking, operator opt-in (SENTINEL_AI_CLOUD) and the measured link state: hosted AI needs exactly UNCLASSIFIED or UNCLASSIFIED // EXERCISE and opt-in, and a DENIED link or any other marking, a caveated one included, means local only. A question that holds a position is answered on the node. With hosted AI not allowed, no request leaves the node.",
               "props": [
                 {
                   "name": "evidence-test",
@@ -410,6 +410,16 @@
                   "name": "evidence-test",
                   "ns": "urn:sentinel:oscal",
                   "value": "tests/ai/test_assistant.py::test_denied_or_classified_never_calls_a_hosted_service"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/ai/test_policy.py::test_a_caveated_or_unknown_marking_keeps_ai_on_the_node"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/ai/test_assistant.py::test_a_question_holding_the_units_position_never_leaves_the_node"
                 },
                 {
                   "name": "evidence-test",
@@ -600,12 +610,17 @@
             {
               "component-uuid": "cd16ef70-2e73-501e-9c7f-4caa10a38352",
               "uuid": "5ccebad1-0384-5d28-9261-14e839c7489b",
-              "description": "The node logs: every assistant question and every confirmation, one line each in a hash-chained audit log; every decision, note, resolution and confirmed AI draft, as signed decision-log entries; every CDM admitted or quarantined, with the reason; and service events as structured JSON logs whose messages are constants, so they can be searched and alerted on.",
+              "description": "The node logs: every assistant question and every confirmation, refused and failed attempts included, one line each in a hash-chained audit log; every decision, note, resolution and confirmed AI draft, as signed decision-log entries; every CDM admitted or quarantined, with the reason; and service events as structured JSON logs whose messages are constants, so they can be searched and alerted on.",
               "props": [
                 {
                   "name": "evidence-test",
                   "ns": "urn:sentinel:oscal",
                   "value": "tests/ai/test_assistant.py::test_every_ask_and_confirm_is_audited_in_a_verifiable_chain"
+                },
+                {
+                  "name": "evidence-test",
+                  "ns": "urn:sentinel:oscal",
+                  "value": "tests/ai/test_assistant.py::test_a_stale_draft_is_refused_audited_and_spent"
                 },
                 {
                   "name": "evidence-test",

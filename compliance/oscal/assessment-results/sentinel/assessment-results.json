@@ -1,9 +1,9 @@
 {
   "assessment-results": {
-    "uuid": "ab39fd75-2923-510c-a80d-c5dfdeb93abc",
+    "uuid": "b3ecc306-96aa-5630-8d43-2bc82d9ca49a",
     "metadata": {
       "title": "Sentinel automated assessment results",
-      "last-modified": "2026-09-25T03:54:22Z",
+      "last-modified": "2026-09-25T06:11:17Z",
       "version": "0.3.0",
       "oscal-version": "1.2.1"
     },
@@ -12,11 +12,11 @@
     },
     "results": [
       {
-        "uuid": "a62c51e8-d89d-501e-aa28-02c392faece6",
-        "title": "Automated assessment of the test run started 2026-09-25T03:53:04Z",
-        "description": "pytest: 2027 cases, 2017 passed, 0 failed, 0 errors, 10 skipped. Controls with automated evidence in this run: 37; all cited checks passed for 37. DDIL harness results supplied; STIG scan results not supplied.",
-        "start": "2026-09-25T03:53:04Z",
-        "end": "2026-09-25T03:54:22Z",
+        "uuid": "8187159a-6360-5829-86c0-47ab7c6b2279",
+        "title": "Automated assessment of the test run started 2026-09-25T06:10:02Z",
+        "description": "pytest: 2481 cases, 2480 passed, 0 failed, 0 errors, 1 skipped. Controls with automated evidence in this run: 37; all cited checks passed for 37. DDIL harness results supplied; STIG scan results not supplied.",
+        "start": "2026-09-25T06:10:02Z",
+        "end": "2026-09-25T06:11:17Z",
         "reviewed-controls": {
           "control-selections": [
             {
@@ -138,7 +138,7 @@
         },
         "observations": [
           {
-            "uuid": "38e8ca06-1fdb-5941-b62e-5d0dff176a24",
+            "uuid": "78c5bf01-a740-59fb-9d13-1fc90f4ee352",
             "title": "AC-2: automated evidence",
             "description": "1 of 1 cited checks passed. The SSP states AC-2 as partial.",
             "props": [
@@ -187,10 +187,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "cd7471f7-11fc-5c7a-8345-e7bf4b3c5c5d",
+            "uuid": "c20a6dde-9175-583c-a798-646d7d41e2a9",
             "title": "AC-3: automated evidence",
             "description": "4 of 4 cited checks passed. The SSP states AC-3 as partial.",
             "props": [
@@ -288,12 +288,12 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "50b96b39-382f-5325-a20f-c0df0c379ca6",
+            "uuid": "8a6d966b-6e8b-573d-aa9e-07b451d50df0",
             "title": "AC-4: automated evidence",
-            "description": "7 of 7 cited checks passed. The SSP states AC-4 as implemented.",
+            "description": "9 of 9 cited checks passed. The SSP states AC-4 as implemented.",
             "props": [
               {
                 "name": "implementation-status",
@@ -378,7 +378,7 @@
                 ]
               },
               {
-                "description": "opsec: all assertions passed (2026-09-24T08:14:52.931372+00:00)",
+                "description": "opsec: all assertions passed (2026-09-25T04:57:45.283415+00:00)",
                 "props": [
                   {
                     "name": "evidence-harness",
@@ -408,12 +408,42 @@
                 ]
               },
               {
-                "description": "tests/ai/test_assistant.py::test_denied_or_classified_never_calls_a_hosted_service: 2 cases passed",
+                "description": "tests/ai/test_assistant.py::test_denied_or_classified_never_calls_a_hosted_service: 3 cases passed",
                 "props": [
                   {
                     "name": "evidence-test",
                     "ns": "urn:sentinel:oscal",
                     "value": "tests/ai/test_assistant.py::test_denied_or_classified_never_calls_a_hosted_service"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/ai/test_policy.py::test_a_caveated_or_unknown_marking_keeps_ai_on_the_node: 12 cases passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/ai/test_policy.py::test_a_caveated_or_unknown_marking_keeps_ai_on_the_node"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/ai/test_assistant.py::test_a_question_holding_the_units_position_never_leaves_the_node: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/ai/test_assistant.py::test_a_question_holding_the_units_position_never_leaves_the_node"
                   },
                   {
                     "name": "result",
@@ -438,10 +468,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "a2ba124c-110e-5195-bcc5-4af59f3beb6b",
+            "uuid": "a33f7134-9e8d-58aa-95cb-658637537361",
             "title": "AC-6: automated evidence",
             "description": "2 of 2 cited checks passed. The SSP states AC-6 as partial.",
             "props": [
@@ -509,10 +539,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "f4900126-a7bf-562b-981b-dff219867809",
+            "uuid": "cda5fb3b-7d47-51a7-95b2-240787b66e12",
             "title": "AC-17: automated evidence",
             "description": "3 of 3 cited checks passed. The SSP states AC-17 as partial.",
             "props": [
@@ -595,12 +625,12 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "9bf13f21-b98d-5b3a-bacf-b69c54aef8ea",
+            "uuid": "d8c4ee8d-1a4e-5510-8832-f8251ed1fec8",
             "title": "AU-2: automated evidence",
-            "description": "6 of 6 cited checks passed. The SSP states AU-2 as partial.",
+            "description": "7 of 7 cited checks passed. The SSP states AU-2 as partial.",
             "props": [
               {
                 "name": "implementation-status",
@@ -642,6 +672,21 @@
                     "name": "evidence-test",
                     "ns": "urn:sentinel:oscal",
                     "value": "tests/ai/test_assistant.py::test_every_ask_and_confirm_is_audited_in_a_verifiable_chain"
+                  },
+                  {
+                    "name": "result",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "passed"
+                  }
+                ]
+              },
+              {
+                "description": "tests/ai/test_assistant.py::test_a_stale_draft_is_refused_audited_and_spent: 1 case passed",
+                "props": [
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/ai/test_assistant.py::test_a_stale_draft_is_refused_audited_and_spent"
                   },
                   {
                     "name": "result",
@@ -726,10 +771,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "d32c9a43-41d9-53e9-a2c1-bb8685e2ead8",
+            "uuid": "b3653366-b11d-5b22-9d0a-d10f5eb9fc4e",
             "title": "AU-3: automated evidence",
             "description": "5 of 5 cited checks passed. The SSP states AU-3 as implemented.",
             "props": [
@@ -838,10 +883,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "84a9daa5-8a18-54f4-91c1-9b8bfae9ac0f",
+            "uuid": "dcfd24f8-b800-5228-82fc-cd7543516334",
             "title": "AU-6: automated evidence",
             "description": "4 of 4 cited checks passed. The SSP states AU-6 as partial.",
             "props": [
@@ -924,7 +969,7 @@
                 ]
               },
               {
-                "description": "denied: all assertions passed (2026-09-24T08:10:39.252576+00:00)",
+                "description": "denied: all assertions passed (2026-09-25T04:29:01.554349+00:00)",
                 "props": [
                   {
                     "name": "evidence-harness",
@@ -939,10 +984,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "312fdde2-5bf2-59d5-a4a4-d81b23539408",
+            "uuid": "5863d19d-28b5-5979-9613-6af916b3af33",
             "title": "AU-9: automated evidence",
             "description": "10 of 10 cited checks passed. The SSP states AU-9 as partial.",
             "props": [
@@ -1089,7 +1134,7 @@
                 ]
               },
               {
-                "description": "denied: all assertions passed (2026-09-24T08:10:39.252576+00:00)",
+                "description": "denied: all assertions passed (2026-09-25T04:29:01.554349+00:00)",
                 "props": [
                   {
                     "name": "evidence-harness",
@@ -1134,10 +1179,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "af472806-7214-5baf-8411-667c73b5b918",
+            "uuid": "92c2f09b-0670-5c74-95da-0cf57598e391",
             "title": "AU-10: automated evidence",
             "description": "5 of 5 cited checks passed. The SSP states AU-10 as partial.",
             "props": [
@@ -1235,7 +1280,7 @@
                 ]
               },
               {
-                "description": "denied: all assertions passed (2026-09-24T08:10:39.252576+00:00)",
+                "description": "denied: all assertions passed (2026-09-25T04:29:01.554349+00:00)",
                 "props": [
                   {
                     "name": "evidence-harness",
@@ -1250,10 +1295,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "61378116-05cb-5a05-a941-9f572b66bc4b",
+            "uuid": "063df7f7-7036-5fb4-8e39-6b3d1746161a",
             "title": "CA-7: automated evidence",
             "description": "1 of 1 cited checks passed. The SSP states CA-7 as partial.",
             "props": [
@@ -1302,10 +1347,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "e4dd9861-b564-5afd-bc92-73f7a88716fe",
+            "uuid": "4e233176-8172-547d-ad7d-e363d77b23f6",
             "title": "CM-2: automated evidence",
             "description": "2 of 2 cited checks passed. The SSP states CM-2 as implemented.",
             "props": [
@@ -1369,10 +1414,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "55509e11-398f-513b-917f-45def426567a",
+            "uuid": "379c3222-01ee-5795-b20a-17ef77bae673",
             "title": "CM-3: automated evidence",
             "description": "2 of 2 cited checks passed. The SSP states CM-3 as partial.",
             "props": [
@@ -1436,10 +1481,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "5f72a54b-346e-5943-b07f-40dead824bff",
+            "uuid": "00422fc9-ab4f-5574-85bc-ebd0ce28e1f4",
             "title": "CM-6: automated evidence",
             "description": "6 of 6 cited checks passed. The SSP states CM-6 as partial.",
             "props": [
@@ -1496,7 +1541,7 @@
                 ]
               },
               {
-                "description": "recovery: all assertions passed (2026-09-24T08:14:43.040351+00:00)",
+                "description": "recovery: all assertions passed (2026-09-25T04:57:34.100643+00:00)",
                 "props": [
                   {
                     "name": "evidence-harness",
@@ -1511,7 +1556,7 @@
                 ]
               },
               {
-                "description": "limited: all assertions passed (2026-09-24T08:13:04.667984+00:00)",
+                "description": "limited: all assertions passed (2026-09-25T04:55:59.831304+00:00)",
                 "props": [
                   {
                     "name": "evidence-harness",
@@ -1526,7 +1571,7 @@
                 ]
               },
               {
-                "description": "denied: all assertions passed (2026-09-24T08:10:39.252576+00:00)",
+                "description": "denied: all assertions passed (2026-09-25T04:29:01.554349+00:00)",
                 "props": [
                   {
                     "name": "evidence-harness",
@@ -1571,10 +1616,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "b60c8718-5f6e-5ab7-9025-09d3bb2bdd9d",
+            "uuid": "0ab1344e-89ef-501c-aae7-7122c3df8bc1",
             "title": "CM-7: automated evidence",
             "description": "5 of 5 cited checks passed. The SSP states CM-7 as partial.",
             "props": [
@@ -1687,10 +1732,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "748aede2-6bc6-5ade-9438-16fe12afdc27",
+            "uuid": "208a0286-56f0-5ebf-b46a-fdaacffaa710",
             "title": "CM-8: automated evidence",
             "description": "6 of 6 cited checks passed. The SSP states CM-8 as partial.",
             "props": [
@@ -1814,10 +1859,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "ee07bac9-42eb-501f-96e7-79fa37cdef1b",
+            "uuid": "acb4a581-6dff-572d-934b-c0fbbee6a982",
             "title": "CM-14: automated evidence",
             "description": "9 of 9 cited checks passed. The SSP states CM-14 as partial.",
             "props": [
@@ -1990,10 +2035,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "7a138564-4d99-57eb-8b93-c74f1cc1cfbd",
+            "uuid": "848e3c5b-91cb-587f-af0a-cd3edfac7444",
             "title": "IA-2: automated evidence",
             "description": "1 of 1 cited checks passed. The SSP states IA-2 as partial.",
             "props": [
@@ -2042,10 +2087,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "c18b2eb1-243d-5ece-9c46-f80e23fac1d8",
+            "uuid": "5c89b1aa-1aeb-5ef8-a662-6f8bcdac8f0a",
             "title": "IA-5: automated evidence",
             "description": "1 of 1 cited checks passed. The SSP states IA-5 as partial.",
             "props": [
@@ -2094,10 +2139,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "1883f17a-9080-57c5-9670-d0e9e06ca02e",
+            "uuid": "ff987f1b-c911-5cb8-a038-b19d6b36bf04",
             "title": "RA-5: automated evidence",
             "description": "8 of 8 cited checks passed. The SSP states RA-5 as partial.",
             "props": [
@@ -2251,10 +2296,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "81f5bb9b-4092-5fb7-8393-2f90f9f218d8",
+            "uuid": "8305b598-e152-59f8-b594-b3ef7ff8fbc7",
             "title": "SA-10: automated evidence",
             "description": "17 of 17 cited checks passed. The SSP states SA-10 as implemented.",
             "props": [
@@ -2543,10 +2588,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "91a8d015-1375-5b89-a2d4-8f02703dcd26",
+            "uuid": "0f9eb7c2-6ba6-5bc6-896d-3930aaa4ffdd",
             "title": "SA-11: automated evidence",
             "description": "17 of 17 cited checks passed. The SSP states SA-11 as implemented.",
             "props": [
@@ -2764,7 +2809,7 @@
                 ]
               },
               {
-                "description": "denied: all assertions passed (2026-09-24T08:10:39.252576+00:00)",
+                "description": "denied: all assertions passed (2026-09-25T04:29:01.554349+00:00)",
                 "props": [
                   {
                     "name": "evidence-harness",
@@ -2779,7 +2824,7 @@
                 ]
               },
               {
-                "description": "limited: all assertions passed (2026-09-24T08:13:04.667984+00:00)",
+                "description": "limited: all assertions passed (2026-09-25T04:55:59.831304+00:00)",
                 "props": [
                   {
                     "name": "evidence-harness",
@@ -2794,7 +2839,7 @@
                 ]
               },
               {
-                "description": "intermittent: all assertions passed (2026-09-24T08:13:52.705532+00:00)",
+                "description": "intermittent: all assertions passed (2026-09-25T04:56:51.014468+00:00)",
                 "props": [
                   {
                     "name": "evidence-harness",
@@ -2809,7 +2854,7 @@
                 ]
               },
               {
-                "description": "degraded: all assertions passed (2026-09-24T08:14:20.216827+00:00)",
+                "description": "degraded: all assertions passed (2026-09-25T04:57:15.926206+00:00)",
                 "props": [
                   {
                     "name": "evidence-harness",
@@ -2824,7 +2869,7 @@
                 ]
               },
               {
-                "description": "recovery: all assertions passed (2026-09-24T08:14:43.040351+00:00)",
+                "description": "recovery: all assertions passed (2026-09-25T04:57:34.100643+00:00)",
                 "props": [
                   {
                     "name": "evidence-harness",
@@ -2839,10 +2884,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "71f6004f-1f6f-5dd8-a968-51d261f72288",
+            "uuid": "6a746fce-2e61-5a25-9372-4e3e8c7edddb",
             "title": "SA-15: automated evidence",
             "description": "10 of 10 cited checks passed. The SSP states SA-15 as implemented.",
             "props": [
@@ -2951,7 +2996,7 @@
                 ]
               },
               {
-                "description": "tests/test_docs.py::test_every_path_a_doc_names_exists: 25 cases passed",
+                "description": "tests/test_docs.py::test_every_path_a_doc_names_exists: 43 cases passed",
                 "props": [
                   {
                     "name": "evidence-test",
@@ -2966,7 +3011,7 @@
                 ]
               },
               {
-                "description": "tests/test_docs.py::test_every_make_target_a_doc_names_exists: 26 cases passed",
+                "description": "tests/test_docs.py::test_every_make_target_a_doc_names_exists: 44 cases passed",
                 "props": [
                   {
                     "name": "evidence-test",
@@ -2981,7 +3026,7 @@
                 ]
               },
               {
-                "description": "tests/test_docs.py::test_every_cli_subcommand_a_doc_names_exists: 26 cases passed",
+                "description": "tests/test_docs.py::test_every_cli_subcommand_a_doc_names_exists: 44 cases passed",
                 "props": [
                   {
                     "name": "evidence-test",
@@ -2996,7 +3041,7 @@
                 ]
               },
               {
-                "description": "tests/test_docs.py::test_every_quoted_number_matches_its_source: 74 cases passed",
+                "description": "tests/test_docs.py::test_every_quoted_number_matches_its_source: 91 cases passed",
                 "props": [
                   {
                     "name": "evidence-test",
@@ -3026,10 +3071,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "3c7b3a41-2228-56e1-aae9-98492ac53ea0",
+            "uuid": "bc6d1f37-77c9-55a6-b0b0-19e011b820c8",
             "title": "SC-7: automated evidence",
             "description": "4 of 4 cited checks passed. The SSP states SC-7 as partial.",
             "props": [
@@ -3131,10 +3176,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "b92bbc97-b739-5000-8c09-add0fa3fa079",
+            "uuid": "01562bb3-fcb2-59e8-856a-aa1cab9e764a",
             "title": "SC-8: automated evidence",
             "description": "1 of 1 cited checks passed. The SSP states SC-8 as partial.",
             "props": [
@@ -3183,10 +3228,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "1a94c626-5563-565f-8bf9-13a7da38df57",
+            "uuid": "65b1659b-35bf-5989-b293-0df7bfa997cf",
             "title": "SC-12: automated evidence",
             "description": "1 of 1 cited checks passed. The SSP states SC-12 as partial.",
             "props": [
@@ -3235,10 +3280,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "36dedb17-8751-5e10-9945-3f228d9f56cd",
+            "uuid": "575048fe-2d72-5f39-a1d3-664868d63e40",
             "title": "SC-13: automated evidence",
             "description": "3 of 3 cited checks passed. The SSP states SC-13 as partial.",
             "props": [
@@ -3321,10 +3366,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "d16df6eb-33dd-5010-9ef4-8445354611d3",
+            "uuid": "beca7d41-9fc9-5f0d-82df-bb45398c0d62",
             "title": "SC-28: automated evidence",
             "description": "1 of 1 cited checks passed. The SSP states SC-28 as partial.",
             "props": [
@@ -3373,10 +3418,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "3f024903-156a-5f14-840a-7d1d983637d3",
+            "uuid": "14aa8e1a-fd30-57df-a427-5cb2fe59b490",
             "title": "SI-2: automated evidence",
             "description": "4 of 4 cited checks passed. The SSP states SI-2 as partial.",
             "props": [
@@ -3474,10 +3519,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "4ea6357c-f142-514b-8448-126f7adcbae6",
+            "uuid": "32133718-d8b3-5f5d-a4d6-0820e79cd86b",
             "title": "SI-4: automated evidence",
             "description": "5 of 5 cited checks passed. The SSP states SI-4 as partial.",
             "props": [
@@ -3549,7 +3594,7 @@
                 ]
               },
               {
-                "description": "denied: all assertions passed (2026-09-24T08:10:39.252576+00:00)",
+                "description": "denied: all assertions passed (2026-09-25T04:29:01.554349+00:00)",
                 "props": [
                   {
                     "name": "evidence-harness",
@@ -3564,7 +3609,7 @@
                 ]
               },
               {
-                "description": "degraded: all assertions passed (2026-09-24T08:14:20.216827+00:00)",
+                "description": "degraded: all assertions passed (2026-09-25T04:57:15.926206+00:00)",
                 "props": [
                   {
                     "name": "evidence-harness",
@@ -3594,10 +3639,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "972870fe-d2c4-57e0-93a5-bfaaad07bba2",
+            "uuid": "d53872b0-45f6-58e7-9b82-46e7a1edefe9",
             "title": "SI-7: automated evidence",
             "description": "10 of 10 cited checks passed. The SSP states SI-7 as partial.",
             "props": [
@@ -3789,10 +3834,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "77d67005-a34d-5177-aa21-cdcc840a6047",
+            "uuid": "053311ae-8bec-52b0-8a47-bbd81806dee1",
             "title": "SI-10: automated evidence",
             "description": "9 of 9 cited checks passed. The SSP states SI-10 as implemented.",
             "props": [
@@ -3961,10 +4006,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "5df7fe53-7b64-59b6-9980-3ece0a8a352e",
+            "uuid": "08499b89-dd88-5104-9ce6-7741524efe0c",
             "title": "SI-15: automated evidence",
             "description": "8 of 8 cited checks passed. The SSP states SI-15 as implemented.",
             "props": [
@@ -4118,10 +4163,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "d9d048fa-d1d4-5207-81cc-e5e59b9abedd",
+            "uuid": "2c85afc0-52f8-5d51-a1cb-c47e98223188",
             "title": "SI-17: automated evidence",
             "description": "11 of 11 cited checks passed. The SSP states SI-17 as implemented.",
             "props": [
@@ -4279,7 +4324,7 @@
                 ]
               },
               {
-                "description": "denied: all assertions passed (2026-09-24T08:10:39.252576+00:00)",
+                "description": "denied: all assertions passed (2026-09-25T04:29:01.554349+00:00)",
                 "props": [
                   {
                     "name": "evidence-harness",
@@ -4294,7 +4339,7 @@
                 ]
               },
               {
-                "description": "intermittent: all assertions passed (2026-09-24T08:13:52.705532+00:00)",
+                "description": "intermittent: all assertions passed (2026-09-25T04:56:51.014468+00:00)",
                 "props": [
                   {
                     "name": "evidence-harness",
@@ -4309,7 +4354,7 @@
                 ]
               },
               {
-                "description": "recovery: all assertions passed (2026-09-24T08:14:43.040351+00:00)",
+                "description": "recovery: all assertions passed (2026-09-25T04:57:34.100643+00:00)",
                 "props": [
                   {
                     "name": "evidence-harness",
@@ -4324,10 +4369,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "bfed9df0-5ef4-5f4f-90e2-2d93bb4b2e82",
+            "uuid": "7c0b4963-ad42-50b1-9a6b-71cf51a58569",
             "title": "SR-3: automated evidence",
             "description": "7 of 7 cited checks passed. The SSP states SR-3 as partial.",
             "props": [
@@ -4466,10 +4511,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "2ff33841-1674-51e2-92a2-8cc2d062d6f6",
+            "uuid": "1049a2b1-0523-5ec5-9a96-52cd6ff252b2",
             "title": "SR-4: automated evidence",
             "description": "4 of 4 cited checks passed. The SSP states SR-4 as partial.",
             "props": [
@@ -4563,10 +4608,10 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           },
           {
-            "uuid": "f1b9dc0c-3018-5f4f-92c8-89f22bd3d5a0",
+            "uuid": "afa899d3-f5ee-5c24-96da-4bd7d350e254",
             "title": "SR-11: automated evidence",
             "description": "4 of 4 cited checks passed. The SSP states SR-11 as partial.",
             "props": [
@@ -4660,7 +4705,7 @@
                 ]
               }
             ],
-            "collected": "2026-09-25T03:53:04Z"
+            "collected": "2026-09-25T06:10:02Z"
           }
         ]
       }

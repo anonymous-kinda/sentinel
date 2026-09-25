@@ -363,6 +363,8 @@ package SentinelVerification {
         @Evidence { kind = EvidenceKind::pytest; locator = "tests/ai/test_policy.py::test_reasons_name_the_constraint"; }
         @Evidence { kind = EvidenceKind::pytest; locator = "tests/ai/test_assistant.py::test_denied_or_classified_never_calls_a_hosted_service"; }
         @Evidence { kind = EvidenceKind::pytest; locator = "tests/api/test_ai_api.py::test_hosted_providers_are_used_only_with_opt_in"; }
+        @Evidence { kind = EvidenceKind::pytest; locator = "tests/ai/test_policy.py::test_a_caveated_or_unknown_marking_keeps_ai_on_the_node"; }
+        @Evidence { kind = EvidenceKind::pytest; locator = "tests/ai/test_assistant.py::test_a_question_holding_the_units_position_never_leaves_the_node"; }
     }
 
     verification <'VC-AI-006'> vcHostedFailureFallsBack : SentinelVerification {
@@ -379,6 +381,7 @@ package SentinelVerification {
         @VerificationMethod { kind = VerificationMethodKind::test; }
         @Evidence { kind = EvidenceKind::pytest; locator = "tests/ai/test_assistant.py::test_low_confidence_asks_instead_of_acting"; }
         @Evidence { kind = EvidenceKind::pytest; locator = "tests/ai/test_assistant.py::test_an_event_tool_without_an_event_asks_which"; }
+        @Evidence { kind = EvidenceKind::pytest; locator = "tests/ai/test_assistant.py::test_an_unsure_event_choice_asks_which_instead_of_acting"; }
     }
 
     verification <'VC-AI-008'> vcRoutingMeasured : SentinelVerification {

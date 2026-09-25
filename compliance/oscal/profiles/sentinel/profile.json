@@ -1,6 +1,6 @@
 {
   "profile": {
-    "uuid": "6a59ec6a-7006-5bc8-b52f-42d615d9aab2",
+    "uuid": "66028af7-f714-5d05-829a-d0031b86358a",
     "metadata": {
       "title": "Sentinel tailored baseline: NIST SP 800-53 Rev 5",
       "last-modified": "2026-09-24T22:00:00Z",
@@ -63,7 +63,7 @@
         {
           "param-id": "ac-04_odp",
           "values": [
-            "Leafnode subject permissions: an edge never exports unit.>, passes.> or node.> to its hub and never imports node.>; console events are published only on node-scoped subjects (node.<id>.>); requests leave a node for a hosted AI service only with an UNCLASSIFIED marking, operator opt-in and a usable measured link."
+            "Leafnode subject permissions: an edge never exports unit.>, passes.> or node.> to its hub and never imports node.>; console events are published only on node-scoped subjects (node.<id>.>); requests leave a node for a hosted AI service only with an allow-listed UNCLASSIFIED marking with no caveat, operator opt-in, a usable measured link and a question that holds no position."
           ]
         },
         {
