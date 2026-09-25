@@ -48,6 +48,39 @@ The composition root is `sentinel/api/app.py`. `build_node` creates the clock, t
 
 Routers beyond the conjunction core are registered through `REGISTRARS` in `sentinel/api/extensions.py`: the AI assistant (`sentinel/api/ai_routes.py`), the pass module (`sentinel/api/pass_routes.py`) and demonstration-mode screening (`sentinel/api/screening_routes.py`). A registrar may add its module name to `node.extensions["modules"]`; `GET /api/node` reports the list, and the console shows a feature tab only for a module the node reports (`web/src/extensions.tsx`, `web/src/features.tsx`). A registrar may also add hooks: the pass module registers an `elements_changed` hook, which the element records call when a synced element set changes the store.
 
+### Where things live
+
+```
+sentinel/cdm/          CCSDS 508.0-B-1 KVN codec and admission policy (ADR-001 seam)
+sentinel/risk/         Foster-Estes 2D Pc, TCA refinement, dilution, applicability gate
+sentinel/conjunction/  mission module: ingest, events, triage policy, summaries, exercise scenario
+sentinel/bus/          Bus protocol: in-process and NATS implementations, node-scoped subjects
+sentinel/sync/         priority pull (edge) and manifest/fetch/ops server (hub) - mission-agnostic
+sentinel/crdt/         dots, signed decision log, multi-value registers (property-tested)
+sentinel/ops/          operator data service: decisions, triage, persistence, anti-entropy
+sentinel/triage/       class / deadline / consequence - the only thing sync knows about a mission
+sentinel/linkstate/    measured link state; Toxiproxy control for demos and the harness
+sentinel/ai/           assistant: tier policy, Jev and local routers, tools, narrators, grounding guard, eval
+sentinel/audit/        hash-chained JSON Lines audit log
+sentinel/passes/       Army overhead-pass module: imaging catalog, element sets, providers, gaps
+sentinel/ephemeris/    CCSDS OEM codec and Earth-fixed state tables
+sentinel/adapters/     source adapters (Wayfinder, on an assumed schema - see docs/adapters/)
+sentinel/screening/    demonstration mode: element-set close approaches, geometry only (ADR-002)
+sentinel/api/          the node: FastAPI, SSE, strict CSP, static console; composes module records for sync
+sentinel/validation/   NASA CARA published cases, shared by the Tier 3 tests, the report and the Validation tab
+sentinel/obs.py        structured logging: stable messages, values as fields
+web/                   React + TypeScript + CesiumJS console (offline imagery, no ion, no CDN)
+harness/               real two-node DDIL scenarios (nats-server + Toxiproxy, no containers)
+deploy/                offline installer and signature gate, systemd, NATS configs, container, AWS Terraform, Ansible
+fixtures/cara/         NASA CARA data, unmodified, with licence, provenance and checksums
+fixtures/omm/          public CelesTrak element-set snapshot, with provenance and checksums
+supplychain/           build-side tooling: SBOMs, Trivy + VEX, bundle manifests (not shipped)
+mbse/                  SysML v2 model and the trace generator -> docs/traceability.md
+compliance/            OSCAL generator and sources; generated SSP, assessment results and POA&M (docs/compliance.md)
+evals/                 labelled operator requests for the routing eval
+docs/                  ADRs, ICDs, supply chain, generated validation / DDIL / AI-eval / trace reports
+```
+
 ### Modules and their allowed dependencies
 
 ```
