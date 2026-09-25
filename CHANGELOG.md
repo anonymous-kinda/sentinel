@@ -103,5 +103,8 @@ The open gaps are listed in `SECURITY.md`:
 
 ## [0.2.0] - 2026-09-23
 
+Never tagged or released: 0.3.0 is the first tagged version. Recorded for
+history.
+
 - The risk engine is validated against NASA CARA's published cases, with a
   CDM codec and the curvature gate.

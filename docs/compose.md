@@ -7,7 +7,7 @@ One command starts a hub and an edge in containers. Each node has its own `nats-
  :8001                                                    :8000
 ```
 
-CI runs the whole stack on every push and pull request (`.github/workflows/ci.yml`, job `compose-smoke`).
+CI is set up to run the whole stack on every push and pull request (`.github/workflows/ci.yml`, job `compose-smoke`). That job has not run yet, so the containers have not run anywhere: its first green run is their first proof. The same smoke checks pass against the process harness.
 
 ## Before you start: Docker inside WSL
 
