@@ -121,7 +121,7 @@ any CDM arrives:
 | `r` | Refusal reason, or null. With a reason, `pc` is null: no Pc travels without its method. |
 | `md` | Miss distance, m, to 0.1. |
 | `rs` | Relative speed, m/s, to 0.1. |
-| `h` | First 16 hex characters of the hub's assessment inputs hash. Verification compares against it. |
+| `h` | First 16 hex characters of the hub's assessment inputs hash. Verification compares it, with every other result field, against this node's own assessment. |
 | `dc` | Data class: `R` (REAL), `D` (DERIVED) or `X` (EXERCISE). |
 
 At the bottom of the degradation ladder a summary renders as one line that
@@ -272,11 +272,11 @@ Per conjunction event, on the edge. `GET /api/events` carries it as
 
 | State | Meaning |
 |---|---|
-| `LOCAL` | This node's own data. There is no hub summary for the event. |
+| `LOCAL` | This node's own data. There is no hub summary for the event, or the CDM shown is newer than any the hub listed (an operator's own update, which the hub has asserted nothing about). |
 | `HUB_ASSERTED` | Known only from the hub's summary. No CDM is here yet; the assessment shown is the hub's, marked as such, and could not have been recomputed because no covariance travelled. |
-| `UPDATING` | The hub has a newer CDM for the event than the latest one here, not yet fetched. |
-| `VERIFIED` | The CDM was fetched and re-assessed here, and its inputs hash matches the hub's `h`. |
-| `MISMATCH` | Same CDM, different result. Flagged, never hidden. |
+| `UPDATING` | The hub's latest CDM for the event is not here yet. It clears when that record arrives. |
+| `VERIFIED` | The hub's latest CDM was fetched and re-assessed here, and this node reached the result the hub asserted: every result field of the summary (`h`, `r`, `b`, `w`, `pc`, `px`, `d`, `md`, `rs`) is equal, compared at the precision the summary carries it. |
+| `MISMATCH` | This node holds the hub's latest CDM but did not reach the result the hub asserted: the same CDM gave another result (another engine version or configuration, or a bug), or this node shows another of the hub's records as latest. Flagged, never hidden. The edge logs `Hub assertion not reproduced` with the fields that differ. |
 
 Element sets have no verification state (`null`). They are checked by hash
 and by the element store's own admission.
