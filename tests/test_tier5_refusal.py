@@ -181,6 +181,27 @@ def test_millisecond_rounded_tca_is_refined_not_refused():
     assert result.pc == pytest.approx(assess(conj).pc, rel=1e-12)
 
 
+def test_the_tca_residual_is_recorded_at_the_supplied_tca_before_refinement():
+    """docs/risk-engine-design.md s4: `tca_residual_m` is the along-track miss
+    of the states as supplied, so it shows how far off TCA the CDM was. After
+    refinement that component is ~0 and says nothing."""
+    conj = make_conjunction(miss_m=100.0, sigma_m=50.0)
+    rounded = conj.replace(
+        secondary=conj.secondary.replace(
+            position_km=conj.secondary.position_km + np.array([0.0, -0.0075, 0.0])
+        )
+    )
+
+    result = assess(rounded)
+
+    assert result.method is Method.FOSTER_ESTES_2D
+    assert abs(result.diagnostics["tca_residual_m"]) == pytest.approx(7.5, rel=1e-9)
+    assert result.diagnostics["tca_residual_m"] == pytest.approx(
+        -result.diagnostics["tca_adjustment_s"] * result.relative_speed_m_s, rel=1e-9
+    )
+    assert assess(conj).diagnostics["tca_residual_m"] == pytest.approx(0.0, abs=1e-9)
+
+
 def test_tca_adjustment_limit_is_configurable():
     conj = make_conjunction(miss_m=100.0, sigma_m=50.0)
     offset = conj.replace(
