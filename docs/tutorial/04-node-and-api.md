@@ -145,7 +145,7 @@ Read the files in this order.
 | `SENTINEL_ELEMENTS` | `elements_path` | unset (role default) | `_element_snapshot` |
 | `SENTINEL_SYNC_ELEMENTS` | `sync_elements` | `catalog` | `_offered_elements`, which refuses anything but `catalog` or `all` |
 
-Four more are read outside `Settings`: `SENTINEL_CLOCK` (`from_env` in `sentinel/clock.py`), `SENTINEL_LOG_FORMAT` and `SENTINEL_LOG_LEVEL` (`sentinel/obs.py`), and `SENTINEL_FIXTURES`, read once at import by `sentinel/validation/cara.py` and `sentinel/passes/element_store.py`. The configuration reference in `docs/technical-guide.md` has the full table.
+Four more are read outside `Settings`: `SENTINEL_CLOCK` (`from_env` in `sentinel/clock.py`), `SENTINEL_LOG_FORMAT` and `SENTINEL_LOG_LEVEL` (`sentinel/obs.py`), and `SENTINEL_FIXTURES`, read once at import by `sentinel/validation/cara.py` and `sentinel/passes/element_store.py`. `sentinel serve` does not read the gitignored `.env` file; only `make ai-live-check`, `make ai-eval` and `make demo-local` load it (`sentinel/localenv.py`), and a variable already exported wins. The configuration reference in `docs/technical-guide.md` has the full table.
 
 **Role validation.** `Settings.__post_init__` refuses a role that is not in `ROLES`. The comment there and `tests/api/test_node_role.py` say why: a mistyped `edg` used to start no sync while `/api/node` still reported a `sync` module, so a broken edge looked connected. Now the node refuses to start.
 
@@ -422,7 +422,7 @@ The help lists `assess`, `cdm`, `serve`, `exercise` and `screen`. The assessment
 | Body not JSON, not an object, or nested too deep | 422 | the reply |
 | A CDM that is wrong | 422, quarantined, `cdm.rejected` published | `GET /api/quarantine`; the console's live feed |
 | Unknown event | 404 on the detail and trajectory routes | the reply |
-| Trajectory cannot be drawn (state below the surface, beyond the Hill sphere) | 422 | the reply; the globe shows nothing |
+| Trajectory cannot be drawn (a state below the Earth's surface or beyond the 3 million km that ingest admits) | 422 | the reply; the globe shows nothing |
 | A catalogued imager's element set is unusable | 503 on `GET /api/passes` | log `Pass computation refused` |
 | A stream subscriber falls 256 events behind | the node closes that stream | log `Stream subscriber overflowed`; the console reconnects and refetches |
 | Console not built | the API works; `/` answers 404 | `make web`, or set `SENTINEL_WEB_DIST` |
