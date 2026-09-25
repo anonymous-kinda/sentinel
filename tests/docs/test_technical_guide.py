@@ -9,6 +9,7 @@ docs/technical-guide.md, docs/index.md and CONTRIBUTING.md to the code:
   make, CLI  every `make` target and `sentinel` subcommand the docs show exists
   contracts  the guide's table quotes every .importlinter contract, module by module
   paths      every repository path the docs name exists
+  examples   the guide's CDM upload example gets the reply the guide promises
   index      every Markdown document in the repository is listed in the index
 
 Paths, make targets and CLI subcommands use the rules in tests/doclint.py,
@@ -24,7 +25,10 @@ import re
 import subprocess
 
 import pytest
+from fastapi.testclient import TestClient
 
+from sentinel.api import create_app
+from sentinel.api.settings import Settings
 from sentinel.cli import build_parser
 from tests.doclint import (
     cli_tree,
@@ -221,6 +225,33 @@ def test_every_path_the_docs_name_exists(doc):
 
     stale = text + "\n`sentinel/sync/jetstream.py` and [the old guide](old-guide.md)\n"
     assert missing(stale, doc) == ["sentinel/sync/jetstream.py", "old-guide.md"]
+
+
+# -------------------------------------------------------------- examples
+INGEST_EXAMPLE = re.compile(r"curl -X POST --data-binary @(\S+)[\s\\]+\S*/api/ingest/cdm")
+
+
+def ingest_example(guide: str) -> str:
+    """The CDM file the guide's `curl ... /api/ingest/cdm` example posts."""
+    match = INGEST_EXAMPLE.search(guide)
+    assert match, "the guide has no ingest example"
+    return match.group(1)
+
+
+def test_the_guides_ingest_example_is_accepted_as_new_by_a_default_node(tmp_path):
+    """The guide says the reply is 201 when accepted. A node in its default
+    configuration already holds NASA's reference library, so posting one of
+    those CDMs back is a 200 duplicate: the example must be a CDM it lacks."""
+    cdm = ROOT / ingest_example(read(GUIDE))
+    settings = Settings(var_dir=str(tmp_path))  # every other setting at its default: library on
+    assert settings.library
+    with TestClient(create_app(settings, start_background=False)) as client:
+        reply = client.post("/api/ingest/cdm", content=cdm.read_bytes())
+        assert reply.status_code == 201, reply.text
+        assert {w["code"] for w in reply.json()["warnings"]} == {"UNIT_LABEL_ANOMALY"}  # as the guide says
+
+        library_cdm = next((ROOT / "fixtures" / "cara" / "PcTestCaseCDMs").glob("*.cdm")).read_bytes()
+        assert client.post("/api/ingest/cdm", content=library_cdm).status_code == 200
 
 
 # ----------------------------------------------------------------- index

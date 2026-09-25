@@ -470,11 +470,11 @@ uv run python scripts/dilution_demo.py
 To push a CDM into a running node:
 
 ```bash
-curl -X POST --data-binary @fixtures/cara/PcTestCaseCDMs/000025994_conj_000037558_20210324_151047_20210323_154356.cdm \
+curl -X POST --data-binary @fixtures/cara/SampleCDMs/AlfanoTestCase01.cdm \
      http://127.0.0.1:8000/api/ingest/cdm
 ```
 
-The reply is 201 when accepted, 200 for a duplicate and 422 when quarantined.
+The reply is 201 when accepted, 200 for a duplicate and 422 when quarantined. This one is accepted with `UNIT_LABEL_ANOMALY` warnings, the incomplete-input path. A CDM from `fixtures/cara/PcTestCaseCDMs/`, such as the `assess` example above, comes back 200: the node loaded NASA's reference library at start-up (`SENTINEL_LIBRARY`), so it already holds it.
 
 The pass and screening APIs (`docs/icd/passes-api.md`, `docs/icd/screening-api.md`), with the exercise unit from the ICD:
 
