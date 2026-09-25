@@ -77,6 +77,25 @@ def compact_summary(summary: dict, cdms: list[tuple[str, int, int]]) -> dict:
     }
 
 
+# What a summary asserts the engine concluded from its latest CDM: the inputs
+# hash, the method (a refusal reason, or none), band and worst-case band,
+# Pc and max Pc, the dilution flag, miss distance and relative speed.
+RESULT_FIELDS = ("h", "r", "b", "w", "pc", "px", "d", "md", "rs")
+
+
+def disagreements(summary: dict, asserted: dict) -> list[str]:
+    """The result fields on which this node's event summary differs from
+    another node's compact assertion about the same CDM (ADR-008).
+
+    This node's result is encoded exactly as the asserting node encoded
+    its own, so each field is compared to the precision the summary
+    carries it: the same inputs through a different engine version,
+    configuration or bug show up here, and float noise below that
+    precision does not."""
+    mine = compact_summary(summary, [])
+    return [key for key in RESULT_FIELDS if mine[key] != asserted.get(key)]
+
+
 def summary_only(compact: dict) -> dict:
     """The P0 part - everything but the CDM list."""
     return {k: v for k, v in compact.items() if k != "c"}

@@ -35,7 +35,7 @@ from ..risk.engine import assess, finite_eigenvalues
 from ..risk.types import AssessedConjunction, AssessmentConfig, Method, RefusalReason
 from .policy import ConjunctionPolicy, triage
 from .store import CdmRow, ConjunctionStore, EventRow
-from .summaries import compact_summary, expand_summary
+from .summaries import compact_summary, disagreements, expand_summary
 from .trajectory import encounter_arcs_ecef
 
 EVENT_TCA_WINDOW_S = 60.0
@@ -289,16 +289,16 @@ class ConjunctionService:
     @staticmethod
     def _verification(summary: dict, remote: dict | None) -> str:
         """LOCAL: this node's own data. VERIFIED: fetched and re-assessed here,
-        identical to what the hub asserted. UPDATING: the hub has a newer CDM
-        not yet fetched. MISMATCH: same CDM, different result - flag it."""
+        and this node's result is the one the hub asserted, field for field
+        (`disagreements`). UPDATING: the hub has a newer CDM not yet fetched.
+        MISMATCH: same CDM, different result - flag it."""
         if remote is None:
             return "LOCAL"
         latest = summary["latest_cdm_sha256"]
         hub_latest = remote["c"][-1][0] if remote.get("c") else None
         if hub_latest and not latest.startswith(hub_latest):
             return "UPDATING"
-        mine = summary["assessment"]["inputs_hash"][:16]
-        return "VERIFIED" if mine == remote.get("h") else "MISMATCH"
+        return "MISMATCH" if disagreements(summary, remote) else "VERIFIED"
 
     def current_ref(self, event_id: str) -> dict | None:
         """What a decision about this event is made against, right now. For

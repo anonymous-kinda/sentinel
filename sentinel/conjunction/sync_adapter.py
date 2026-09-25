@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from ..obs import get_logger
 from .service import ConjunctionService
-from .summaries import summary_problem
+from .summaries import disagreements, summary_problem
 
 log = get_logger(__name__)
 
@@ -47,4 +47,12 @@ class ConjunctionRecords:
             summary = self.service.event_summary(result.event_id)
             remote = self.service.store.remote_summaries().get(result.event_id)
             verification = self.service._verification(summary, remote)
+            if verification == "MISMATCH" and remote is not None and summary["latest_cdm_sha256"] == result.sha256:
+                log.warning(
+                    "Hub assertion not reproduced",
+                    event_id=result.event_id,
+                    origin=remote.get("_origin"),
+                    sha256=result.sha256,
+                    fields=disagreements(summary, remote),
+                )
         return {"status": result.status, "sha256": result.sha256, "verification": verification}
