@@ -12,7 +12,7 @@ Three checks keep this set honest:
 | Reader | Start with | Then |
 |---|---|---|
 | **Operator or program office** | `README.md`, `docs/white-paper.md`, `docs/quad-chart.md` | `docs/demo-script.md` to see it run, `docs/install-guide.md` to install a node, and the generated reports behind every number |
-| **Engineer** | `docs/technical-guide.md`, `docs/system-design.md`, `docs/icd/`, `CONTRIBUTING.md` | `docs/risk-engine-design.md` for the maths, and `CLAUDE.md` for the rules in their shortest form |
+| **Engineer** | `docs/tutorial/README.md` to learn the codebase, then `docs/technical-guide.md`, `docs/system-design.md`, `docs/icd/`, `CONTRIBUTING.md` | `docs/risk-engine-design.md` for the maths, and `CLAUDE.md` for the rules in their shortest form |
 | **Security assessor** | `SECURITY.md`, `docs/supply-chain.md`, `docs/compliance.md` | `docs/traceability.md` and the OSCAL documents under `compliance/oscal/` |
 | **Reviewer of the evidence** | `docs/validation-report.md`, `docs/ddil-results.md`, `docs/ai-eval.md`, `docs/traceability.md` | the script or scenario that generates each one (the last column below) |
 
@@ -31,6 +31,28 @@ Audiences in the tables below: **operator** (uses the decision aid, or runs a no
 | [Repository rules for coding agents](../CLAUDE.md) | `CLAUDE.md` | new engineer, coding agents | authored | |
 | This index | `docs/index.md` | everyone | authored | |
 | [Licence](../LICENSE) | `LICENSE` | everyone | authored (Apache 2.0) | |
+
+## Tutorial
+
+A guided course through the code, one subsystem per chapter, with something to run at every step. Every chapter has the same sections (`docs/tutorial/README.md`).
+
+| Document | Path | Audience | Authored or generated | Regenerate with |
+|---|---|---|---|---|
+| [Tutorial overview](tutorial/README.md) | `docs/tutorial/README.md` | new engineer | authored: reading order, set-up, how a chapter is laid out | |
+| [1. Orientation](tutorial/01-orientation.md) | `docs/tutorial/01-orientation.md` | new engineer | authored | |
+| [2. The risk engine](tutorial/02-risk-engine.md) | `docs/tutorial/02-risk-engine.md` | new engineer | authored | |
+| [3. CDMs, ingest and events](tutorial/03-cdm-and-events.md) | `docs/tutorial/03-cdm-and-events.md` | new engineer | authored | |
+| [4. The node and its API](tutorial/04-node-and-api.md) | `docs/tutorial/04-node-and-api.md` | new engineer | authored | |
+| [5. The operator console](tutorial/05-console.md) | `docs/tutorial/05-console.md` | new engineer | authored | |
+| [6. The bus and the link](tutorial/06-bus-and-links.md) | `docs/tutorial/06-bus-and-links.md` | new engineer | authored | |
+| [7. Priority sync](tutorial/07-priority-sync.md) | `docs/tutorial/07-priority-sync.md` | new engineer | authored | |
+| [8. Operator data: signed CRDTs](tutorial/08-operator-data.md) | `docs/tutorial/08-operator-data.md` | new engineer | authored | |
+| [9. The DDIL harness](tutorial/09-ddil-harness.md) | `docs/tutorial/09-ddil-harness.md` | new engineer | authored | |
+| [10. Passes and screening](tutorial/10-passes-and-screening.md) | `docs/tutorial/10-passes-and-screening.md` | new engineer | authored | |
+| [11. The AI assistant: a safety pattern](tutorial/11-ai-assistant.md) | `docs/tutorial/11-ai-assistant.md` | new engineer | authored | |
+| [12. Supply chain and deployment](tutorial/12-supply-chain-and-deploy.md) | `docs/tutorial/12-supply-chain-and-deploy.md` | new engineer | authored | |
+| [13. Keeping it honest: guardrails, compliance and the trace](tutorial/13-guardrails-compliance-mbse.md) | `docs/tutorial/13-guardrails-compliance-mbse.md` | new engineer | authored | |
+| [14. End to end: one CDM through the whole system](tutorial/14-end-to-end.md) | `docs/tutorial/14-end-to-end.md` | new engineer | authored | |
 
 ## Design
 
