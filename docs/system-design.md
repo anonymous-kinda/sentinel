@@ -381,7 +381,7 @@ The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and t
 
 `tests/conformance/` holds both to the same contract:
 - the overlap convention;
-- sorted, signed windows;
+- windows sorted by rise, each naming the provider that computed it (its `provider` field);
 - a brute-force Skyfield oracle: rise and set within 2 s, maximum elevation within 0.1°.
 
 Adding a provider is one factory and one line.
