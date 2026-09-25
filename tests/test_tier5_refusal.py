@@ -12,6 +12,7 @@ import json
 import numpy as np
 import pytest
 
+from sentinel.risk import engine, integrate
 from sentinel.risk.engine import assess
 from sentinel.risk.types import AssessmentConfig, Method, RefusalReason
 
@@ -240,3 +241,37 @@ def test_a_covariance_too_large_to_decompose_is_refused_never_raised(scale, wher
 
     assert result.method is Method.REFUSED and result.pc is None
     json.dumps(result.to_dict(), allow_nan=False)
+
+
+# --- rung 23c: an integral beyond double precision --------------------------
+def test_a_pc_the_integrator_cannot_resolve_is_refused_never_returned():
+    """sigma = 1e-17 m against a 10 m hard body. Every gate passes: the
+    covariance is positive definite, isotropic and flat. But the Gaussian is
+    narrower than one float64 step of the quadrature variable, so no grid
+    can resolve it. A Pc here would be a guess; the engine refuses."""
+    result = assess(make_conjunction(miss_m=3.0, sigma_m=1e-17, radius_m=5.0))
+
+    assert result.method is Method.REFUSED
+    assert result.refusal_reason is RefusalReason.UNRESOLVED_INTEGRAL
+    assert result.pc is None and result.pc_max is None
+    assert result.diagnostics["stage"] == "pc"
+    assert result.diagnostics["sigma_min_m"] == pytest.approx(1e-17, rel=1e-6)
+    json.dumps(result.to_dict(), allow_nan=False)
+
+
+def test_an_unresolvable_max_pc_search_is_refused_even_when_pc_resolved(monkeypatch):
+    """Pc at k = 1 is fine but the worst-case search fails. Without k* the
+    engine cannot say whether the point is diluted, and a Pc without that
+    answer is the half-truth this project argues against."""
+
+    def unresolved(*_args, **_kwargs):
+        raise integrate.UnresolvedIntegral(sigma_min=1e-19)
+
+    monkeypatch.setattr(engine, "maximize_pc_over_scale", unresolved)
+    result = assess(make_conjunction(miss_m=100.0, sigma_m=50.0))
+
+    assert result.method is Method.REFUSED
+    assert result.refusal_reason is RefusalReason.UNRESOLVED_INTEGRAL
+    assert result.pc is None and result.pc_max is None
+    assert result.diagnostics["stage"] == "max_pc_search"
+    assert result.diagnostics["sigma_min_m"] == 1e-19

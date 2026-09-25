@@ -25,7 +25,7 @@ from .encounter import (
     relative_state,
 )
 from .geometry import tca_residual
-from .integrate import gaussian_mass_over_disk, maximize_pc_over_scale
+from .integrate import UnresolvedIntegral, gaussian_mass_over_disk, maximize_pc_over_scale
 from .types import (
     AssessedConjunction,
     AssessmentConfig,
@@ -197,12 +197,24 @@ def assess(
         )
 
     # --- step 5: integrate ------------------------------------------------
-    pc = gaussian_mass_over_disk(cov_2d, mu, hbr_m, panel_cap=config.quadrature_panels_cap)
+    # The integrator proves it resolved the integrand or raises; either way
+    # no unverified number leaves this function.
+    try:
+        pc = gaussian_mass_over_disk(cov_2d, mu, hbr_m, panel_cap=config.quadrature_panels_cap)
+    except UnresolvedIntegral as exc:
+        return refuse(RefusalReason.UNRESOLVED_INTEGRAL, stage="pc", sigma_min_m=exc.sigma_min)
 
     # --- steps 6 & 7: worst case over covariance scaling, and dilution ----
-    k_star, pc_max, hit_bound = maximize_pc_over_scale(
-        cov_2d, mu, hbr_m, panel_cap=config.quadrature_panels_cap
-    )
+    # Without k* the dilution question has no answer, and a Pc without it is
+    # the half-truth the flag exists to prevent: refuse the whole result.
+    try:
+        k_star, pc_max, hit_bound = maximize_pc_over_scale(
+            cov_2d, mu, hbr_m, panel_cap=config.quadrature_panels_cap
+        )
+    except UnresolvedIntegral as exc:
+        return refuse(
+            RefusalReason.UNRESOLVED_INTEGRAL, stage="max_pc_search", sigma_min_m=exc.sigma_min
+        )
     diluted = k_star < 1.0
 
     return AssessedConjunction(
