@@ -12,7 +12,8 @@ WORKFLOWS = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
 MAKEFILE = ROOT / "Makefile"
 USES = re.compile(r"^\s*-?\s*uses:\s*([^\s#]+)")
 PINNED = re.compile(r"@[0-9a-f]{40}$")
-EXACT = re.compile(r"==\d")
+EXACT = re.compile(r"(==|@)\d")  # PKG==1.2 or, for a bare uvx tool, tool@1.2
+UVX_VALUE_OPTIONS = ("--from", "--with", "--python", "-p")
 
 
 def unpinned(paths=WORKFLOWS) -> list[str]:
@@ -120,13 +121,23 @@ def test_the_scripts_ci_runs_are_found_through_the_scripts_that_run_them():
 
 def uvx_packages(line: str) -> list[str]:
     """The packages a `uvx` call on this line installs: each --from and --with
-    value. Options may come before them (`uvx --quiet --from PKG cmd`)."""
+    value and, with no --from, the tool itself (`uvx pip download`). Options
+    may come first (`uvx --quiet --from PKG cmd`), in a shell line or a
+    Python argv (`"uvx", "pip", ...`)."""
     specs = []
     for call in re.finditer(r"\buvx\b", line):
-        tokens = re.findall(r"[^\s'\"]+", line[call.end():])
-        for option, value in zip(tokens, tokens[1:], strict=False):
-            if option in ("--from", "--with"):
-                specs.append(value)
+        tokens = iter(re.findall(r"[^\s'\",]+", line[call.end():]))
+        values: dict[str, list[str]] = {}
+        tool = None
+        for token in tokens:
+            if token in UVX_VALUE_OPTIONS:
+                values.setdefault(token, []).append(next(tokens, ""))
+            elif not token.startswith("-"):
+                tool = token
+                break
+        specs += values.get("--from", []) + values.get("--with", [])
+        if tool and "--from" not in values:
+            specs.append(tool)
     return specs
 
 
@@ -151,8 +162,8 @@ def test_each_uvx_package_ci_runs_is_pinned_to_one_version():
     for path in (*WORKFLOWS, MAKEFILE, *ci_scripts()):
         for line in path.read_text().splitlines():
             for spec in uvx_packages(line):
-                name, _, version = spec.partition("==")
-                versions.setdefault(name, set()).add(version)
+                name, *version = re.split(r"==|@", spec, maxsplit=1)
+                versions.setdefault(name, set()).add("".join(version))
     assert "ansible-core" in versions
     assert {name: found for name, found in versions.items() if len(found) > 1} == {}
 
@@ -165,3 +176,19 @@ def test_the_tool_check_catches_an_unpinned_package_after_other_options(tmp_path
         "uvx --from ansible-core==2.21.4 ansible-playbook site.yml\n"
     )
     assert unpinned_tools([script]) == ["x.sh:2 ansible-core"]
+
+
+def test_the_tool_check_catches_a_bare_tool_in_a_shell_line_or_a_python_argv(tmp_path):
+    """Without --from, the tool is the package: `uvx pip download` runs the newest pip."""
+    script = tmp_path / "build.py"
+    script.write_text(
+        'run("uvx", "pip", "download", "--quiet", "-r", "requirements.txt")\n'
+        "uvx --quiet pip download -r requirements.txt\n"
+        'run("uvx", "--from", "pip==26.2.1", "pip", "download")\n'
+        "uvx ruff@0.15.0 check .\n"
+    )
+    assert unpinned_tools([script]) == ["build.py:1 pip", "build.py:2 pip"]
+
+
+def test_the_release_bundle_build_is_among_the_scripts_ci_runs():
+    assert ROOT / "scripts" / "build_bundle.py" in ci_scripts(), "release.yml builds the bundles with it"

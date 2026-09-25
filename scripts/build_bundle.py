@@ -90,9 +90,12 @@ def build(arch: str, out_dir: pathlib.Path) -> pathlib.Path:
     (stage / "requirements.txt").write_text(export_requirements(ROOT))
 
     # 3. Dependency wheels for the target platform, verified against those hashes.
+    #    The downloader is pinned too (tests/test_workflows_pinned.py): the
+    #    wheels are hash-checked, but an unpinned pip would still run here.
     platform_args = [arg for p in PLATFORMS[arch] for arg in ("--platform", p)]
     run(
-        "uvx", "pip", "download", "--quiet", "--require-hashes", "-r", str(stage / "requirements.txt"),
+        "uvx", "--from", "pip==26.2.1", "pip", "download", "--quiet", "--require-hashes",
+        "-r", str(stage / "requirements.txt"),
         "--only-binary=:all:", *platform_args, "--python-version", PYTHON_TAG,
         "--implementation", "cp", "--abi", f"cp{PYTHON_TAG.replace('.', '')}",
         "-d", str(stage / "wheels"),
