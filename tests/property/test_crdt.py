@@ -15,7 +15,7 @@ DDIL link. Invariants:
 import copy
 
 import pytest
-from hypothesis import HealthCheck, settings
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 from hypothesis.stateful import Bundle, RuleBasedStateMachine, invariant, precondition, rule
 
@@ -126,6 +126,21 @@ TestDDILNetwork = DDILNetwork.TestCase
 TestDDILNetwork.settings = settings(
     max_examples=150, stateful_step_count=40, deadline=None, suppress_health_check=[HealthCheck.too_slow]
 )
+
+
+# --- causal contexts -----------------------------------------------------------
+contexts = st.builds(
+    lambda vv, cloud: DotContext(vv, (Dot(node, seq) for node, seq in cloud)),
+    st.dictionaries(st.sampled_from(NODES), st.integers(0, 8)),
+    st.sets(st.tuples(st.sampled_from(NODES), st.integers(1, 12))),
+)
+
+
+@given(contexts, contexts)
+def test_covers_answers_whether_every_dot_was_seen_without_enumerating_them(mine, theirs):
+    """The comparison anti-entropy uses must agree with the definition it
+    replaces: every dot `theirs` has seen, `mine` has seen too."""
+    assert mine.covers(theirs) == all(mine.contains(d) for d in theirs.dots())
 
 
 # --- algebraic properties on reachable states --------------------------------
