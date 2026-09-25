@@ -3,7 +3,8 @@
 Persisted in SQLite and replicated by state-based anti-entropy
 (`exchange_payload` / `merge_payload`). The CRDT state is itself durable,
 so a node that is denied for six hours loses nothing: it keeps writing
-locally, and on reconnect one exchange brings both sides to the same state.
+locally, and on reconnect a few exchanges, each within its budget on a thin
+link, bring both sides to the same state.
 
 This module is mission-agnostic. It knows event ids as opaque strings. Whether a
 decision is still current - REVIEW_REQUIRED when it was made against a
@@ -194,11 +195,23 @@ class OpsService:
     def contexts(self) -> dict:
         return {"log_ctx": self.log.ctx.to_wire(), "mv_ctx": self.mv.ctx.to_wire()}
 
-    def payload_for(self, log_ctx: dict, mv_ctx: dict) -> dict:
-        """Everything this replica holds that a peer with these contexts lacks."""
+    def payload_for(self, log_ctx: dict, mv_ctx: dict, budget_bytes: int | None = None) -> dict:
+        """What this replica holds that a peer with these contexts lacks.
+
+        Oldest first: log entries in display order, then registers by key.
+        With a budget, only the leading items whose encodings fit in it, and
+        always at least one, so every exchange makes progress over a thin
+        link. The rest goes in a later exchange and nothing is lost: an
+        entry's dot, or a register's writes, enter the peer's context only
+        when that item itself is merged there.
+        """
+        entries = sorted(self.log.missing_for(DotContext.from_wire(log_ctx)), key=_display_order)
+        registers = sorted(self.mv.missing_for(DotContext.from_wire(mv_ctx)).items())
+        items = [("log", e.to_wire()) for e in entries] + [("reg", [k, r.to_wire()]) for k, r in registers]
+        chosen = _leading_within(items, budget_bytes)
         return {
-            "log": [e.to_wire() for e in self.log.missing_for(DotContext.from_wire(log_ctx))],
-            "reg": {k: r.to_wire() for k, r in self.mv.missing_for(DotContext.from_wire(mv_ctx)).items()},
+            "log": [wire for kind, wire in chosen if kind == "log"],
+            "reg": {wire[0]: wire[1] for kind, wire in chosen if kind == "reg"},
         }
 
     async def merge_payload(self, payload: dict) -> dict:
@@ -238,6 +251,24 @@ class OpsService:
     def remember_peer(self, peer: str, contexts: dict) -> None:
         with self._lock:
             self._db.execute("INSERT OR REPLACE INTO ops_peers VALUES (?,?)", (peer, codec.encode(contexts)))
+
+
+def _display_order(entry: Entry) -> tuple[int, str, int]:
+    return entry.lamport, entry.dot.node, entry.dot.seq
+
+
+def _leading_within(items: list[tuple[str, Any]], budget_bytes: int | None) -> list[tuple[str, Any]]:
+    """The leading items whose encodings fit in the budget; at least one."""
+    if budget_bytes is None:
+        return items
+    chosen: list[tuple[str, Any]] = []
+    spent = 0
+    for item in items:
+        spent += len(codec.encode(item[1]))
+        if chosen and spent > budget_bytes:
+            break
+        chosen.append(item)
+    return chosen
 
 
 def same_record(a: str | None, b: str | None) -> bool:

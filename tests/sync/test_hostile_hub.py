@@ -6,8 +6,9 @@ are the hub's claims about the bytes; the bytes themselves can be hashed.
 These tests hold the agent to what it can check, and hold the protocol to
 the DDIL link it runs on.
 
-Bugs in the closed core (sentinel/sync) are strict xfails: the suite stays
-green, the bug stays recorded, and the xfail turns red the day it is fixed.
+A bug found here in the closed core (sentinel/sync) is recorded as a strict
+xfail until it is fixed: the suite stays green, the bug stays recorded, and
+the xfail turns red the day the fix lands. None is open.
 """
 
 from __future__ import annotations
@@ -39,7 +40,6 @@ from sentinel.sync.agent import LINK_ERRORS
 from .conftest import EPOCH, KEYS, TRUST, Node
 
 SNAPSHOT = pathlib.Path(__file__).resolve().parents[2] / "fixtures" / "omm" / "celestrak-resource-20260924.json"
-CORE = "core bug in sentinel/sync (closed; fix belongs to its owner): "
 
 Tamper = Callable[[bytes, dict[str, str]], tuple[bytes, dict[str, str]]]
 
@@ -117,10 +117,6 @@ def substituted_by(link: Link) -> Tamper:
     return tamper
 
 
-@pytest.mark.xfail(strict=True, reason=CORE + (
-    "_fetch() ingests the reply before checking any hash, compares only the hub's own "
-    "Sentinel-Sha256 header (a missing header counts as a match), never the sha16 the "
-    "manifest announced, and marks the item ARRIVED either way"))
 @pytest.mark.parametrize("mode", ["corrupted", "header-stripped", "substituted"])
 def test_the_edge_admits_only_the_bytes_it_asked_for(link, mode):
     tamper = {"corrupted": corrupted, "header-stripped": header_stripped}.get(mode) or substituted_by(link)
@@ -132,6 +128,21 @@ def test_the_edge_admits_only_the_bytes_it_asked_for(link, mode):
     for arrival in link.agent.arrivals:
         assert link.edge.records.has(arrival["sha"]), f"{arrival['sha']} marked arrived but never received"
         assert arrival["hash_ok"], "a record whose hash did not match was admitted"
+
+
+def test_intact_bytes_without_their_sha256_header_are_not_a_match(link):
+    """hash_ok is a comparison with the hub's claim; with no claim there is
+    nothing to compare, so the record is refused and asked for again."""
+
+    def strip_hash(body, headers):
+        headers.pop("Sentinel-Sha256")
+        return body, headers
+
+    tamper_fetch(link, strip_hash)
+    run(link.agent.cycle())
+    assert link.agent.arrivals == []
+    assert list(link.edge.conj.store.all_cdms()) == []
+    assert {item.status for item in link.agent.queue} == {"QUEUED"}
 
 
 def test_a_missing_data_class_header_cannot_relabel_exercise_data_as_real(link):
@@ -149,21 +160,43 @@ def test_a_missing_data_class_header_cannot_relabel_exercise_data_as_real(link):
     assert classes == {"EXERCISE"}
 
 
-@pytest.mark.xfail(strict=True, reason=CORE + (
-    "an exception from records.ingest() for one item escapes _fetch() and pull(), so the "
-    "cycle aborts there; the same reply comes back first every cycle, and nothing queued "
-    "behind it ever arrives (head-of-line blocking); run() also counts it as a link failure"))
-def test_one_unreadable_reply_does_not_block_every_record_behind_it(link):
-    def bad_class(body, headers):
-        headers["Sentinel-Data-Class"] = "BANANA"
-        return body, headers
+def bad_class(body, headers):
+    """The bytes are right; the module's own admission cannot read the reply."""
+    headers["Sentinel-Data-Class"] = "BANANA"
+    return body, headers
 
+
+def test_one_unreadable_reply_does_not_block_every_record_behind_it(link):
     tamper_fetch(link, bad_class, one_record=True)
     for _ in range(2):
         with contextlib.suppress(ValueError):  # run() logs it; the next cycle is what matters
             run(link.agent.cycle())
     held = {row.sha256[:16] for row in link.edge.conj.store.all_cdms()}
     assert len(announced(link.hub) - held) == 1, "only the unreadable record is missing"
+
+
+@pytest.mark.parametrize("tamper", [bad_class, corrupted], ids=["unreadable", "corrupted"])
+def test_a_refused_record_is_retried_with_back_off_not_every_cycle(link, tamper):
+    """Every attempt costs a round trip on a thin link, so a record the edge
+    refuses sits out a growing number of pulls; it arrives once the hub's
+    reply is good again."""
+    attempts = []
+
+    def counted(body, headers):
+        attempts.append(1)
+        return tamper(body, headers)
+
+    tamper_fetch(link, counted, one_record=True)
+    cycles = 8
+    for _ in range(cycles):
+        run(link.agent.cycle())
+    assert 2 <= len(attempts) <= cycles // 2, f"asked {len(attempts)} times in {cycles} cycles"
+
+    run(link.bus.serve(subjects.sync_fetch("hub"), link.server._fetch))   # the hub answers honestly again
+    for _ in range(4 * cycles):
+        run(link.agent.cycle())
+    held = {row.sha256[:16] for row in link.edge.conj.store.all_cdms()}
+    assert announced(link.hub) <= held
 
 
 # ------------------------------------------------------- the manifest
@@ -176,17 +209,58 @@ def hostile_manifest(link: Link, extra: list[dict]) -> None:
 
 
 BOGUS = {"e": "bogus", "dl": "soon", "q": 9, "c": [["0" * 16, 10, 0]]}
+PAST = 1_790_000_000                      # a readable deadline, already gone
+MALFORMED = {
+    "unreadable-deadline": BOGUS,
+    "not-a-map": ["not", "a", "summary"],
+    "no-item-id": {"dl": PAST, "q": 1, "c": [["0" * 16, 10, 0]]},
+    "numeric-item-id": {"e": 12, "dl": PAST, "q": 1, "c": [["0" * 16, 10, 0]]},
+    "empty-item-id": {"e": "", "dl": PAST, "q": 1, "c": [["0" * 16, 10, 0]]},
+    "unknown-consequence": {"e": "bogus", "dl": PAST, "q": 9, "c": [["0" * 16, 10, 0]]},
+    "deadline-out-of-range": {"e": "bogus", "dl": 10**20, "q": 1, "c": [["0" * 16, 10, 0]]},
+    "record-name-a-number": {"e": "bogus", "dl": PAST, "q": 1, "c": [[7, 10, 0]]},
+    "record-name-not-hex": {"e": "bogus", "dl": PAST, "q": 1, "c": [["%" * 16, 10, 0]]},
+    "record-too-short": {"e": "bogus", "dl": PAST, "q": 1, "c": [["0" * 16, 10]]},
+    "negative-size": {"e": "bogus", "dl": PAST, "q": 1, "c": [["0" * 16, -10**9, 0]]},
+}
 
 
-@pytest.mark.xfail(strict=True, reason=CORE + (
-    "fetch_manifest() stores the digest before apply_manifest() runs, and _rebuild_queue() "
-    "rejects the whole manifest on one malformed entry; the next cycle is told 'unchanged' "
-    "and the queue is never built, so no record ever arrives"))
-def test_one_malformed_manifest_entry_does_not_stop_the_edge_fetching_the_rest(link):
-    hostile_manifest(link, [BOGUS])
+@pytest.mark.parametrize("entry", MALFORMED.values(), ids=MALFORMED.keys())
+def test_one_malformed_manifest_entry_does_not_stop_the_edge_fetching_the_rest(link, entry):
+    hostile_manifest(link, [entry])
     for _ in range(2):
-        with contextlib.suppress(TypeError, ValueError, KeyError):  # run() logs these
+        with contextlib.suppress(TypeError, ValueError, KeyError, *LINK_ERRORS):  # run() logs these
             run(link.agent.cycle())
+    held = {row.sha256[:16] for row in link.edge.conj.store.all_cdms()}
+    assert announced(link.hub) <= held
+
+
+@pytest.mark.parametrize("entry", MALFORMED.values(), ids=MALFORMED.keys())
+def test_a_malformed_manifest_entry_puts_nothing_in_the_queue(link, entry):
+    """Sync reads four generic fields; an entry whose fields it cannot read
+    as documented (a string item id, a deadline, a consequence 0-3, records
+    of [16 hex digits, bytes >= 0, created]) is skipped, and only that one."""
+    link.agent.apply_manifest([entry, *link.hub.records.manifest()])
+    assert {item.sha16 for item in link.agent.queue} == announced(link.hub)
+
+
+def test_a_manifest_that_failed_to_apply_is_fetched_again(link, monkeypatch):
+    """The digest the edge sends back names the manifest it applied, not
+    the last one it was sent: otherwise the hub answers 'unchanged' and the
+    queue is never built."""
+    store_summaries = link.edge.records.put_summaries
+    calls = []
+
+    def fails_once(summaries, origin):
+        calls.append(origin)
+        if len(calls) == 1:
+            raise RuntimeError("summary store unavailable")
+        store_summaries(summaries, origin)
+
+    monkeypatch.setattr(link.edge.records, "put_summaries", fails_once)
+    with contextlib.suppress(RuntimeError):        # run() logs it; the next cycle is what matters
+        run(link.agent.cycle())
+    run(link.agent.cycle())
     held = {row.sha256[:16] for row in link.edge.conj.store.all_cdms()}
     assert announced(link.hub) <= held
 
@@ -236,10 +310,6 @@ def element_link() -> tuple[Link, set[int], ElementStore]:
     return Link(bus, clock, hub, edge, server, agent), offered, edge_elements
 
 
-@pytest.mark.xfail(strict=True, reason=CORE + (
-    "_fetch() routes a record by the reply's Sentinel-Event-Id header alone; without it the "
-    "item id the manifest gave (WantItem.event_id) is ignored, an element set is handed to "
-    "the CDM parser, quarantined as PARSE_ERROR, and the item is marked ARRIVED"))
 def test_a_record_is_filed_under_the_item_the_manifest_named(element_link):
     link, offered, edge_elements = element_link
 
@@ -251,6 +321,22 @@ def test_a_record_is_filed_under_the_item_the_manifest_named(element_link):
     run(link.agent.cycle())
     assert link.edge.conj.quarantined() == []
     assert set(edge_elements.latest()) == offered
+
+
+def test_a_reply_naming_another_item_is_refused(link):
+    """The manifest said which item a record belongs to; a reply header that
+    names another one is the hub contradicting itself, so the record is
+    refused rather than filed under either."""
+
+    def other_item(body, headers):
+        headers["Sentinel-Event-Id"] = "SOMEONE-ELSE"
+        return body, headers
+
+    tamper_fetch(link, other_item)
+    run(link.agent.cycle())
+    assert link.agent.arrivals == []
+    assert list(link.edge.conj.store.all_cdms()) == []
+    assert {item.status for item in link.agent.queue} == {"QUEUED"}
 
 
 # ------------------------------------------------------ admission control
@@ -270,7 +356,8 @@ class SmallRecords:
         raw = self.records.get(sha16)
         if raw is None:
             return None
-        return raw, {"Sentinel-Sha256": hashlib.sha256(raw).hexdigest(), "Sentinel-Event-Id": "x",
+        item_id = next(s["e"] for s in self.summaries if any(sha == sha16 for sha, *_ in s["c"]))
+        return raw, {"Sentinel-Sha256": hashlib.sha256(raw).hexdigest(), "Sentinel-Event-Id": item_id,
                      "Sentinel-Data-Class": "REAL"}
 
     def has(self, sha16):
@@ -290,10 +377,6 @@ def _record(tag: str, size: int) -> tuple[str, bytes]:
     return hashlib.sha256(raw).hexdigest()[:16], raw
 
 
-@pytest.mark.xfail(strict=True, reason=CORE + (
-    "pull() reads the clock once before the loop (and bytes_ahead is reset but never "
-    "added to), so a record is admitted against a deadline measured before the records "
-    "ahead of it spent the link"))
 def test_admission_control_counts_the_time_spent_on_records_ahead():
     now = dt.datetime(2026, 9, 24, 12, 0, tzinfo=dt.UTC)
     clock = FixedClock(now)
@@ -340,10 +423,6 @@ class ThinLinkBus(InProcessBus):
         return reply
 
 
-@pytest.mark.xfail(strict=True, reason=CORE + (
-    "fetch_manifest() always allows the time for 4000 bytes (_timeout(4000)); a manifest "
-    "that needs longer to cross the measured link times out every cycle, identically, "
-    "forever, and the edge never sees a single summary"))
 def test_a_manifest_larger_than_4_kb_still_reaches_the_edge_on_a_limited_link():
     rate = 1000.0                                  # ~8 kbit/s: the LIMITED scenario
     now = dt.datetime(2026, 9, 24, 12, 0, tzinfo=dt.UTC)
@@ -367,6 +446,74 @@ def test_a_manifest_larger_than_4_kb_still_reaches_the_edge_on_a_limited_link():
         except LINK_ERRORS:
             agent.link.observe_failure()
     assert agent.manifest_digest is not None and agent.queue, "the edge never received the manifest"
+
+
+class LossyManifestBus(InProcessBus):
+    """Loses every manifest reply while `lost`, and records how long the
+    edge was prepared to wait for each."""
+
+    def __init__(self):
+        super().__init__()
+        self.lost = True
+        self.waits: list[float] = []
+
+    async def request(self, subject, data, timeout, headers=None):
+        if subject == subjects.sync_manifest("hub"):
+            self.waits.append(timeout)
+            if self.lost:
+                raise RequestTimeout(subject)
+        return await super().request(subject, data, timeout, headers)
+
+
+def test_the_manifest_wait_grows_after_each_timeout_up_to_a_cap_and_resets_when_one_arrives():
+    """A longer wait costs the cycle behind it (operator data waits too, and
+    a cut link is measured only when the request gives up), so it grows only
+    while manifests are being lost, stops at a cap, and returns to the size
+    of the manifest last received."""
+    bus = LossyManifestBus()
+    run(SyncServer(bus, SmallRecords([{"e": "A", "dl": 1_790_000_000, "q": 0, "c": []}]), None, "hub").start())
+    agent = SyncAgent(bus, SmallRecords(), None, FixedClock(EPOCH), "alpha", "hub", LinkMonitor(rate_bytes_per_s=1000.0))
+
+    for _ in range(12):
+        with contextlib.suppress(RequestTimeout):
+            run(agent.fetch_manifest())
+    grown = bus.waits
+    assert grown == sorted(grown) and grown[1] > grown[0], "it waits longer after each timeout"
+    assert grown[-1] == grown[-2] == grown[-3], "up to a cap"
+
+    bus.lost = False
+    run(agent.fetch_manifest())
+    run(agent.fetch_manifest())
+    assert bus.waits[-1] == grown[0], "a manifest arrived: back to the wait its size needs"
+
+
+class DeniedLink(LossyManifestBus):
+    """Loses every request, on every subject, while `lost`."""
+
+    async def request(self, subject, data, timeout, headers=None):
+        if self.lost and subject != subjects.sync_manifest("hub"):
+            raise RequestTimeout(subject)
+        return await super().request(subject, data, timeout, headers)
+
+
+def test_a_denial_never_lengthens_the_manifest_wait():
+    """The manifest wait grows only on a manifest lost after the operator-data
+    exchange got through in the same cycle. Through a denial that exchange
+    fails first, so however long the denial, the first manifest after it is
+    waited for as long as its size needs, and no longer."""
+    bus = DeniedLink()
+    clock = FixedClock(EPOCH)
+    hub_ops = OpsService("hub", KEYS["hub"], TrustStore(TRUST), bus, clock)
+    run(SyncServer(bus, SmallRecords([{"e": "A", "dl": 1_790_000_000, "q": 0, "c": []}]), hub_ops, "hub").start())
+    edge_ops = OpsService("alpha", KEYS["alpha"], TrustStore(TRUST), bus, clock)
+    agent = SyncAgent(bus, SmallRecords(), edge_ops, clock, "alpha", "hub", LinkMonitor(rate_bytes_per_s=1000.0))
+
+    for _ in range(10):
+        with contextlib.suppress(*LINK_ERRORS):
+            run(agent.cycle())
+    bus.lost = False
+    run(agent.cycle())
+    assert len(bus.waits) == 1 and bus.waits[0] == 6.0 + 1.5 * 4000 / 1000.0
 
 
 def test_the_composite_routes_a_summary_without_an_item_id_to_rejection_not_to_a_crash(link):
