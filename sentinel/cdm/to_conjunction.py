@@ -13,7 +13,7 @@ import numpy as np
 
 from ..risk.types import Conjunction, ObjectState
 from .model import POSITION_COVARIANCE_KEYS, CdmMessage, CdmSection
-from .validate import CdmWarning, covariance_status, validate
+from .validate import CdmWarning, _number, covariance_status, validate
 
 
 @dataclasses.dataclass(frozen=True)
@@ -39,8 +39,8 @@ def _covariance_rtn_m2(section: CdmSection, index: int) -> np.ndarray | None:
     )
 
 
-def _radius_from_area_m(section: CdmSection) -> float | None:
-    area = section.number("AREA_PC")
+def _radius_from_area_m(section: CdmSection, index: int) -> float | None:
+    area = _number(section, "AREA_PC", index)
     if area is None or not math.isfinite(area) or area <= 0.0:
         return None
     return math.sqrt(area / math.pi)
@@ -62,8 +62,8 @@ def resolve_radii(
     combined = message.hbr_from_comment_m()
     if combined is not None:
         return (combined / 2.0, combined / 2.0), "cdm_comment_hbr"
-    r1 = _radius_from_area_m(message.objects[0])
-    r2 = _radius_from_area_m(message.objects[1])
+    r1 = _radius_from_area_m(message.objects[0], 0)
+    r2 = _radius_from_area_m(message.objects[1], 1)
     if r1 is not None and r2 is not None:
         return (r1, r2), "area_pc"
     return (None, None), None

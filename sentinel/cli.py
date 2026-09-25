@@ -6,7 +6,9 @@
 
 Exit status follows the ingest policy: 0 when a message was assessed (a
 refusal is still an assessment), 2 when it was rejected as wrong, 1 on
-usage or I/O errors.
+usage or I/O errors. A message is read exactly as the node admits it
+(`sentinel.cdm.admit`): whatever the node would quarantine is reported with
+the node's code and reason, `REJECTED <code>...` on stderr.
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ import sys
 from typing import Any
 
 from . import __version__
-from .cdm import CdmParseError, CdmRejected, emit, parse_bytes, to_conjunction
+from .cdm import CdmRejected, admit, emit, read_message
 from .risk import assess
 from .risk.types import Method
 
@@ -32,8 +34,7 @@ def _read(path: str) -> bytes:
 
 
 def _cmd_assess(args: argparse.Namespace) -> int:
-    message = parse_bytes(_read(args.file))
-    conversion = to_conjunction(message, hbr_override_m=args.hbr)
+    message, conversion = admit(_read(args.file), hbr_override_m=args.hbr)
     result = assess(conversion.conjunction)
 
     payload: dict[str, Any] = {
@@ -72,10 +73,7 @@ def _cmd_assess(args: argparse.Namespace) -> int:
 
 
 def _cmd_cdm_parse(args: argparse.Namespace) -> int:
-    from .cdm import validate
-
-    message = parse_bytes(_read(args.file))
-    warnings = validate(message)
+    message, conversion = admit(_read(args.file))
     print(
         json.dumps(
             {
@@ -84,7 +82,7 @@ def _cmd_cdm_parse(args: argparse.Namespace) -> int:
                 "tca": message.tca.isoformat(),
                 "objects": [message.object_designator(0), message.object_designator(1)],
                 "hbr_from_comment_m": message.hbr_from_comment_m(),
-                "warnings": [w.__dict__ for w in warnings],
+                "warnings": [w.__dict__ for w in conversion.warnings],
             },
             indent=2,
         )
@@ -93,7 +91,7 @@ def _cmd_cdm_parse(args: argparse.Namespace) -> int:
 
 
 def _cmd_cdm_emit(args: argparse.Namespace) -> int:
-    sys.stdout.write(emit(parse_bytes(_read(args.file))))
+    sys.stdout.write(emit(read_message(_read(args.file))))
     return EXIT_OK
 
 
@@ -135,7 +133,7 @@ def main(argv: list[str] | None = None) -> int:
     except CdmRejected as exc:
         print(f"REJECTED {exc}", file=sys.stderr)
         return EXIT_REJECTED
-    except (CdmParseError, OSError) as exc:
+    except OSError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EXIT_ERROR
 

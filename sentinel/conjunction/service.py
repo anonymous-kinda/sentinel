@@ -3,8 +3,10 @@
 Ingest follows the admission policy end to end:
 
     raw bytes --sha256--> duplicate?         -> no-op (idempotent)
-              --parse---> not a CDM?         -> quarantine PARSE_ERROR
-              --validate> wrong?             -> quarantine with the reason
+              --admit---> not a CDM?         -> quarantine PARSE_ERROR
+                          unreadable?        -> quarantine UNREADABLE
+                          wrong?             -> quarantine with the reason
+                          (sentinel.cdm.admit, the path the CLI takes too)
               --group---> event id
               --assess--> AssessedConjunction (refusal is a result)
               --publish-> cdm.accepted.<event_id>
@@ -27,7 +29,7 @@ import numpy as np
 
 from .. import __version__
 from ..bus import Bus, subjects
-from ..cdm import CdmParseError, CdmRejected, parse_bytes, to_conjunction
+from ..cdm import Admitted, CdmRejected, admit
 from ..cdm.model import CdmMessage
 from ..clock import Clock
 from ..risk.encounter import build_encounter_plane, curvilinear_check, pc_curve
@@ -101,14 +103,9 @@ class ConjunctionService:
             return IngestResult("duplicate", sha)
 
         try:
-            message = parse_bytes(raw)
-            conversion = to_conjunction(message)
-        except CdmParseError as exc:
-            return await self._reject(sha, raw, "PARSE_ERROR", str(exc), source)
+            message, conversion = admit(raw)
         except CdmRejected as exc:
             return await self._reject(sha, raw, exc.code, str(exc), source)
-        except (ValueError, KeyError) as exc:
-            return await self._reject(sha, raw, "UNREADABLE", str(exc), source)
 
         data_class = ORIGINATOR_DATA_CLASS.get((message.originator or "").upper(), data_class)
 
@@ -197,10 +194,8 @@ class ConjunctionService:
 
     # --------------------------------------------------------------- assessment
     @functools.lru_cache(maxsize=4096)  # noqa: B019 - bounded, keyed by content hash
-    def _parsed(self, sha: str):
-        row = self.store.cdm(sha)
-        message = parse_bytes(row.raw)
-        return message, to_conjunction(message)
+    def _parsed(self, sha: str) -> Admitted:
+        return admit(self.store.cdm(sha).raw)
 
     def _assess_sha(self, sha: str, message: CdmMessage | None = None) -> dict:
         cached = self.store.assessment(sha, self.engine_version)
