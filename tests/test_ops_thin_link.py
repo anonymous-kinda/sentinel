@@ -56,6 +56,7 @@ def test_a_backlog_of_operator_entries_reaches_the_edge_on_a_limited_link():
     assert backlog > 6 * RATE + 1.5 * 4000, "the reply needs longer than the agent waits for a small request"
 
     for _ in range(8):
+        agent.link.rate_bytes_per_s = RATE      # what a monitor on this link measures; the bus is instant
         try:
             run(agent.exchange_ops())
         except LINK_ERRORS:
