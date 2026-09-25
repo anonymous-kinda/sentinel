@@ -60,7 +60,7 @@ These measures narrow the gap without closing it:
 The commands below need the Sigstore and GitHub APIs. They run outside this repo's test suite.
 
 ```bash
-VER=0.2.0; REPO=OWNER/sentinel
+VER=0.3.0; REPO=OWNER/sentinel
 ID="https://github.com/$REPO/.github/workflows/release.yml@refs/tags/v$VER"
 
 # Signature; cosign fetches the trust root through TUF
@@ -85,7 +85,7 @@ gh attestation verify sentinel-$VER-x86_64.tar.gz --repo $REPO --predicate-type 
 On the enclave, nothing needs a network.
 
 ```bash
-VER=0.2.0; ARCH=x86_64
+VER=0.3.0; ARCH=x86_64
 ID="https://github.com/OWNER/sentinel/.github/workflows/release.yml@refs/tags/v$VER"
 
 # 0. The verifier. The cosign binary must match its pin in deploy/tools.lock
