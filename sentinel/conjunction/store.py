@@ -12,6 +12,7 @@ from __future__ import annotations
 import dataclasses
 import datetime as dt
 import json
+import re
 import sqlite3
 import threading
 from collections.abc import Iterator
@@ -228,16 +229,18 @@ class ConjunctionStore:
             for r in rows
         }
 
+    # --- records named by the leading hex digits of their sha256 (sync) --------
     def has_cdm_prefix(self, prefix: str) -> bool:
+        if not _is_sha_prefix(prefix):
+            return False
         with self._lock:
-            return (
-                self._db.execute("SELECT 1 FROM cdm_messages WHERE sha256 LIKE ?", (prefix + "%",)).fetchone()
-                is not None
-            )
+            return self._db.execute(f"SELECT 1 FROM cdm_messages WHERE {_PREFIX_RANGE}", _bounds(prefix)).fetchone() is not None
 
     def cdm_by_prefix(self, prefix: str) -> CdmRow | None:
+        if not _is_sha_prefix(prefix):
+            return None
         with self._lock:
-            r = self._db.execute("SELECT * FROM cdm_messages WHERE sha256 LIKE ?", (prefix + "%",)).fetchone()
+            r = self._db.execute(f"SELECT * FROM cdm_messages WHERE {_PREFIX_RANGE}", _bounds(prefix)).fetchone()
         return None if r is None else self._cdm(r)
 
     def clear_derived(self) -> None:
@@ -248,3 +251,20 @@ class ConjunctionStore:
 
 def _now() -> str:
     return dt.datetime.now(dt.UTC).isoformat()
+
+
+# A sha256 is stored as 64 lowercase hex digits, so the hashes that start
+# with a prefix are exactly those in [prefix, prefix + "g"): "g" sorts after
+# every hex digit. A range is searched through the primary key's index;
+# LIKE, case-insensitive in SQLite, scans the table. Anything but hex digits
+# ("", "%", "A") names no record: the range would be wrong for it.
+_PREFIX_RANGE = "sha256 >= ? AND sha256 < ?"
+_SHA_PREFIX = re.compile(r"[0-9a-f]{1,64}")
+
+
+def _is_sha_prefix(prefix: str) -> bool:
+    return _SHA_PREFIX.fullmatch(prefix) is not None
+
+
+def _bounds(prefix: str) -> tuple[str, str]:
+    return prefix, prefix + "g"
