@@ -3,6 +3,7 @@ import type { LogEntryView, OpsView, ResolutionBody } from "../api/types";
 import { postJSON, useResource } from "../api/client";
 import { dtg } from "../lib/format";
 import { useAction } from "../lib/useAction";
+import { Pending } from "./Pending";
 
 const STATUSES = ["NEW", "WATCH", "MANEUVER_PLANNING", "NO_ACTION", "CLOSED"];
 
@@ -24,12 +25,12 @@ const words = (value: unknown): string => {
  */
 export function OpsPanel({ eventId, version, readOnly }: { eventId: string; version: number; readOnly: boolean }) {
   const [local, setLocal] = useState(0);
-  const { data } = useResource<OpsView>(`/api/events/${encodeURIComponent(eventId)}/ops`, version + local);
+  const { data, error: readError } = useResource<OpsView>(`/api/events/${encodeURIComponent(eventId)}/ops`, version + local);
   const [decision, setDecision] = useState("MONITOR");
   const [rationale, setRationale] = useState("");
   const { busy, error, run } = useAction();
 
-  if (!data) return null;
+  if (!data) return <Pending what="Triage and decisions" error={readError} />;
   const status = data.annotations.triage_status;
   const refresh = () => setLocal((n) => n + 1);
 

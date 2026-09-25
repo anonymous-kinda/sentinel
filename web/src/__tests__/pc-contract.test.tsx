@@ -1,7 +1,10 @@
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { DilutionCurve as Curve } from "../api/types";
+import { DilutionCurve, interpolatePc } from "../components/DilutionCurve";
 import { EventDetail } from "../components/EventDetail";
 import { HistorySpark } from "../components/HistorySpark";
+import { sci, sciPlain } from "../lib/format";
 import { mockApi, ok } from "./fixtures/api";
 import { detail, diluted, summary } from "./fixtures/events";
 import { SOURCES, findAll, type Hit } from "./fixtures/sources";
@@ -25,7 +28,7 @@ const OWNERS = new Set(["src/components/PcValue.tsx", "src/lib/format.ts"]);
 const ALLOWED: Record<string, { count: number; why: string }> = {
   "src/components/DilutionCurve.tsx": {
     count: 3,
-    why: "the Pc(k) sensitivity curve: the engine's samples of Pc against covariance scale, served only when it returned a Pc",
+    why: "the Pc(k) sensitivity curve: the engine's samples of Pc against covariance scale, stated only when the node says the 2D model applies (a refused event's curve is drawn as shape alone)",
   },
   "src/components/ValidationPanel.tsx": {
     count: 4,
@@ -95,5 +98,59 @@ describe("renderings that used to format a Pc by hand", () => {
     render(<EventDetail eventId={EVENT} version={0} />);
     const callout = (await screen.findByText("Diluted.")).parentElement!;
     expect(callout.textContent).not.toMatch(/(^|\s)0(\s|$|\.(\s|$))/); // a zero, not k* = 0.200
+  });
+});
+
+describe("the Pc(k) curve of an event the engine refused", () => {
+  // Shaped like the node's reply for a CURVILINEAR_UNCERTAINTY or
+  // LOW_RELATIVE_VELOCITY refusal (tests/api/test_api.py): the covariance
+  // exists, so the curve is served, but the 2D model does not apply.
+  // Its Pc exponents (-7, -6) differ from its k axis's (-2 to 2).
+  const refusedCurve: Curve = {
+    model_applies: false,
+    log10_k: [-2, -1, 0, 1, 2],
+    pc: [1.2e-7, 2.9e-6, 2.1e-6, 4.0e-7, 5.0e-8],
+    k_star: 0.38,
+    pc_at_k1: 2.1e-6,
+    pc_max: 2.9e-6,
+    diluted: true,
+  };
+  const SLIDER = -0.5;
+
+  /** Every Pc the curve could be read as stating, in both console formats. */
+  function statedPcs(curve: Curve): string[] {
+    const pcs = [...(curve.pc ?? []), curve.pc_at_k1!, curve.pc_max!, interpolatePc(curve, SLIDER)!];
+    return pcs.flatMap((p) => [sci(p), sciPlain(p)]);
+  }
+
+  const renderCurve = (curve: Curve) => render(<DilutionCurve curve={curve} log10k={SLIDER} onChange={() => {}} />);
+
+  /** Each label drawn in the plot, one by one. */
+  const plotLabels = (container: HTMLElement) => [...container.querySelectorAll("svg text")].map((t) => t.textContent);
+
+  it("states no Pc, in its caption or on its axes", () => {
+    const { container } = renderCurve(refusedCurve);
+    const text = container.textContent ?? "";
+    for (const stated of statedPcs(refusedCurve)) expect(text).not.toContain(stated);
+    expect(text).not.toMatch(/Pc\s*≈?\s*\d/);
+    expect(plotLabels(container)).not.toContain("1e-6"); // a tick on the Pc axis
+  });
+
+  it("says the model does not apply and the Pc is refused", () => {
+    const text = renderCurve(refusedCurve).container.textContent ?? "";
+    expect(text).toMatch(/model does not apply/i);
+    expect(text).toMatch(/Pc refused/);
+  });
+
+  it("still draws the curve's shape, with the slider that scales the B-plane", () => {
+    const { container } = renderCurve(refusedCurve);
+    expect(container.querySelector("path.curve")?.getAttribute("d")).toBeTruthy();
+    expect(screen.getByRole("slider")).toBeTruthy();
+  });
+
+  it("(the check itself finds the Pc when the model applies)", () => {
+    const { container } = renderCurve({ ...refusedCurve, model_applies: true });
+    expect(container.textContent).toContain(sci(refusedCurve.pc_at_k1!));
+    expect(plotLabels(container)).toContain("1e-6");
   });
 });

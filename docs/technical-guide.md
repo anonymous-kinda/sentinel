@@ -191,7 +191,7 @@ A screened approach needs no special case in the engine. It is an ordinary DERIV
    ▼
  data class                ORIGINATOR=SENTINEL-EXERCISE ─► EXERCISE; SENTINEL-SCREENING ─► DERIVED
    ▼
- group into an event       same object pair and TCA within 60 s; or the id the hub assigned
+ group into an event       same object pair, same data class, TCA within 60 s; or the id the hub assigned
    ▼
  store the raw bytes       sentinel/conjunction/store.py (SQLite; raw bytes are the source of truth)
    ▼
@@ -210,7 +210,7 @@ Step by step:
 2. **Parse.** `sentinel/cdm/kvn.py` reads CCSDS 508.0-B-1 KVN into a `CdmMessage`. Anything that is not a CDM is quarantined as `PARSE_ERROR`; a `ValueError` or `KeyError` later in conversion is quarantined as `UNREADABLE`.
 3. **Admission** follows the repository's ingest rule, and `docs/icd/cdm-profile.md` lists every code. Input that would make the answer *wrong* raises `CdmRejected` with a stable code, and the message is quarantined (`GET /api/quarantine`) and announced on `node.<id>.cdm.rejected`. Input that makes it *incomplete* is accepted with a `CdmWarning`, stored beside the CDM. `sentinel/cdm/validate.py` lists which is which: for example a state labelled in metres is wrong, and a missing covariance is incomplete (the engine will refuse a Pc for it).
 4. **Data class.** Every CDM is REAL, DERIVED or EXERCISE. Sentinel's own generators mark their output at the source, and the mark wins over the route it arrived by (`ORIGINATOR_DATA_CLASS` in `sentinel/conjunction/service.py`).
-5. **Events.** CCSDS CDMs carry no event id, so the rule is explicit: the same primary and secondary with a TCA within 60 s is the same event. The node that first ingests a CDM assigns the id, and it travels with the record (`Sentinel-Event-Id`); an edge never re-derives it (ADR-008).
+5. **Events.** CCSDS CDMs carry no event id, so the rule is explicit: the same primary and secondary, of the same data class, with a TCA within 60 s is the same event. An event holds one data class. Otherwise a screening CDM (DERIVED, geometry only) for the pair of a REAL event would become that event's latest CDM, and its refusal would replace the real Pc. A CDM of another class starts its own event; when that event's id (`<primary>-<secondary>-<TCA to the second>`) is already taken, the data class is appended to it (`_event_for` in `sentinel/conjunction/service.py`, `tests/conjunction/test_event_grouping.py`). The node that first ingests a CDM assigns the id, and it travels with the record (`Sentinel-Event-Id`); an edge never re-derives it (ADR-008).
 6. **Assessment.** `risk.assess()` never raises on bad data. It returns `Method.REFUSED` with a `RefusalReason` and the value that tripped the gate. Results are cached per CDM hash and *engine version*, which is `sentinel.__version__` plus a hash of `AssessmentConfig`; changing a threshold re-assesses from the raw bytes rather than trusting old numbers.
 7. **Publish.** The service publishes the event summary on the node-local subject `node.<id>.cdm.accepted.<event_id>`, with the header `Sentinel-Kind: cdm.accepted`.
 8. **Console.** `GET /api/stream` subscribes to `node.<id>.>` and forwards each message as a server-sent event named by its `Sentinel-Kind`. The console (`web/src/api/client.ts`, `useStream`) bumps a version counter on each event and refetches what it shows. An event published while the stream is down is lost, so the console also refetches every time the stream opens. The node closes a subscriber that falls 256 events behind and logs `Stream subscriber overflowed`, so a lagging console reconnects and refetches rather than silently missing updates. The browser retries a dropped connection by itself but gives up on an HTTP error, such as a proxy's 502 while the node restarts; `useStream` then opens a new stream after the server's 3 s retry interval. Node-local subjects never cross a leaf link (ADR-009).
@@ -447,7 +447,7 @@ Every node setting is an environment variable read at start-up; `sentinel/api/se
 | Variable | Default | Effect |
 |---|---|---|
 | `SENTINEL_LOG_FORMAT` | `text` | `json` writes one JSON object per line (the container sets it); anything else writes `key=value` text |
-| `SENTINEL_LOG_LEVEL` | `INFO` | Root log level for `sentinel serve` when `--log-level` is not given, and for the scripts that call `configure_logging()` without a level (`scripts/trace.py`, `scripts/oscal_evidence.py`, `scripts/sysml_check.py`, `scripts/sbom.py`, `scripts/scan.py`). The flag wins over the variable; `deploy/systemd/sentinel.service` passes `--log-level warning`. |
+| `SENTINEL_LOG_LEVEL` | `INFO` | Root log level for `sentinel serve` when `--log-level` is not given, and for the scripts that call `configure_logging()` without a level (`scripts/trace.py`, `scripts/oscal_evidence.py`, `scripts/sysml_check.py`, `scripts/sbom.py`, `scripts/scan.py`). The flag wins over the variable. `deploy/systemd/sentinel.service` passes no flag: it sets `Environment=SENTINEL_LOG_LEVEL=warning`, and a `SENTINEL_LOG_LEVEL` in its `EnvironmentFile` (`sentinel.env`) overrides that default. |
 
 ### Installer and offline signature verification
 
@@ -829,7 +829,7 @@ The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and t
 | `harness/cluster.py` exits with `missing: run make tools` | `nats-server` or `toxiproxy` not in `.tools/<arch>/` | `make tools` |
 | `python -m harness.report` prints `not writing ddil-results.md: no result for ...` | A scenario has no result in `harness/results/`, so the report would drop it | `make ddil` |
 | The Passes tab lists every imager as skipped, or `GET /api/passes/catalog` is empty on an edge | Element sets have not arrived: the hub holds none (its log says `Element snapshot missing`) or lacks those imagers, or sync has not run yet | `GET /api/sync` on the edge; `SENTINEL_ELEMENTS` and `SENTINEL_SYNC_ELEMENTS` on the hub |
-| `GET /api/passes` returns 409 or 503 | 409: no unit is set. 503: an element set for a catalogued imager cannot be propagated | `PUT /api/passes/unit`; the node log `Pass computation refused` |
+| `GET /api/passes` returns 409 or 503 | 409: no unit is set. 503: an element set for a catalogued imager cannot be used, because its mean motion is not positive or its orbit is outside low Earth orbit (`docs/icd/passes-api.md`) | `PUT /api/passes/unit`; the node log `Pass computation refused` |
 | A node will not start: `SENTINEL_SYNC_ELEMENTS must be one of` | The value is not `catalog` or `all` | the configuration reference above |
 | A node will not start: `SENTINEL_ROLE must be one of` | The value is not `hub`, `edge` or `standalone` | the configuration reference above |
 | Requests reach a node you did not start | `make serve` and `make demo-local` use fixed ports 8000 and 8001; if another process holds them, your node fails to bind and your requests go to the other one | `node_id` and `role` in `GET /api/node`; `ss -ltn` |
