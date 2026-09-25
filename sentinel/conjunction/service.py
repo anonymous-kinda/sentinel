@@ -32,6 +32,7 @@ from ..bus import Bus, subjects
 from ..cdm import Admitted, CdmRejected, admit
 from ..cdm.model import CdmMessage
 from ..clock import Clock
+from ..obs import get_logger
 from ..risk.encounter import build_encounter_plane, curvilinear_check, pc_curve
 from ..risk.engine import assess, finite_eigenvalues
 from ..risk.types import AssessedConjunction, AssessmentConfig, Method, RefusalReason
@@ -39,6 +40,8 @@ from .policy import ConjunctionPolicy, triage
 from .store import CdmRow, ConjunctionStore, EventRow
 from .summaries import compact_summary, disagreements, expand_summary, record_hashes
 from .trajectory import encounter_arcs_ecef
+
+log = get_logger(__name__)
 
 EVENT_TCA_WINDOW_S = 60.0
 EXERCISE_ORIGINATOR = "SENTINEL-EXERCISE"
@@ -140,6 +143,8 @@ class ConjunctionService:
 
     async def _reject(self, sha: str, raw: bytes, code: str, detail: str, source: str) -> IngestResult:
         self.store.quarantine(sha, raw, code, detail, source)
+        # The code, hash and source identify it; the detail can quote the CDM, so it stays out of the log.
+        log.warning("CDM quarantined", code=code, sha256=sha, source=source)
         await self.bus.publish(
             subjects.cdm_rejected(self.node_id),
             json.dumps({"sha256": sha, "code": code, "detail": detail, "source": source}).encode(),
