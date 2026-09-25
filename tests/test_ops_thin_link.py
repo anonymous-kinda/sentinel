@@ -1,11 +1,10 @@
 """Operator data over a thin link: a backlog reaches the edge.
 
 After a long partition the hub holds operator entries the edge has never
-seen, and the whole backlog comes back in one exchange reply. The edge's
-request has to wait long enough for that reply to cross the measured link,
-or it is lost, and the next cycle asks for exactly the same thing.
-
-Bugs in the closed core (sentinel/sync) are strict xfails.
+seen. Sent whole in one reply, that backlog outran the edge's wait on a
+thin link, was lost, and the next cycle asked for exactly the same thing.
+Each exchange now carries a budget each way, what the measured link moves
+in 10 s, so the backlog drains over a few cycles and the wait covers it.
 """
 
 from __future__ import annotations
@@ -15,6 +14,7 @@ import datetime as dt
 
 import pytest
 
+from sentinel.bus import subjects
 from sentinel.clock import FixedClock
 from sentinel.crdt import DotContext, NodeKey, TrustStore, codec
 from sentinel.linkstate import LinkMonitor
@@ -27,7 +27,6 @@ NOW = dt.datetime(2026, 9, 24, 12, 0, tzinfo=dt.UTC)
 KEYS = {n: NodeKey.generate(n) for n in ("hub", "alpha")}
 TRUST = {n: k.public_hex() for n, k in KEYS.items()}
 RATE = 1000.0                                   # ~8 kbit/s: the LIMITED scenario
-CORE = "core bug in sentinel/sync (closed; fix belongs to its owner): "
 
 
 def run(coro):
@@ -38,11 +37,6 @@ def replica(node: str, bus: ThinLinkBus) -> OpsService:
     return OpsService(node, KEYS[node], TrustStore(TRUST), bus, FixedClock(NOW))
 
 
-@pytest.mark.xfail(strict=True, reason=CORE + (
-    "SyncAgent.exchange_ops sizes its timeout from the request (_timeout(len(request) + 2000)), "
-    "but the reply carries the hub's whole backlog: 60 entries are a 26 kB reply that needs 26 s "
-    "at 1000 B/s, and the agent waits 9 s, every cycle, identically, forever. The exchange runs "
-    "first in cycle(), so the manifest and CDM fetch never run either"))
 def test_a_backlog_of_operator_entries_reaches_the_edge_on_a_limited_link():
     bus = ThinLinkBus(RATE)
     hub = replica("hub", bus)
@@ -62,3 +56,86 @@ def test_a_backlog_of_operator_entries_reaches_the_edge_on_a_limited_link():
         except LINK_ERRORS:
             agent.link.observe_failure()
     assert len(edge.log.entries) == 60, "the edge never received the hub's backlog"
+
+
+# ------------------------------------------------------ a budget per exchange
+NOTHING = DotContext().to_wire()
+
+
+def written(node: str, bus: ThinLinkBus, entries: int, annotations: int) -> OpsService:
+    """A replica holding what it wrote through a partition."""
+    ops = replica(node, bus)
+    for n in range(entries):
+        run(ops.append(f"EVENT-{n % 12:03d}", "NOTE", {"text": f"{node} item {n}: " + "x" * 80}, f"op@{node}"))
+    for n in range(annotations):
+        run(ops.annotate(f"EVENT-{n:03d}", "note", f"{node} says {n}", f"op@{node}"))
+    return ops
+
+
+def item_sizes(payload: dict) -> list[int]:
+    return [len(codec.encode(e)) for e in payload["log"]] + [
+        len(codec.encode([k, r])) for k, r in payload["reg"].items()
+    ]
+
+
+def test_a_budgeted_payload_is_the_oldest_first_prefix_that_fits():
+    hub = written("hub", ThinLinkBus(RATE), entries=30, annotations=10)
+    everything = hub.payload_for(NOTHING, NOTHING)
+    part = hub.payload_for(NOTHING, NOTHING, budget_bytes=4000)
+    oldest_first = sorted(everything["log"], key=lambda e: (e["lamport"], e["dot"]))
+    assert part["log"] == oldest_first[: len(part["log"])]
+    assert 0 < len(part["log"]) < len(everything["log"])
+    assert sum(item_sizes(part)) <= 4000
+
+
+def test_a_budget_smaller_than_one_item_still_sends_one():
+    """Every exchange makes progress, however thin the budget."""
+    hub = written("hub", ThinLinkBus(RATE), entries=3, annotations=0)
+    assert len(hub.payload_for(NOTHING, NOTHING, budget_bytes=1)["log"]) == 1
+
+
+class MeasuredLink(ThinLinkBus):
+    """A thin link that records the bytes of every exchange each way."""
+
+    def __init__(self, rate_bytes_per_s: float):
+        super().__init__(rate_bytes_per_s)
+        self.exchanges: list[tuple[int, int]] = []
+
+    async def request(self, subject, data, timeout, headers=None):
+        reply = await super().request(subject, data, timeout, headers)
+        self.exchanges.append((len(data), len(reply.data)))
+        return reply
+
+
+def test_each_exchange_spends_a_bounded_share_of_the_link_and_both_backlogs_converge():
+    """Both sides wrote through a partition. Each exchange carries at most its
+    budget of operator data each way, so the manifest and records behind it
+    still get the link every cycle, and a few exchanges bring both replicas
+    to the same state: the part not yet sent is never lost."""
+    bus = MeasuredLink(RATE)
+    hub = written("hub", bus, entries=60, annotations=20)
+    run(SyncServer(bus, None, hub, "hub").start())
+    edge = written("alpha", bus, entries=60, annotations=20)
+    agent = SyncAgent(bus, None, edge, FixedClock(NOW), "alpha", "hub", LinkMonitor(rate_bytes_per_s=RATE))
+
+    for _ in range(12):
+        agent.link.rate_bytes_per_s = RATE
+        run(agent.exchange_ops())
+    budget = RATE * 10
+    assert all(sent <= budget + 2000 and got <= budget + 2000 for sent, got in bus.exchanges), bus.exchanges
+    assert hub.digest()["log"] == edge.digest()["log"] and len(edge.log.entries) == 120
+    assert hub.digest()["annotations"] == edge.digest()["annotations"]
+
+
+@pytest.mark.parametrize("budget", [0, -1, "10000", True, 2.5, None])
+def test_a_budget_the_hub_cannot_read_gets_everything_not_an_error(budget):
+    """An edge that sends no budget, or one that is not a positive integer,
+    is answered as before the budget existed: with everything it lacks."""
+    bus = ThinLinkBus(10**9)
+    hub = written("hub", bus, entries=30, annotations=0)
+    run(SyncServer(bus, None, hub, "hub").start())
+    request = {"from": "alpha", "log_ctx": NOTHING, "mv_ctx": NOTHING, "push": {"log": [], "reg": {}}}
+    if budget is not None:
+        request["budget"] = budget
+    reply = run(bus.request(subjects.ops_exchange("hub"), codec.encode(request), 5.0))
+    assert len(codec.decode(reply.data)["pull"]["log"]) == 30

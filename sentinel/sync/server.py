@@ -46,6 +46,12 @@ class SyncServer:
         self.requests["ops"] += 1
         request = codec.decode(msg.data)
         merged = await self.ops.merge_payload(request.get("push", {}))
-        pull = self.ops.payload_for(request["log_ctx"], request["mv_ctx"])
+        pull = self.ops.payload_for(request["log_ctx"], request["mv_ctx"], reply_budget(request.get("budget")))
         reply = {"pull": pull, "ctx": self.ops.contexts(), "merged": merged}
         return codec.encode(reply), {"Sentinel-Kind": "ops.exchange"}
+
+
+def reply_budget(value: object) -> int | None:
+    """The bytes of operator data an edge asked for: a positive integer. Anything
+    else, or none, gets everything it lacks, as before the budget existed."""
+    return value if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None

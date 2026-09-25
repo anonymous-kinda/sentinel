@@ -48,6 +48,9 @@ LINK_ERRORS = (RequestTimeout, NoResponders, ConnectionError, OSError)
 RETRY_MAX_PULLS = 32        # the most pulls a refused record sits out
 MANIFEST_MIN_BYTES = 4000   # the manifest wait is sized for at least this
 MANIFEST_MAX_BYTES = 256 * 1024     # and for at most this, however many were lost
+OPS_BUDGET_S = 10.0         # link time one exchange may spend on operator data, each way
+OPS_BUDGET_MAX_BYTES = 256_000
+OPS_REPLY_OVERHEAD_BYTES = 2000     # the hub's contexts and counts around its payload
 # What reading a summary sync cannot read raises. Each is skipped on its own.
 MALFORMED = (TypeError, ValueError, KeyError, OverflowError)
 _SHA16 = re.compile(r"[0-9a-f]{16}")
@@ -192,9 +195,18 @@ class SyncAgent:
         self._backoff = RetryBackoff()
 
     # ------------------------------------------------------------------ helpers
+    def _rate(self) -> float:
+        """The measured link rate in B/s: 1000 until one is measured, never below 400."""
+        return max(self.link.rate_bytes_per_s or 1000.0, 400.0)
+
     def _timeout(self, expected_bytes: int) -> float:
-        rate = self.link.rate_bytes_per_s or 1000.0
-        return 6.0 + 1.5 * expected_bytes / max(rate, 400.0)
+        return 6.0 + 1.5 * expected_bytes / self._rate()
+
+    def _ops_budget(self) -> int:
+        """Bytes of operator data one exchange carries each way: what the link
+        moves in OPS_BUDGET_S, so a backlog drains over several cycles and the
+        manifest and records still get the link in each."""
+        return int(min(self._rate() * OPS_BUDGET_S, OPS_BUDGET_MAX_BYTES))
 
     async def _publish(self, kind: str, payload: dict[str, Any]) -> None:
         await self.bus.publish(
@@ -241,12 +253,14 @@ class SyncAgent:
 
     # ------------------------------------------------------------ operator data
     async def exchange_ops(self) -> dict[str, Any]:
+        budget = self._ops_budget()
         peer = self.ops.peer_contexts(self.hub_id)
-        push = self.ops.payload_for(peer["log_ctx"], peer["mv_ctx"])
-        request = codec.encode({"from": self.node_id, **self.ops.contexts(), "push": push})
+        push = self.ops.payload_for(peer["log_ctx"], peer["mv_ctx"], budget)
+        request = codec.encode({"from": self.node_id, **self.ops.contexts(), "push": push, "budget": budget})
         t0 = time.monotonic()
         reply_msg = await self.bus.request(
-            subjects.ops_exchange(self.hub_id), request, timeout=self._timeout(len(request) + 2000)
+            subjects.ops_exchange(self.hub_id), request,
+            timeout=self._timeout(len(request) + budget + OPS_REPLY_OVERHEAD_BYTES),
         )
         rtt = time.monotonic() - t0
         reply = codec.decode(reply_msg.data)

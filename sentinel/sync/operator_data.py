@@ -23,8 +23,12 @@ class OperatorData(Protocol):
 
     def remember_peer(self, peer: str, contexts: dict[str, Any]) -> None: ...
 
-    def payload_for(self, log_ctx: dict[str, Any], mv_ctx: dict[str, Any]) -> dict[str, Any]:
-        """Everything this replica holds that a peer with these contexts lacks."""
+    def payload_for(
+        self, log_ctx: dict[str, Any], mv_ctx: dict[str, Any], budget_bytes: int | None = None
+    ) -> dict[str, Any]:
+        """What this replica holds that a peer with these contexts lacks: all of
+        it, or with a budget the oldest part whose encoding fits in it (always
+        at least one item). The rest goes in a later exchange."""
         ...
 
     async def merge_payload(self, payload: dict[str, Any]) -> dict[str, Any]:

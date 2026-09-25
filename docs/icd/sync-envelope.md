@@ -27,9 +27,14 @@ The edge's `SyncAgent` runs a cycle every 2 s by default
 (`SENTINEL_SYNC_INTERVAL_S`):
 
 1. **Operator data (P0).** `ops.<hub_id>.exchange` sends this node's CRDT
-   contexts and everything the hub was last known to lack. The reply
-   carries everything this node lacks. It is state-based, so a lost reply
-   only means the next cycle sends a little more.
+   contexts and what the hub was last known to lack. The reply carries what
+   this node lacks. Each way is held to a budget, what the measured link
+   moves in 10 s (at most 256000 bytes): the oldest part that fits, always
+   at least one item. A backlog after a long denial drains over several
+   cycles, and the manifest and records still get the link in each. It is
+   state-based, so a lost reply only means the next cycle sends a little
+   more, and an item's dots enter the peer's context only when that item
+   is merged, so the part not yet sent is never lost.
 2. **Manifest (P0).** `sync.<hub_id>.manifest` fetches one summary per active
    item. It is skipped when the hub's digest is unchanged. Every event is then
    visible on the edge as `HUB_ASSERTED`, before any record arrives.
@@ -52,7 +57,10 @@ A request's timeout is 6 s + 1.5 × expected bytes ÷ max(measured rate,
 responders" is expected over a DDIL link: it counts as a link failure, and
 the next cycle tries again.
 
-A record's expected bytes are its size in the manifest. A manifest's are
+A record's expected bytes are its size in the manifest. An operator-data
+exchange's are the request, the budget and 2000 bytes for the hub's
+contexts. It does not grow after a timeout, so a denial never lengthens
+the wait. A manifest's are
 the size of the last manifest received, at least 4000, doubled for each
 manifest timeout in a row up to 256 KiB. A manifest that outgrew the wait
 still reaches the edge over a thin link, and the first one that arrives
@@ -222,7 +230,7 @@ manifest and never leave the node (ADR-010).
 
 | Subject | Request (CBOR) | Reply |
 |---|---|---|
-| `ops.<hub_id>.exchange` | `from`, `log_ctx`, `mv_ctx`, `push` (`log` entries and `reg` registers the hub lacks) | CBOR `pull` (what the edge lacks), `ctx` (the hub's contexts), `merged` (counts) |
+| `ops.<hub_id>.exchange` | `from`, `log_ctx`, `mv_ctx`, `push` (`log` entries and `reg` registers the hub lacks, within the budget), `budget` (bytes the edge will take in the reply) | CBOR `pull` (what the edge lacks, within the budget; everything if `budget` is missing or not a positive integer), `ctx` (the hub's contexts), `merged` (counts) |
 | `sync.<hub_id>.manifest` | `from`, `known` (the last digest, or null) | CBOR array of summaries; or an empty body with `Sentinel-Unchanged` when `known` is current |
 | `sync.<hub_id>.fetch` | `sha` (sha16), `from` | The record's bytes, exactly as the hub received them |
 
