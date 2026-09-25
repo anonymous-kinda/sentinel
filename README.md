@@ -24,7 +24,7 @@ lands on the disk. So a reassuring number can mean either "we know precisely
 that these will miss" or "we barely know where either object is."
 
 Sentinel computes where the operating point sits relative to that peak and
-says so. Run `python3 scripts/dilution_demo.py`:
+says so. Run `uv run python scripts/dilution_demo.py` (set up as in [Running it](#running-it)):
 
 ```
  sigma (m)            Pc        Pc max        k*                 verdict
@@ -202,10 +202,13 @@ What Sentinel does with element sets instead is *demonstration mode*.
 `sentinel screen --primary 40115 --hours 24` screens a satellite against the
 bundled public CelesTrak snapshot and lists every close approach: object,
 time of closest approach, miss distance and relative speed. Every line says
-*Pc: refused — element sets have no covariance*. With `--out DIR` it writes
-each approach as a DERIVED CCSDS CDM. Fed back in, the risk engine refuses it
-with `NO_COVARIANCE`, the same gate any covariance-less CDM meets. There is
-no special case in the engine (ADR-002).
+*Pc: refused — element sets have no covariance*. The bundled snapshot is one
+small public group, so a 24-hour window at the default 5 km threshold is
+often empty ("no close approaches"); widen it with `--threshold-km 50` to see
+the listing. With `--out DIR` it writes each approach as a DERIVED CCSDS CDM.
+Fed back in, the risk engine refuses it with `NO_COVARIANCE`, the same gate
+any covariance-less CDM meets. There is no special case in the engine
+(ADR-002).
 
 **No number where the model does not apply.** Low relative velocity breaks
 the rectilinear encounter assumption - the geostationary and similar-orbit

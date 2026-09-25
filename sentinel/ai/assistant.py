@@ -47,8 +47,9 @@ TOOL_QUESTIONS = {
 
 def gate(route: Route, min_confidence: float = MIN_CONFIDENCE) -> str | None:
     """Why the assistant would ask back instead of acting; None to act.
-    The eval scores routers through this same gate."""
-    if route.tool is None or route.confidence < min_confidence:
+    The eval scores routers through this same gate. It fails closed: a
+    confidence that is not a probability (NaN, above 1) is not a confident one."""
+    if route.tool not in TOOLS or not min_confidence <= route.confidence <= 1.0:
         return "unsure"
     if TOOLS[route.tool].needs_event and "event_id" not in route.args:
         return "which_event"

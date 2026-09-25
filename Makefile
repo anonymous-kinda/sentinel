@@ -214,3 +214,11 @@ compose-link:  ## shape the leaf link from inside the edge: PRESET=CONNECTED|DEG
 typecheck:  ## mypy over sentinel/: strict on the core and the risk engine, standard on the rest
 	$(UV) run mypy sentinel
 # <<< type check (mypy) <<<
+
+# >>> hosted-AI live check >>>
+# One real call per provider whose key is set (see .env.example); a missing
+# key is reported, not failed. It writes nothing: `make ai-eval` publishes.
+.PHONY: ai-live-check
+ai-live-check:  ## one real Jev routing call and one Claude narration, each only if its key is set; writes nothing
+	$(UV) run python scripts/ai_live_check.py
+# <<< hosted-AI live check <<<

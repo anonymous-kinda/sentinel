@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { LinkInfo } from "../api/types";
 import { postJSON, useResource } from "../api/client";
+import { useAction } from "../lib/useAction";
 
 const PRESETS = ["CONNECTED", "DEGRADED", "LIMITED", "DENIED"] as const;
 
@@ -13,12 +14,18 @@ export function LinkControl({ version }: { version: number }) {
   const [local, setLocal] = useState(0);
   const { data } = useResource<LinkInfo>("/api/link", version + local);
   const [open, setOpen] = useState(false);
+  const preset = useAction();
   if (!data || data.role !== "edge") return null;
   const state = data.monitor.state;
   const emulation = data.emulation;
   return (
     <span className="link-control">
-      <button className={`link-chip link-${state.toLowerCase()}`} onClick={() => setOpen((o) => !o)} title="Link to hub, as measured by the sync agent">
+      <button
+        className={`link-chip link-${state.toLowerCase()}`}
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        title="Link to hub, as measured by the sync agent"
+      >
         LINK {state}
         {data.monitor.rtt_ms !== null && state !== "DENIED" ? ` · ${Math.round(data.monitor.rtt_ms)} ms` : ""}
       </button>
@@ -36,9 +43,12 @@ export function LinkControl({ version }: { version: number }) {
                   <button
                     key={p}
                     className={`btn-small ${emulation.preset === p ? "active" : ""}`}
+                    aria-pressed={emulation.preset === p}
+                    disabled={preset.busy}
                     onClick={async () => {
-                      await postJSON("/api/demo/link", { preset: p });
-                      setLocal((n) => n + 1);
+                      if (await preset.run(() => postJSON("/api/demo/link", { preset: p }), "Link preset failed", { preset: p })) {
+                        setLocal((n) => n + 1);
+                      }
                     }}
                   >
                     {p}
@@ -49,6 +59,11 @@ export function LinkControl({ version }: { version: number }) {
                 {PRESETS.indexOf(emulation.preset as (typeof PRESETS)[number]) >= 0 ? `applied: ${emulation.preset}` : ""}
                 {emulation.toxics.length > 0 ? ` · ${emulation.toxics.map((t) => t.type).join(", ")}` : ""}
               </div>
+              {preset.error && (
+                <div className="form-error" role="alert">
+                  {preset.error}
+                </div>
+              )}
             </>
           ) : (
             <div className="muted small">Link emulation is disabled on this node.</div>

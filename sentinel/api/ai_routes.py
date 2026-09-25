@@ -24,6 +24,7 @@ from ..ai.tools import ToolError, ToolRegistry
 from ..audit import AuditLog
 from ..obs import get_logger
 from . import apidoc
+from .bodies import json_object, read_only_safe
 from .identity import operator_of
 
 log = get_logger(__name__)
@@ -120,11 +121,12 @@ def register(app: FastAPI, node) -> None:
             {"text": apidoc.text(f"1 to {MAX_QUESTION_CHARS} characters")}, required=("text",)
         ),
     )
+    @read_only_safe
     async def ai_ask(request: Request) -> dict:
         """An answer phrased from tool facts (every number checked by the grounding guard), a
         question back when the request is ambiguous, or a draft action that takes effect only
         on /api/ai/confirm. 422 on an empty or over-long question."""
-        text = _question(await request.json())
+        text = _question(await json_object(request))
         answer = await assistant.ask(text, operator_of(request, settings.node_id))
         return answer.to_dict()
 
@@ -142,9 +144,7 @@ def register(app: FastAPI, node) -> None:
         """The operator confirms a draft once; it becomes a signed DECISION. 404 for an unknown
         draft, 409 when the event's CDM changed since the draft (stale), 403 on a read-only
         node."""
-        if settings.read_only:
-            raise HTTPException(403, "this node is read-only")
-        body = await request.json()
+        body = await json_object(request)
         try:
             return await assistant.confirm(
                 str(body.get("draft_id", "")),

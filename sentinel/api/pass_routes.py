@@ -15,7 +15,6 @@ only bus message is the service's coordinate-free passes.updated.
 from __future__ import annotations
 
 import datetime as dt
-import json
 import pathlib
 
 from fastapi import FastAPI, HTTPException, Query, Request, Response
@@ -28,6 +27,7 @@ from ..passes.model import PassWindow
 from ..passes.service import MAX_HOURS, MIN_HOURS, CatalogEntry, NoUnit, PassReport, PassService
 from ..passes.tracks import STEP_S, ecef_track_m
 from ..passes.unit import UnitFile, UnitRejected, unit_from_dict, unit_to_dict
+from .bodies import parse_json
 
 log = get_logger(__name__)
 
@@ -48,10 +48,6 @@ def register(app: FastAPI, node) -> None:
     node.extensions.setdefault("modules", []).append("passes")
     node.extensions.setdefault("elements_changed", []).append(lambda _node: service.elements_changed())
 
-    def writable() -> None:
-        if settings.read_only:
-            raise HTTPException(403, "this node is read-only")
-
     @app.get("/api/passes/unit")
     def get_unit() -> dict:
         if service.unit is None:
@@ -60,7 +56,6 @@ def register(app: FastAPI, node) -> None:
 
     @app.put("/api/passes/unit")
     async def put_unit(request: Request) -> dict:
-        writable()
         try:
             unit = unit_from_dict(await _json_body(request))
         except UnitRejected as exc:
@@ -70,7 +65,6 @@ def register(app: FastAPI, node) -> None:
 
     @app.delete("/api/passes/unit", status_code=204)
     async def delete_unit() -> Response:
-        writable()
         await service.clear_unit()
         return Response(status_code=204)
 
@@ -103,8 +97,8 @@ def register(app: FastAPI, node) -> None:
 
 async def _json_body(request: Request):
     try:
-        return await request.json()
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+        return parse_json(await request.body())
+    except ValueError as exc:
         raise UnitRejected("unit", "body is not JSON") from exc
 
 

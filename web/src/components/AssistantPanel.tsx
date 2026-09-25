@@ -1,6 +1,8 @@
 import { useState } from "react";
 import type { AiAnswer, AiRoute, AiStatus } from "../api/types";
-import { postJSON, useResource } from "../api/client";
+import { HttpError, apiErrorMessage, postJSON, useResource } from "../api/client";
+import { log } from "../lib/log";
+import { useAction } from "../lib/useAction";
 
 /**
  * The assistant: System One routes (Jev, or local rules), code computes,
@@ -84,17 +86,17 @@ export function AnswerCard({
 }) {
   const [rationale, setRationale] = useState("");
   const [recorded, setRecorded] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { busy, error, run } = useAction();
   const route = answer.route;
   const detail = route?.detail ?? {};
 
   async function confirm() {
-    try {
-      const entry = await onConfirm(answer.draft_id as string, rationale);
-      setRecorded(entry.digest ?? "");
-    } catch (e) {
-      setError(String(e));
-    }
+    const draftId = answer.draft_id as string;
+    await run(
+      async () => setRecorded((await onConfirm(draftId, rationale)).digest ?? ""),
+      "Assistant draft confirm failed",
+      { draft_id: draftId },
+    );
   }
 
   return (
@@ -154,7 +156,7 @@ export function AnswerCard({
               onChange={(e) => setRationale(e.target.value)}
               aria-label="rationale"
             />
-            <button className="btn-primary" onClick={confirm}>
+            <button className="btn-primary" onClick={confirm} disabled={busy}>
               Confirm and sign
             </button>
             {error && <span className="form-error">{error}</span>}
@@ -219,7 +221,9 @@ export function AssistantPanel({ version }: { version: number }) {
       const answer = await postJSON<AiAnswer>("/api/ai/ask", { text: q });
       setTurns((t) => [{ question: q, answer }, ...t]);
     } catch (e) {
-      setTurns((t) => [{ question: q, error: String(e) }, ...t]);
+      const reason = apiErrorMessage(e);
+      log.error({ status: e instanceof HttpError ? e.status : null, error: reason }, "Assistant question failed");
+      setTurns((t) => [{ question: q, error: reason }, ...t]);
     } finally {
       setBusy(false);
     }

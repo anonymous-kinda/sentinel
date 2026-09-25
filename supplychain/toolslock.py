@@ -5,7 +5,8 @@
 `arch` is x86_64, aarch64 or noarch (trust roots, signature bundles). `member`
 is the path inside a .tar.gz, or `-` for a file served as-is. A download is
 hashed before anything is written; a mismatch raises and leaves no file
-behind (SR-3, SR-11).
+behind (SR-3, SR-11). A file already on disk is reused only if it still
+hashes to what was written after that verified download.
 """
 
 from __future__ import annotations
@@ -87,7 +88,7 @@ def fetch(pin: ToolPin, dest_dir: pathlib.Path, opener: Opener = urllib.request.
     """Download, verify and install one pinned file into dest_dir."""
     dest = dest_dir / pin.name
     stamp = dest_dir / f".{pin.name}.sha256"
-    if dest.exists() and stamp.exists() and stamp.read_text().strip() == pin.sha256:
+    if dest.exists() and stamp.exists() and stamp.read_text().strip() == _stamp(pin, dest.read_bytes()):
         return dest
     with opener(pin.url, timeout=120) as response:
         blob = response.read()
@@ -99,9 +100,15 @@ def fetch(pin: ToolPin, dest_dir: pathlib.Path, opener: Opener = urllib.request.
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest.write_bytes(payload)
     dest.chmod(0o644 if pin.is_data else 0o755)
-    stamp.write_text(pin.sha256 + "\n")
+    stamp.write_text(_stamp(pin, payload) + "\n")
     log.info("Pinned tool installed", tool=pin.name, version=pin.version, arch=pin.arch, sha256=pin.sha256)
     return dest
+
+
+def _stamp(pin: ToolPin, installed: bytes) -> str:
+    """The pin a file was verified against, and the digest of the file as
+    written: a member extracted from an archive has no pin of its own."""
+    return f"{pin.sha256} {hashlib.sha256(installed).hexdigest()}"
 
 
 def _extract(blob: bytes, member: str) -> bytes:

@@ -14,6 +14,10 @@ from typing import Protocol
 
 from .geometry import STALE_AFTER_DAYS, element_pad_s
 
+# The interval a pass answer covers, in hours: the node computes no longer.
+MIN_HOURS = 1
+MAX_HOURS = 72
+
 
 @dataclasses.dataclass(frozen=True)
 class Unit:
