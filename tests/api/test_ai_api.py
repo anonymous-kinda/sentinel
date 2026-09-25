@@ -5,6 +5,7 @@ local tier end to end; provider selection is checked through /status.
 """
 
 import datetime as dt
+import logging
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,6 +14,7 @@ from sentinel.api import create_app
 from sentinel.api.settings import Settings
 from sentinel.clock import FixedClock
 from sentinel.conjunction.exercise import generate
+from sentinel.obs import JsonFormatter
 
 EPOCH = dt.datetime(2026, 9, 23, 12, 0, tzinfo=dt.UTC)
 NOW = EPOCH + dt.timedelta(hours=1)
@@ -130,12 +132,44 @@ def test_a_read_only_node_offers_no_draft_it_could_never_confirm(tmp_path):
     assert "read-only" in a["text"]
 
 
+def test_a_refused_confirm_is_in_the_audit_record(client):
+    assert client.post("/api/ai/confirm", json={"draft_id": "0123456789abcdef"}, headers=OP2).status_code == 404
+    last = client.get("/api/ai/audit").json()[-1]
+    assert (last["kind"], last["status"], last["reason"], last["author"]) == ("confirm", "refused", "unknown_draft", "op2")
+    assert client.get("/api/ai/audit/verify").json()["ok"]
+
+
 def test_confirming_an_evicted_draft_is_404_unknown_draft(client):
     client.app.state.node.extensions["ai"].max_drafts = 1
     first, second = (client.post("/api/ai/ask", json={"text": "/draft 118 monitor"}, headers=OP1).json() for _ in range(2))
     r = client.post("/api/ai/confirm", json={"draft_id": first["draft_id"]}, headers=OP2)
     assert r.status_code == 404 and r.json()["detail"] == "unknown_draft"
     assert client.post("/api/ai/confirm", json={"draft_id": second["draft_id"]}, headers=OP2).status_code == 201
+
+
+def test_a_question_holding_the_nodes_unit_position_is_answered_on_the_node(tmp_path, monkeypatch, caplog):
+    """The assistant reads the pass module's unit (ADR-010). With both hosted
+    providers configured and approved, a question naming the unit's latitude
+    is routed and phrased locally, and no log line carries the position."""
+    caplog.set_level(logging.DEBUG)
+    monkeypatch.setenv("TYPESAFE_API_KEY", "test-key")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    c = node(tmp_path, ai_cloud=True)
+    try:
+        question = "which events matter to us at 34.05?"
+        assistant = c.app.state.node.extensions["ai"]
+        assert assistant.tier(question)["router"] == "jev", "no unit is held yet: the number is just a number"
+
+        unit = {"unit_id": "OPSEC-1", "lat_deg": 34.0522, "lon_deg": -118.2437, "alt_m": 90.0, "reaction_time_min": 30.0}
+        assert c.put("/api/passes/unit", json=unit).status_code == 200
+        a = c.post("/api/ai/ask", json={"text": question}, headers=OP1).json()
+        assert (a["tier"]["router"], a["tier"]["narrator"]) == ("deterministic", "template")
+        assert "position" in a["tier"]["reason"] and a["fallbacks"] == []
+        assert c.get("/api/ai/status").json()["tier"]["router"] == "jev", "the node's tier is unchanged"
+    finally:
+        c.__exit__(None, None, None)
+    logged = "\n".join(JsonFormatter().format(record) for record in caplog.records)
+    assert "34.05" not in logged and "118.24" not in logged
 
 
 def test_hosted_providers_are_used_only_with_opt_in(tmp_path, monkeypatch):

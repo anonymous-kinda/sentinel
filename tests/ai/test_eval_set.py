@@ -4,6 +4,7 @@ import asyncio
 import collections
 import pathlib
 
+from sentinel.ai.assistant import gate
 from sentinel.ai.catalog import BANDS, DECISIONS, TOOLS
 from sentinel.ai.evaluation import load_cases, run_eval
 from sentinel.ai.router import DeterministicRouter, RoutingContext
@@ -26,6 +27,18 @@ def test_the_set_covers_every_tool_and_out_of_scope_requests(registry):
         assert c.band is None or c.band in BANDS, c.id
         assert c.decision is None or c.decision in DECISIONS, c.id
         assert (c.decision is not None) == (c.tool == "draft_decision"), c.id
+
+
+def test_the_event_gate_holds_back_no_event_the_local_router_resolved(registry):
+    """The event half of the gate is for a router that can be unsure which
+    event is meant. A rule match is exact, so on every labelled request the
+    floor acts exactly where it did before, and its published coverage holds."""
+    context = RoutingContext.from_facts(registry.execute("list_events", {})["events"])
+    for case in load_cases(EVAL_SET):
+        route = asyncio.run(DeterministicRouter().route(case.text, context))
+        if "event_id" in route.args:
+            assert route.event_probabilities == {route.args["event_id"]: 1.0}, case.id
+            assert gate(route) != "which_event", case.id
 
 
 def test_the_baseline_is_scored_on_every_case(registry):

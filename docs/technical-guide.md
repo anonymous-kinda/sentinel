@@ -136,7 +136,7 @@ The imports that actually exist between packages (measured with grimp, the graph
 | `cdm-is-a-seam` | The CDM codec (ADR-001 seam) does not depend on services above it | `sentinel.cdm` | sentinel.conjunction, sentinel.api, sentinel.bus |
 | `sync-is-mission-agnostic` | Sync, CRDTs and operator data know nothing about any mission module | `sentinel.sync`, `sentinel.crdt`, `sentinel.ops`, `sentinel.linkstate` | sentinel.conjunction, sentinel.risk, sentinel.cdm, sentinel.api, sentinel.passes |
 | `ai-does-no-math` | The AI layer has no path to the maths: it asks tools, never computes | `sentinel.ai` | sentinel.risk, sentinel.cdm, numpy, scipy |
-| `hosted-ai-at-the-edges` | Hosted AI SDKs are confined to their adapters | `sentinel.ai.assistant`, `sentinel.ai.catalog`, `sentinel.ai.grounding`, `sentinel.ai.narrate`, `sentinel.ai.policy`, `sentinel.ai.router`, `sentinel.ai.tools` | typesafe_sdk, anthropic |
+| `hosted-ai-at-the-edges` | Hosted AI SDKs are confined to their adapters | every `sentinel.ai` module but the two adapters, as modules (`as_packages = false`): `sentinel.ai` (the package's `__init__`), `sentinel.ai.assistant`, `sentinel.ai.calibration`, `sentinel.ai.catalog`, `sentinel.ai.evaluation`, `sentinel.ai.grounding`, `sentinel.ai.live_check`, `sentinel.ai.narrate`, `sentinel.ai.opsec`, `sentinel.ai.policy`, `sentinel.ai.router`, `sentinel.ai.tools`. `tests/ai/test_contracts.py` fails when a new module is left off. | typesafe_sdk, anthropic |
 | `passes-is-independent` | The pass module knows nothing about conjunction risk, sync internals or the API | `sentinel.passes` | sentinel.risk, sentinel.cdm, sentinel.conjunction, sentinel.sync, sentinel.api, sentinel.ai |
 | `ephemeris-and-adapters-are-independent` | Ephemeris codecs and source adapters know nothing about risk, CDM services, conjunction, sync, the API or AI | `sentinel.ephemeris`, `sentinel.adapters` | sentinel.risk, sentinel.cdm, sentinel.conjunction, sentinel.sync, sentinel.api, sentinel.ai (one ignored import: `sentinel.ephemeris.oem -> sentinel.cdm.timefmt`) |
 | `ephemeris-is-below-passes` | Ephemeris tables sit below the pass module and the adapters that feed them | `sentinel.ephemeris` | sentinel.passes, sentinel.adapters |
@@ -306,7 +306,8 @@ The pipeline, in `sentinel/ai/assistant.py`:
 
 ```
  text ─► router (Jev | deterministic) ─► Route: tool, arguments, confidence
-      ─► gate ─────────────────────────► ask back if confidence < 0.5, or an event tool has no event
+      ─► gate ─────────────────────────► ask back if the tool or the event choice is below 0.5 confident,
+                                         or an event tool has no event
       ─► tool (sentinel/ai/tools.py) ──► facts: every number from Sentinel's own services
       ─► narrator (Claude | template) ─► prose
       ─► grounding guard ──────────────► an AI answer stating a number the facts lack is withheld;
@@ -318,16 +319,17 @@ The pipeline, in `sentinel/ai/assistant.py`:
 |---|---|---|
 | Tool catalog | `sentinel/ai/catalog.py` | `list_events`, `get_assessment`, `explain_dilution`, `link_status`, `sync_queue`, `draft_decision`. The descriptions are also Jev's option criteria. |
 | Tools | `sentinel/ai/tools.py` | deterministic code over the conjunction, ops, link and sync services. Dates and hours are formatted here, by code. A tool that writes returns a draft. |
-| Deterministic router | `sentinel/ai/router.py` | slash commands at confidence 1.0, keyword rules at 0.6 |
+| Deterministic router | `sentinel/ai/router.py` | slash commands at confidence 1.0, keyword rules at 0.6; an event it resolves by position or catalog number is an exact match, stated at 1.0 |
 | Jev router | `sentinel/ai/router_jev.py` | model pinned to `jev-1.13.0`. Typed Choice questions whose options are exactly the catalog and this node's events; one attempt, no retries |
 | Template narrator | `sentinel/ai/narrate.py` | always available; tested grounded on every tool and exercise event |
 | Claude narrator | `sentinel/ai/narrate_claude.py` | model pinned to `claude-opus-5`; no retries |
 | Tier policy | `sentinel/ai/policy.py` | a pure function of the measured link, the marking and operator opt-in |
-| Grounding guard | `sentinel/ai/grounding.py` | numbers must match, at the precision stated, a number in the facts or the question. Numbers glued to units are checked too. |
+| Position guard | `sentinel/ai/opsec.py` | a question that holds a position is kept off hosted AI (ADR-010); the unit is read from the pass module through `node.extensions`, read-only |
+| Grounding guard | `sentinel/ai/grounding.py` | numbers must match, at the precision stated, a number in the facts or the question. Numbers glued to units are checked too. Identifiers are not quantities: a field named `*_id`, `*_ids`, `*_by`, `sha*`, `*hash` or `digest` grounds only a whole mention of itself, so "41" inside a sha256 grounds no "41 m". |
 | Eval | `sentinel/ai/evaluation.py`, `sentinel/ai/calibration.py`, `scripts/ai_eval.py` | routers scored through the same gate on `evals/routing.jsonl` |
 | HTTP | `sentinel/api/ai_routes.py` | `GET /api/ai/status`, `POST /api/ai/ask`, `POST /api/ai/confirm`, `GET /api/ai/audit`, `GET /api/ai/audit/verify` |
 
-**Tier policy.** Hosted AI needs a marking that starts with UNCLASSIFIED and operator opt-in (`SENTINEL_AI_CLOUD=1`). Then:
+**Tier policy.** Hosted AI needs exactly an allow-listed marking, `UNCLASSIFIED` or `UNCLASSIFIED // EXERCISE`, and operator opt-in (`SENTINEL_AI_CLOUD=1`). Case and the spacing around `//` are ignored; nothing else is. A caveat such as `UNCLASSIFIED//CUI` or `UNCLASSIFIED//FOUO` limits who may receive the text, and a hosted service is a recipient no caveat names, so a caveated or unknown marking keeps the assistant on the node and the tier's reason says so. Then:
 
 | Measured link | Router | Narrator |
 |---|---|---|
@@ -335,13 +337,15 @@ The pipeline, in `sentinel/ai/assistant.py`:
 | LIMITED | Jev, if configured | template |
 | DENIED, UNKNOWN | deterministic | template |
 
+**A position never goes to a hosted service.** Jev and Claude receive the question's text, so a question that holds a position is routed and phrased on the node, and the tier's reason cites ADR-010. Either rule is enough. The first is a decimal number that states the latitude or longitude of the unit the node holds, at the precision typed (`34.05` for 34.0522; a whole number alone is not matched). The second is position notation for any unit: an MGRS reference, a degree sign, a pair with hemisphere letters, or a pair of decimal degrees to three places. A false positive costs one local answer; none of the 60 eval requests is one. Nothing logs the matched text. The question itself stays in the node-local audit file, as every ask does.
+
 An edge measures its hub link and uses that as the WAN state. A hub or standalone node has no upstream link to measure; it is treated as CONNECTED, and `/api/ai/status` says the state is assumed. A hosted call that fails for any reason falls back to the local tier inside the same answer, and the answer lists the fallback.
 
 **Hosted SDKs load lazily.** A provider is loaded only when its key variable is set, and its SDK is imported only then (`_load_provider` in `sentinel/api/ai_routes.py`). A bundle built without the `ai` extra serves the local tier.
 
 **Readiness check.** `make ai-live-check` makes one real Jev routing call and one real Claude narration through the production adapters, each only if its key is set (`.env.example` lists them; copy it to `.env`, which `make ai-live-check`, `make ai-eval` and `make demo-local` read, with an exported variable winning). It prints the tool, confidence, latency and bytes for Jev, and the model, latency, grounding result and tokens for Claude. A key that is not set is reported, not failed; a configured call that fails exits 1 with the adapter's reason code. It writes nothing: `make ai-eval` publishes.
 
-**Drafts, not actions.** `draft_decision` returns a draft id. `POST /api/ai/confirm` turns it into a signed `DECISION` entry once, carrying router, confidence, model and the audit sequence of the ask. It is refused with HTTP 409 if the CDM the draft was made against has been superseded since. At most 100 unconfirmed drafts are held. Past that the oldest is forgotten (logged as `Assistant draft evicted`), and confirming it answers 404 `unknown_draft`. A read-only node answers questions but drafts nothing: asked to draft, it answers with a question saying the node is read-only.
+**Drafts, not actions.** `draft_decision` returns a draft id. `POST /api/ai/confirm` turns it into a signed `DECISION` entry once, carrying router, confidence, model and the audit sequence of the ask. It is refused with HTTP 409 if the CDM the draft was made against has been superseded since. The first confirm spends the draft whatever comes of it: a stale draft can never become current again, so a retry answers 404 `unknown_draft` and the operator redrafts. Every confirm is a line in the audit record, with `status` `confirmed`, `refused` (and the reason code) or `failed` (and the error type), and a refusal is logged as `AI draft confirm refused`. At most 100 unconfirmed drafts are held. Past that the oldest is forgotten (logged as `Assistant draft evicted`), and confirming it answers 404 `unknown_draft`. A read-only node answers questions but drafts nothing: asked to draft, it answers with a question saying the node is read-only.
 
 **Audit.** The log lives at `<SENTINEL_VAR>/ai-audit.jsonl`. `GET /api/ai/audit/verify` re-reads the file, recomputes the chain and reports the first bad line. It also holds the file against the hashes this process has seen, so an edit, a deletion or a truncation made while the node runs is found at its line. A line torn by a power cut breaks the chain at that line but never stops the node, and later entries still append. A truncation made while the node is down is not detectable (`SECURITY.md`, gap 3).
 
@@ -428,7 +432,7 @@ Every node setting is an environment variable read at start-up; `sentinel/api/se
 | `SENTINEL_DB` | `:memory:` | SQLite file for CDMs, assessments and operator data. The default keeps nothing across restarts. |
 | `SENTINEL_VAR` | `var` (relative to the working directory) | Writable state: `keys/<node_id>.ed25519.pem`, `keys/<node_id>.pub`, `ai-audit.jsonl` and the unit file `unit.json` (mode 0600). Under systemd it must point inside the writable prefix (`tests/test_deploy_env.py`). |
 | `SENTINEL_TRUST_FILE` | unset | JSON map of node id to Ed25519 public key (hex). Unset: the node trusts only itself and merges no one else's decision entries. |
-| `SENTINEL_MARKING` | `UNCLASSIFIED // EXERCISE` | Classification banner shown in the console. Hosted AI is allowed only when it starts with `UNCLASSIFIED`. |
+| `SENTINEL_MARKING` | `UNCLASSIFIED // EXERCISE` | Classification banner shown in the console. Hosted AI is allowed only under exactly `UNCLASSIFIED` or `UNCLASSIFIED // EXERCISE` (case and spacing around `//` aside); any caveat keeps it local. |
 | `SENTINEL_EXERCISE` | on | Run the scripted exercise scenario (`sentinel/conjunction/exercise.py`); its CDMs carry `ORIGINATOR=SENTINEL-EXERCISE` |
 | `SENTINEL_LIBRARY` | on | Load NASA CARA's 53 operational conjunctions as REAL reference events at start-up |
 | `SENTINEL_READ_ONLY` | off | Public node: ingest, screening, operator writes, setting or clearing the unit, and AI confirmation return HTTP 403 |
@@ -437,7 +441,7 @@ Every node setting is an environment variable read at start-up; `sentinel/api/se
 | `SENTINEL_ELEMENTS` | unset | Path of a CelesTrak OMM JSON snapshot to load at start-up. Unset: a hub or standalone node loads the vendored snapshot under `SENTINEL_FIXTURES`, and an edge loads none and receives element sets from its hub. A missing file is logged (`Element snapshot missing`) and the node starts with no element sets. |
 | `SENTINEL_SYNC_ELEMENTS` | `catalog` | Which element sets this node offers edges over sync: `catalog` (only the imagers in `sentinel/passes/imaging.toml`) or `all` (every set it holds). Any other value stops the node at start-up with `ValueError`. |
 | `SENTINEL_AI` | on | Register the assistant's routes. Off: `/api/ai/status` returns `{"enabled": false}`. |
-| `SENTINEL_AI_CLOUD` | off | Operator opt-in to hosted AI (Jev routing, Claude phrasing). The tier policy still requires an UNCLASSIFIED marking and a usable measured link. |
+| `SENTINEL_AI_CLOUD` | off | Operator opt-in to hosted AI (Jev routing, Claude phrasing). The tier policy still requires an allow-listed marking (`SENTINEL_MARKING`, above), a usable measured link and a question that holds no position. |
 | `SENTINEL_DEMO_CONTROLS` | off | Enable `POST /api/demo/link`, accepted from localhost only, which applies Toxiproxy link presets. For demonstrations and the harness. |
 | `SENTINEL_TOXIPROXY_API` | unset (the control then uses `http://127.0.0.1:8474`) | Toxiproxy's API, for link emulation |
 | `SENTINEL_CLOCK` | `real` | `real`; `sim:<ISO-8601 epoch>,<scale>` (starts at the epoch and runs `<scale>` times wall speed); `fixed:<ISO-8601 instant>`. The epoch or instant may be `now`. The console labels a non-real clock. |

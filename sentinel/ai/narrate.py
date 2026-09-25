@@ -176,8 +176,8 @@ def _sync_queue(f: dict) -> str:
         for item in f["queue"]:
             eta = "" if item.get("eta_s") is None else f", ETA {_num(item['eta_s'])} s"
             lines.append(f"- {item['event_id']} ({item['class']}): {_num(item['bytes'])} bytes{eta}")
-    if f["summary_only"]:
-        lines.append("Summary only (the full CDM cannot arrive before its deadline): " + ", ".join(f["summary_only"]))
+    if f["summary_only_ids"]:
+        lines.append("Summary only (the full CDM cannot arrive before its deadline): " + ", ".join(f["summary_only_ids"]))
     return "\n".join(lines)
 
 

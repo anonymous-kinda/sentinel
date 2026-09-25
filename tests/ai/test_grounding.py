@@ -5,6 +5,7 @@ precision stated, comes from a tool result - or from the operator's own
 question. Anything else is withheld: the model has no path to the math.
 """
 
+from sentinel.ai import grounding
 from sentinel.ai.grounding import check_grounding, numbers_in_text
 
 EVIDENCE = {
@@ -61,6 +62,53 @@ def test_numbers_glued_to_units_or_letters_are_still_checked():
 def test_a_sign_carried_in_words_is_grounded():
     """'passed 3.2 h ago' states a tool's -3.2 as a magnitude."""
     assert check_grounding("The commit point passed 3.2 h ago.", {"time_to_mcp_h": -3.2}).ok
+
+
+# What draft_decision returns: the event's facts, and the CDM the draft is
+# made against, named by two hashes and a message id.
+DRAFT = {
+    "event_id": "99001-99118-20260924T205723", "secondary": "EX-DEB 118 (EXERCISE)", "secondary_id": "99118",
+    "pc": 0.006271, "miss_distance_m": 200.3, "time_to_mcp_h": 10.9, "draft": True, "decision": "MANEUVER",
+    "against": {
+        "cdm_sha256": "3f41c07e9a2b6d15e8f0a4c3b27d9e61f5a8c0b4d2e7f9a1c3b5d7e9f0a2c4e6",
+        "inputs_hash": "b7e2a9f58d06c3e8a5f7b1d9c2e4a6f8b0d3e5a7c9f1b2d4e6a8c0e2f4a6b8d0",
+        "message_id": "EX-RED-03-20260923T120500",
+    },
+}
+
+
+def test_digits_inside_a_hash_or_an_id_never_ground_a_quantity():
+    """'41' inside a sha256 is part of a name, not a miss distance. Neither
+    are the date and time inside an event id or a message id."""
+    assert check_grounding("Miss 200 m.", DRAFT).ok
+    result = check_grounding("Miss 41 m.", DRAFT)
+    assert not result.ok and result.unsupported == ["41"]
+    assert not check_grounding("Miss 205723 m.", DRAFT).ok
+    assert not check_grounding("Relative speed 120500 m/s.", DRAFT).ok
+
+
+def test_an_identifier_grounds_a_mention_of_itself_whole():
+    text = "DRAFT: MANEUVER on 99001-99118-20260924T205723 (object 99118), against CDM EX-RED-03-20260923T120500."
+    assert check_grounding(text, DRAFT).ok
+    assert not check_grounding("Against CDM EX-RED-03-20260923T120501.", DRAFT).ok, "a near miss is not a mention"
+
+
+def test_a_queued_records_hash_and_the_summary_only_event_ids_ground_nothing():
+    facts = {"count": 1, "queue": [{"event_id": "E1", "sha": "9c41e0aa13f2b7d4", "bytes": 2961,
+                                    "class": "P1_URGENT", "eta_s": 1.4}],
+             "summary_only_ids": ["99001-99412-20260925T075723"]}
+    assert check_grounding("E1 (P1_URGENT): 2,961 bytes, ETA 1.4 s. Summary only: 99001-99412-20260925T075723.", facts).ok
+    assert not check_grounding("ETA 41 s.", facts).ok
+    assert not check_grounding("ETA 13 s.", facts).ok
+    assert not check_grounding("75723 bytes waiting.", facts).ok
+
+
+def test_the_guard_says_what_the_operator_sees_in_place_of_a_withheld_answer():
+    """The assistant shows the template answer (tests/ai/test_assistant.py::
+    test_an_ungrounded_ai_answer_is_withheld_and_the_facts_shown), and the
+    module that withholds must say the same."""
+    doc = " ".join(grounding.__doc__.split())
+    assert "the template answer is shown instead" in doc and "raw tool results" not in doc
 
 
 def test_absurd_exponents_never_crash_the_guard():

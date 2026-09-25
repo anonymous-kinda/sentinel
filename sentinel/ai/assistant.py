@@ -9,9 +9,10 @@
                                         facts do not is withheld
          --audit----------------------> one hash-chained line per ask
 
-The tier policy picks router and narrator from the measured link state
-and the classification marking; a hosted service that fails falls back
-to the local one, and the answer says so. A tool that writes yields a
+The tier policy picks router and narrator from the measured link state,
+the classification marking and whether the question holds a position
+(opsec.py); a hosted service that fails falls back to the local one, and
+the answer says so. A tool that writes yields a
 draft, and only `confirm` - a person - records it.
 """
 
@@ -27,6 +28,7 @@ from ..obs import get_logger
 from .catalog import DECISIONS, TOOLS
 from .grounding import check_grounding
 from .narrate import Narrator, NarratorUnavailable, TemplateNarrator
+from .opsec import Position, holds_position
 from .policy import TierInputs, decide
 from .router import DeterministicRouter, Route, Router, RouterUnavailable, RoutingContext
 from .tools import ToolError, ToolRegistry
@@ -36,6 +38,8 @@ log = get_logger(__name__)
 MIN_CONFIDENCE = 0.5
 # Unconfirmed drafts a node holds; past this the oldest is forgotten.
 MAX_DRAFTS = 100
+# A draft id is 16 hex characters; the audit records no more than this of one sent.
+MAX_DRAFT_ID_CHARS = 64
 COMMANDS = "Try /events [red|amber] [48h], /assess <n>, /explain <n>, /link, /queue or /draft <n> <decision>."
 TOOL_QUESTIONS = {
     "missing_event": "Which event?",
@@ -50,13 +54,21 @@ TOOL_QUESTIONS = {
 
 def gate(route: Route, min_confidence: float = MIN_CONFIDENCE) -> str | None:
     """Why the assistant would ask back instead of acting; None to act.
-    The eval scores routers through this same gate. It fails closed: a
-    confidence that is not a probability (NaN, above 1) is not a confident one."""
-    if route.tool not in TOOLS or not min_confidence <= route.confidence <= 1.0:
+    The eval scores routers through this same gate. The tool choice and,
+    for an event tool, the event choice must each clear it. It fails
+    closed: a confidence that is missing or is not a probability (NaN,
+    above 1) is not a confident one."""
+    if route.tool not in TOOLS or not _confident(route.confidence, min_confidence):
         return "unsure"
-    if TOOLS[route.tool].needs_event and "event_id" not in route.args:
-        return "which_event"
+    if TOOLS[route.tool].needs_event:
+        event_id = route.args.get("event_id")
+        if event_id is None or not _confident(route.event_probabilities.get(event_id), min_confidence):
+            return "which_event"
     return None
+
+
+def _confident(p: float | None, min_confidence: float) -> bool:
+    return p is not None and min_confidence <= p <= 1.0
 
 
 @dataclasses.dataclass
@@ -104,7 +116,11 @@ class Assistant:
         min_confidence: float = MIN_CONFIDENCE,
         max_drafts: int = MAX_DRAFTS,
         read_only: bool = False,
+        unit_position: Callable[[], Position | None] = lambda: None,
     ):
+        """`unit_position`: the (lat, lon) of the unit this node holds, read at
+        each question; a question that states it is never sent to a hosted
+        service (ADR-010)."""
         self.tools = tools
         self.marking = marking
         self.cloud_opt_in = cloud_opt_in
@@ -114,15 +130,24 @@ class Assistant:
         self.max_drafts = max_drafts
         self.read_only = read_only
         self._link_state = link_state
+        self._unit_position = unit_position
         self._routers: dict[str, Router] = {"deterministic": DeterministicRouter(), **({"jev": jev} if jev else {})}
         self._narrators: dict[str, Narrator] = {"template": TemplateNarrator(), **({"claude": llm} if llm else {})}
         self._drafts: dict[str, _Draft] = {}
 
     # ------------------------------------------------------------------ tier
-    def tier(self) -> dict:
+    def tier(self, question: str = "") -> dict:
+        """The tier for this question; with none, the node's own tier."""
         link_state = self._link_state()
         decision = decide(
-            TierInputs(link_state, self.marking, "jev" in self._routers, "claude" in self._narrators, self.cloud_opt_in)
+            TierInputs(
+                link_state,
+                self.marking,
+                "jev" in self._routers,
+                "claude" in self._narrators,
+                self.cloud_opt_in,
+                question_holds_position=holds_position(question, self._unit_position()),
+            )
         )
         return {
             "router": decision.router,
@@ -134,7 +159,7 @@ class Assistant:
 
     # ------------------------------------------------------------------- ask
     async def ask(self, text: str, author: str) -> Answer:
-        answer = await self._answer(text, self.tier())
+        answer = await self._answer(text, self.tier(text))
         record = {
             "kind": "ask",
             "author": author,
@@ -149,7 +174,7 @@ class Assistant:
             "answer": answer.text,
             "facts_sha256": None if answer.facts is None else _sha256(answer.facts),
         }
-        answer.audit_seq = self.audit.append(record, at=self.clock.now().isoformat())["seq"]
+        answer.audit_seq = self._audit(record)["seq"]
         if answer.status == "draft":
             answer.draft_id = secrets.token_hex(8)
             self._hold_draft(answer.draft_id, _Draft(answer.facts, answer.route, answer.audit_seq))
@@ -250,20 +275,37 @@ class Assistant:
 
     # --------------------------------------------------------------- confirm
     async def confirm(self, draft_id: str, author: str, rationale: str = "") -> dict:
-        """A person turns a draft into a signed DECISION. Once only."""
+        """A person turns a draft into a signed DECISION. Once only: the first
+        attempt spends the draft, whatever comes of it. A draft refused as
+        stale can never become current again, so holding it would only invite
+        the same refusal. Every attempt is audited, refused ones too (ADR-007)."""
         draft = self._drafts.pop(draft_id, None)
-        if draft is None:
-            raise ToolError("unknown_draft", draft_id)
-        provenance = {
+        ask_seq = None if draft is None else draft.ask_seq
+        attempt = {"kind": "confirm", "author": author, "draft_id": draft_id[:MAX_DRAFT_ID_CHARS], "ask_seq": ask_seq}
+        try:
+            if draft is None:
+                raise ToolError("unknown_draft", draft_id)
+            entry = await self.tools.record_decision(draft.facts, author, rationale, self._provenance(draft))
+        except ToolError as exc:
+            self._audit({**attempt, "status": "refused", "reason": exc.code, "entry": None})
+            log.warning("AI draft confirm refused", reason=exc.code, ask_seq=ask_seq)
+            raise
+        except Exception as exc:
+            self._audit({**attempt, "status": "failed", "reason": type(exc).__name__, "entry": None})
+            log.error("AI draft confirm failed", error=type(exc).__name__, ask_seq=ask_seq)
+            raise
+        self._audit({**attempt, "status": "confirmed", "reason": None, "entry": entry["digest"]})
+        log.info("AI draft confirmed", event_id=draft.facts["event_id"], ask_seq=ask_seq)
+        return entry
+
+    @staticmethod
+    def _provenance(draft: _Draft) -> dict:
+        return {
             "router": draft.route["provider"],
             "confidence": draft.route["confidence"],
             "model": draft.route["detail"].get("model"),
             "ask_seq": draft.ask_seq,
         }
-        entry = await self.tools.record_decision(draft.facts, author, rationale, provenance)
-        self.audit.append(
-            {"kind": "confirm", "author": author, "draft_id": draft_id, "ask_seq": draft.ask_seq, "entry": entry["digest"]},
-            at=self.clock.now().isoformat(),
-        )
-        log.info("AI draft confirmed", event_id=draft.facts["event_id"], ask_seq=draft.ask_seq)
-        return entry
+
+    def _audit(self, record: dict) -> dict:
+        return self.audit.append(record, at=self.clock.now().isoformat())

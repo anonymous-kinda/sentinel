@@ -2,9 +2,15 @@
 
 Every numeric token in the answer must match - at the precision the answer
 states it - a number in the tool results (values, numbers inside returned
-identifiers and names, or the length of a returned list), or a number in
-the operator's own question. An answer that introduces any other number
-is withheld and the raw tool results are shown instead.
+names, or the length of a returned list), or a number in the operator's
+own question. An answer that introduces any other number is withheld: the
+template answer is shown instead, phrased by code from the same facts, and
+the unsupported numbers are named (Assistant._narrate).
+
+Identifiers are not quantities. A number inside an identifier field (an
+event, object or message id, a hash, who asserted a record) grounds
+nothing: "41" inside a sha256 is not a miss distance. An identifier grounds
+only a mention of itself, whole.
 """
 
 from __future__ import annotations
@@ -27,6 +33,8 @@ _NUMBER = re.compile(
 
 
 _DIGITS = re.compile(r"\d+")
+# Fact fields that name a thing rather than measure it, by the name's ending.
+_IDENTIFIER_FIELD = re.compile(r"(?:^|_)(?:id|ids|by|sha\d*|hash|digest)$")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -54,6 +62,16 @@ def _unread_digits(text: str) -> list[str]:
 
 def _dotted_continuation(text: str, start: int) -> bool:
     return start >= 2 and text[start - 1] == "." and text[start - 2].isdigit()
+
+
+def states(token: str, value: float) -> bool:
+    """Does the number `token` state `value`, at the precision it is written?"""
+    stated, sig = _parse(token)
+    return math.isfinite(stated) and _same_at(stated, value, sig)
+
+
+def _same_at(stated: float, value: float, sig: int) -> bool:
+    return math.isclose(_round_sig(value, sig), _round_sig(stated, sig), rel_tol=1e-9, abs_tol=0.0)
 
 
 def _parse(token: str) -> tuple[float, int]:
@@ -94,23 +112,56 @@ def _evidence_numbers(evidence: Any) -> Iterable[float]:
             if math.isfinite(value := _parse(token)[0]):
                 yield value
     elif isinstance(evidence, dict):
-        for value in evidence.values():
-            yield from _evidence_numbers(value)
+        for key, value in evidence.items():
+            if not _is_identifier(key):
+                yield from _evidence_numbers(value)
+            elif isinstance(value, (list, tuple)):
+                yield float(len(value))         # how many names: a count
     elif isinstance(evidence, (list, tuple)):
         yield float(len(evidence))
         for value in evidence:
             yield from _evidence_numbers(value)
 
 
+def _is_identifier(key: Any) -> bool:
+    return isinstance(key, str) and _IDENTIFIER_FIELD.search(key) is not None
+
+
+def _identifiers(evidence: Any) -> Iterable[str]:
+    """Every value held in an identifier field, as text."""
+    if isinstance(evidence, dict):
+        for key, value in evidence.items():
+            yield from (_names(value) if _is_identifier(key) else _identifiers(value))
+    elif isinstance(evidence, (list, tuple)):
+        for value in evidence:
+            yield from _identifiers(value)
+
+
+def _names(value: Any) -> Iterable[str]:
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            yield from _names(item)
+    elif isinstance(value, str) or (isinstance(value, int) and not isinstance(value, bool)):
+        yield str(value)
+
+
+def _without_mentions(text: str, identifiers: Iterable[str]) -> str:
+    """The answer with every whole mention of an identifier blanked out,
+    longest first, so an id inside a longer one is not read as a part of it."""
+    for name in sorted({i for i in identifiers if i}, key=len, reverse=True):
+        text = re.sub(rf"(?<!\w){re.escape(name)}(?!\w)", " ", text)
+    return text
+
+
 def check_grounding(text: str, evidence: Any, question: str = "") -> GroundingResult:
     pool = list(_evidence_numbers(evidence)) + list(_evidence_numbers(question))
+    text = _without_mentions(text, _identifiers(evidence))
     unsupported = _unread_digits(text)
     for token in numbers_in_text(text):
         stated, sig = _parse(token)
         if not math.isfinite(stated):
             unsupported.append(token)
             continue
-        target = _round_sig(stated, sig)
-        if not any(math.isclose(_round_sig(v, sig), target, rel_tol=1e-9, abs_tol=0.0) for v in pool):
+        if not any(_same_at(stated, v, sig) for v in pool):
             unsupported.append(token)
     return GroundingResult(not unsupported, unsupported)
