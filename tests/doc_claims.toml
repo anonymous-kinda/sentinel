@@ -12,6 +12,41 @@
 # Sources are generated reports (docs/ddil-results.md, docs/validation-report.md,
 # docs/ai-eval.md, docs/traceability.md), or the test or pin that asserts the value.
 
+# --- README: the value table an operator reads first ---------------------------
+
+[[claim]]
+id = "readme-value-cara"
+doc = "README.md"
+quoted = "on 53 real operational conjunctions (worst relative error 1.5e-8), and it refuses all 29 events where CARA says the method does not apply"
+source = "docs/validation-report.md"
+patterns = ["53 real operational conjunctions", "| 53 | **1.5e-08** |", "| **Sentinel refuses** | 29 | 5 |", "| **Sentinel returns Pc** | **0** | 19 |"]
+
+[[claim]]
+id = "readme-value-urgent-first"
+doc = "README.md"
+quoted = "At about 8 kbit/s, the most urgent full CDM arrived in 9.1 s in deadline order, against 136.9 s in arrival order. Both orders moved the whole backlog in about the same time (150.9 s and 149.0 s), so putting the urgent record first costs almost nothing. Medians of 5 runs per mode."
+source = "docs/ddil-results.md"
+patterns = [
+    "over ~8 kbit/s + 600 ms",
+    "EDF 9.1 s (8.6–9.1) vs FIFO 136.9 s (135.4–141.7) (15.0x)",
+    "| every record delivered or held summary-only | 150.9 s (148.6–150.9) | 149.0 s (147.0–153.8) |",
+    "medians over 5 runs per mode",
+]
+
+[[claim]]
+id = "readme-value-disconnected"
+doc = "README.md"
+quoted = "Cut off, the edge console answered at 3.2 ms (95th percentile) and all 11 DENIED checks passed. On reconnect, operator data converged in 1.37 s."
+source = "docs/ddil-results.md"
+patterns = ["p95 3.2 ms over 40 requests", "| DENIED | PASS | 11/11 |", "| convergence_after_reconnect_s | 1.37 |"]
+
+[[claim]]
+id = "readme-value-opsec"
+doc = "README.md"
+quoted = "the hub's server carried 179 messages while the edge computed a unit's passes. None held the unit's id or coordinates, and all 10 OPSEC checks passed."
+source = "docs/ddil-results.md"
+patterns = ["hub capture: 179 messages, 90,804 bytes", "| OPSEC | PASS | 10/10 |"]
+
 # --- DDIL: docs/ddil-results.md (make ddil) ------------------------------------
 
 [[claim]]
@@ -70,7 +105,7 @@ patterns = [
 [[claim]]
 id = "adr006-edf-vs-fifo"
 doc = "docs/system-design.md"
-quoted = "the same 51 records (13 CDMs and 38 element sets): the most urgent event's full CDM arrives in **9.1 s with EDF vs 136.9 s with FIFO** (15.0×), medians of 5 runs per mode"
+quoted = "the same 51 records (13 CDMs and 38 element sets): the most urgent event's full CDM arrives in **9.1 s with EDF vs 136.9 s with FIFO**, medians of 5 runs per mode"
 source = "docs/ddil-results.md"
 patterns = [
     "same 51 records (13 CDMs",
@@ -103,6 +138,31 @@ doc = "docs/system-design.md"
 quoted = "It now re-establishes the leaf in 10.5 s."
 source = "docs/ddil-results.md"
 patterns = ["leaf re-establishes over ~8 kbit/s after a denial (10.5 s)"]
+
+[[claim]]
+id = "adr005-buys-offline-merge"
+doc = "docs/system-design.md"
+quoted = "operator data converged in 1.37 s after reconnect, and over a link that dropped 8 times, 24 notes were written and 24 arrived on each node"
+source = "docs/ddil-results.md"
+patterns = ["| convergence_after_reconnect_s | 1.37 |", "| flaps | 8 |", "(hub 24, edge 24, written 24)"]
+
+[[claim]]
+id = "adr006-buys-urgent-first"
+doc = "docs/system-design.md"
+quoted = "Its full CDM arrived 15.0× sooner than in arrival order, while the whole backlog took about the same time either way (150.9 s against 149.0 s, medians of 5 runs per mode)"
+source = "docs/ddil-results.md"
+patterns = [
+    "(15.0x)",
+    "| every record delivered or held summary-only | 150.9 s (148.6–150.9) | 149.0 s (147.0–153.8) |",
+    "medians over 5 runs per mode",
+]
+
+[[claim]]
+id = "adr010-buys-opsec"
+doc = "docs/system-design.md"
+quoted = "none of the 179 messages the hub's server carried held the unit, and all 10 OPSEC checks passed"
+source = "docs/ddil-results.md"
+patterns = ["hub capture: 179 messages, 90,804 bytes", "| OPSEC | PASS | 10/10 |"]
 
 # --- Summary size: asserted by the sync tests ---------------------------------
 
@@ -219,6 +279,20 @@ doc = "docs/system-design.md"
 quoted = "**53/53 operational events within 1.5e-8 relative**"
 source = "docs/validation-report.md"
 patterns = ["| 53 | **1.5e-08** |"]
+
+[[claim]]
+id = "adr003-buys-no-pc-where-cara-flags"
+doc = "docs/system-design.md"
+quoted = "it returns no Pc for any of the 29 events CARA says the method cannot handle"
+source = "docs/validation-report.md"
+patterns = ["| **Sentinel refuses** | 29 | 5 |", "| **Sentinel returns Pc** | **0** | 19 |"]
+
+[[claim]]
+id = "adr003-costs-conservative-refusals"
+doc = "docs/system-design.md"
+quoted = "and so do 5 events CARA would compute"
+source = "docs/validation-report.md"
+patterns = ["| **Sentinel refuses** | 29 | 5 |", "The 5 false positives are refusals where CARA would have computed"]
 
 [[claim]]
 id = "adr003-gates"
@@ -565,6 +639,67 @@ doc = "docs/white-paper.md"
 quoted = "Afterwards the hub has no unit (its unit endpoint returns 404), and none of its 8 files holds the unit."
 source = "docs/ddil-results.md"
 patterns = ["(HTTP 404)", "(8 files scanned)"]
+
+# The quad chart. Its numbers are also checked against the generated reports as
+# a whole (tests/docs/test_quad_chart.py), but a number can appear there for
+# another reason: "53 of 54 verified" once passed because 53 is the CARA event
+# count. Each measured line is registered here against the phrase it comes from.
+
+[[claim]]
+id = "quad-chart-cara"
+doc = "docs/quad-chart.svg"
+quoted = "Pc vs NASA CARA: 53 events, worst relative error 1.5e-8"
+source = "docs/validation-report.md"
+patterns = ["| 53 | **1.5e-08** |"]
+
+[[claim]]
+id = "quad-chart-gate"
+doc = "docs/quad-chart.svg"
+quoted = "Refusal gate: all 29 CARA-flagged events refused, 0 missed"
+source = "docs/validation-report.md"
+patterns = ["| **Sentinel refuses** | 29 | 5 |", "| **Sentinel returns Pc** | **0** | 19 |"]
+
+[[claim]]
+id = "quad-chart-limited"
+doc = "docs/quad-chart.svg"
+quoted = "Thin link, medians: urgent CDM 9.1 s by deadline, 136.9 s FIFO"
+source = "docs/ddil-results.md"
+patterns = ["EDF 9.1 s (8.6–9.1) vs FIFO 136.9 s (135.4–141.7) (15.0x)", "medians over 5 runs per mode"]
+
+[[claim]]
+id = "quad-chart-denied"
+doc = "docs/quad-chart.svg"
+quoted = "Cut off: edge console p95 3.2 ms"
+source = "docs/ddil-results.md"
+patterns = ["p95 3.2 ms over 40 requests"]
+
+[[claim]]
+id = "quad-chart-opsec"
+doc = "docs/quad-chart.svg"
+quoted = "OPSEC: 179 messages to the hub captured; none held the unit"
+source = "docs/ddil-results.md"
+patterns = ["hub capture: 179 messages, 90,804 bytes"]
+
+[[claim]]
+id = "quad-chart-opsec-checks"
+doc = "docs/quad-chart.svg"
+quoted = "OPSEC scenario 10 of 10"
+source = "docs/ddil-results.md"
+patterns = ["| OPSEC | PASS | 10/10 |"]
+
+[[claim]]
+id = "quad-chart-trace"
+doc = "docs/quad-chart.svg"
+quoted = "Requirement trace: 54 of 54 verified"
+source = "docs/traceability.md"
+patterns = ["| **total** | **54** | **54** | **0** | **0** |"]
+
+[[claim]]
+id = "quad-chart-text-trace"
+doc = "docs/quad-chart.md"
+quoted = "the requirement trace (54 of 54 verified)"
+source = "docs/traceability.md"
+patterns = ["| **total** | **54** | **54** | **0** | **0** |"]
 
 [[claim]]
 id = "install-guide-smoke-test"

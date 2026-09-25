@@ -7,13 +7,24 @@ Three checks keep this set honest:
 - `tests/test_docs.py` checks every path, `make` target and `sentinel` subcommand named in `README.md`, `CLAUDE.md`, `SECURITY.md` and `docs/`.
 - `tests/doc_claims.toml` registers each headline number the prose quotes, against the generated report or test it comes from.
 
-Audiences: **new engineer** (has just cloned the repository), **reviewer** (judges the design or the evidence), **operator** (runs a node), **security** (ATO and supply-chain assessors), **acquisition** (program and mission stakeholders).
+## Which document is for whom
+
+| Reader | Start with | Then |
+|---|---|---|
+| **Operator or program office** | `README.md`, `docs/white-paper.md`, `docs/quad-chart.md` | `docs/demo-script.md` to see it run, `docs/install-guide.md` to install a node, and the generated reports behind every number |
+| **Engineer** | `docs/technical-guide.md`, `docs/system-design.md`, `docs/icd/`, `CONTRIBUTING.md` | `docs/risk-engine-design.md` for the maths, and `CLAUDE.md` for the rules in their shortest form |
+| **Security assessor** | `SECURITY.md`, `docs/supply-chain.md`, `docs/compliance.md` | `docs/traceability.md` and the OSCAL documents under `compliance/oscal/` |
+| **Reviewer of the evidence** | `docs/validation-report.md`, `docs/ddil-results.md`, `docs/ai-eval.md`, `docs/traceability.md` | the script or scenario that generates each one (the last column below) |
+
+The documents for an operator or program office lead with what Sentinel gives them, then the evidence, then the limits, stated as plainly as the value. They present Sentinel as a demonstrator: an architecture proven with measured numbers, not an operational capability. The documents for engineers lead with how it is built and why; every ADR opens with what it buys and what it costs. `tests/docs/test_value_first.py` checks the ADR openings, the README's limits and this table.
+
+Audiences in the tables below: **operator** (uses the decision aid, or runs a node), **program office** (program and mission stakeholders), **new engineer** (has just cloned the repository), **reviewer** (judges the design or the evidence), **security** (ATO and supply-chain assessors).
 
 ## Start here
 
 | Document | Path | Audience | Authored or generated | Regenerate with |
 |---|---|---|---|---|
-| [README](../README.md) | `README.md` | everyone | authored | |
+| [README](../README.md) | `README.md` | operator, program office; everyone starts here | authored: the value, the evidence and the limits | |
 | [Technical guide](technical-guide.md) | `docs/technical-guide.md` | new engineer | authored; its variables, `make` targets, CLI subcommands, import contracts and paths are checked by `tests/docs/test_technical_guide.py`, and its quoted numbers are registered in `tests/doc_claims.toml` | |
 | [Contributing](../CONTRIBUTING.md) | `CONTRIBUTING.md` | new engineer | authored; its paths, `make` targets and CLI subcommands are checked by `tests/docs/test_technical_guide.py` | |
 | [Security policy](../SECURITY.md) | `SECURITY.md` | security, everyone | authored: how to report a vulnerability, and what is known to be missing | |
@@ -25,7 +36,7 @@ Audiences: **new engineer** (has just cloned the repository), **reviewer** (judg
 
 | Document | Path | Audience | Authored or generated | Regenerate with |
 |---|---|---|---|---|
-| [System design](system-design.md) | `docs/system-design.md` | reviewer, new engineer | authored: ADR-001 to ADR-012, with rejected alternatives | |
+| [System design](system-design.md) | `docs/system-design.md` | new engineer, reviewer | authored: ADR-001 to ADR-012, each opening with what it buys and costs, with rejected alternatives | |
 | [Risk engine design](risk-engine-design.md) | `docs/risk-engine-design.md` | reviewer, new engineer | authored: the maths and the test ladder | |
 | [Wayfinder adapter](adapters/wayfinder.md) | `docs/adapters/wayfinder.md` | new engineer | authored: an assumed schema, and how to swap in the real one | |
 | [Interface control index](icd/README.md) | `docs/icd/README.md` | new engineer, integrators | authored: every ICD, its standard and the test that keeps it current; checked by `tests/docs/test_icd_index.py` | |
@@ -41,7 +52,7 @@ Audiences: **new engineer** (has just cloned the repository), **reviewer** (judg
 | Document | Path | Audience | Authored or generated | Regenerate with |
 |---|---|---|---|---|
 | [Validation report](validation-report.md) | `docs/validation-report.md` | reviewer | generated from closed forms and NASA CARA's published values | `make report` |
-| [DDIL results](ddil-results.md) | `docs/ddil-results.md` | reviewer, acquisition | generated from real two-node harness runs in `harness/results/` | `make ddil` (all six scenarios; needs the pinned tools from GitHub) |
+| [DDIL results](ddil-results.md) | `docs/ddil-results.md` | reviewer, program office | generated from real two-node harness runs in `harness/results/` | `make ddil` (all six scenarios; needs the pinned tools from GitHub) |
 | [AI routing eval](ai-eval.md) | `docs/ai-eval.md` | reviewer | generated from `evals/routing.jsonl`; Jev's column only from a real keyed run | `make ai-eval` |
 | AI reliability diagram | `docs/img/ai-reliability.svg` | reviewer | generated with the AI routing eval | `make ai-eval` |
 | [Requirements traceability](traceability.md) | `docs/traceability.md` | reviewer, security | generated from the SysML v2 model in `mbse/` and the evidence it names | `make trace` |
@@ -50,8 +61,8 @@ Audiences: **new engineer** (has just cloned the repository), **reviewer** (judg
 
 | Document | Path | Audience | Authored or generated | Regenerate with |
 |---|---|---|---|---|
-| [White paper](white-paper.md) | `docs/white-paper.md` | acquisition | authored; every proof-point number is registered in `tests/doc_claims.toml` against a generated report (`tests/docs/test_program_docs.py`) | |
-| [Quad chart](quad-chart.md) | `docs/quad-chart.md`, `docs/quad-chart.svg` | acquisition | authored; the SVG gets the same drift guards as Markdown, and states no number the repository did not generate (`tests/docs/test_quad_chart.py`) | |
+| [White paper](white-paper.md) | `docs/white-paper.md` | program office, operator | authored; every proof-point number is registered in `tests/doc_claims.toml` against a generated report (`tests/docs/test_program_docs.py`) | |
+| [Quad chart](quad-chart.md) | `docs/quad-chart.md`, `docs/quad-chart.svg` | program office, operator | authored; the SVG gets the same drift guards as Markdown, and states no number the repository did not generate (`tests/docs/test_quad_chart.py`); its measured lines are registered in `tests/doc_claims.toml` | |
 | [Demo script](demo-script.md) | `docs/demo-script.md` | operator, reviewer | authored: a three-minute walk-through on `make demo-local` | |
 | [Install guide](install-guide.md) | `docs/install-guide.md` | operator | authored: installing a node at a disconnected or classified site, matching `deploy/bundle/` | |
 

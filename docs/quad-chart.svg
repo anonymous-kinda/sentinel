@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="11in" height="8.5in" viewBox="0 0 1100 850" role="img" aria-labelledby="qc-title qc-desc">
   <title id="qc-title">Sentinel capability quad chart</title>
-  <desc id="qc-desc">One-page chart in four quadrants. Operational capability: a hub and a forward edge node joined by a measured leaf link, each serving its own console. Technical approach and discriminators: open standards at every seam, an honest risk engine, priority sync, AI that cannot compute, and an offline-verifiable supply chain. Status and milestones: what is built, partly built and open. Evidence and next steps: measured results from the generated reports, the commands that reproduce them, what fielding needs, and the demo hub's cost.</desc>
+  <desc id="qc-desc">One-page chart in four quadrants. Operational capability: a hub and a forward edge node joined by a measured leaf link, each serving its own console, and what that gives an operator. Technical approach and discriminators: open standards at every seam, an honest risk engine, priority sync, AI kept out of the decision, and an offline-verifiable supply chain. Status and milestones: what is built, partly built and open. Evidence and next steps: measured results from the generated reports, the commands that reproduce them, what fielding needs, and the demo hub's cost.</desc>
   <defs>
     <style>
       .t { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; fill: #1b1b1b; }
@@ -56,13 +56,13 @@
   <text class="t s" x="284" y="211" text-anchor="middle">signed decisions</text>
   <text class="t s" x="284" y="238" text-anchor="middle">Leaf link, measured: CONNECTED · DEGRADED · LIMITED · DENIED</text>
 
-  <text class="t h" x="44" y="268">What it does</text>
-  <text class="t b" x="44" y="290">• Decide before the maneuver commit point: maneuver or not.</text>
-  <text class="t b" x="44" y="310">• Refuses a Pc the method cannot support; flags dilution.</text>
-  <text class="t b" x="44" y="330">• Cut off, each node keeps working; urgent data crosses first.</text>
-  <text class="t b" x="44" y="350">• AI routes and phrases; validated code computes; a person decides.</text>
-  <text class="t b" x="44" y="370">• Ground units see when public imagers can observe them,</text>
-  <text class="t b" x="59" y="388">and the unit's position never leaves its edge node.</text>
+  <text class="t h" x="44" y="268">What it gives an operator</text>
+  <text class="t b" x="44" y="290">• No false reassurance: diluted Pc flagged, unsupported Pc refused.</text>
+  <text class="t b" x="44" y="310">• Urgent data crosses a thin link first; each node works cut off.</text>
+  <text class="t b" x="44" y="330">• Offline decisions merge without loss; conflicts are shown.</text>
+  <text class="t b" x="44" y="350">• Ground units see when public imagers can observe them,</text>
+  <text class="t b" x="59" y="368">and the unit's position never leaves its edge node.</text>
+  <text class="t b" x="44" y="388">• AI kept out of the decision: code computes, a person decides.</text>
   <text class="t h" x="44" y="414">For</text>
   <text class="t b" x="80" y="414">satellite operators, space operations cells, S6/G6 staff.</text>
 
@@ -107,19 +107,19 @@
 
   <rect class="built" x="38" y="585" width="78" height="21" rx="4"/>
   <text class="t chip built-t" x="77" y="600" text-anchor="middle">BUILT</text>
-  <text class="t b" x="126" y="600">AI decision support; routing eval of the local tier</text>
+  <text class="t b" x="126" y="600">Pass module at the edge; OPSEC scenario 10 of 10</text>
 
   <rect class="built" x="38" y="613" width="78" height="21" rx="4"/>
   <text class="t chip built-t" x="77" y="628" text-anchor="middle">BUILT</text>
-  <text class="t b" x="126" y="628">Pass module at the edge; OPSEC scenario 10 of 10</text>
+  <text class="t b" x="126" y="628">Signed bundle, offline verify, SBOMs, vulnerability gate</text>
 
   <rect class="built" x="38" y="641" width="78" height="21" rx="4"/>
   <text class="t chip built-t" x="77" y="656" text-anchor="middle">BUILT</text>
-  <text class="t b" x="126" y="656">Signed bundle, offline verify, SBOMs, vulnerability gate</text>
+  <text class="t b" x="126" y="656">Requirement trace: 54 of 54 verified</text>
 
   <rect class="partial" x="38" y="669" width="78" height="21" rx="4"/>
   <text class="t chip partial-t" x="77" y="684" text-anchor="middle">PARTIAL</text>
-  <text class="t b" x="126" y="684">Requirement trace: 53 of 54 verified</text>
+  <text class="t b" x="126" y="684">AI guards and local tier; hosted models not yet run</text>
 
   <rect class="partial" x="38" y="697" width="78" height="21" rx="4"/>
   <text class="t chip partial-t" x="77" y="712" text-anchor="middle">PARTIAL</text>

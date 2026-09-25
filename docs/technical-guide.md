@@ -6,6 +6,7 @@ The other design documents answer different questions:
 - `docs/system-design.md` holds the architecture decisions (ADR-001 to ADR-012) and the alternatives each one rejected. It says *why*.
 - `docs/risk-engine-design.md` holds the collision-probability maths and the test ladder. It says *what the engine computes*.
 - This guide says *how the code is put together*: where things live, how data moves, how to run each configuration, and which files and tests you touch to extend it.
+- `README.md`, `docs/white-paper.md` and `docs/quad-chart.md` are written for operators and program offices: what Sentinel gives them, the evidence and the limits. `docs/index.md` says which document is for whom.
 
 Where this guide and the code disagree, the code is right and this guide is a bug. `tests/docs/test_technical_guide.py` checks the configuration reference, the quoted import contracts, and every path, `make` target and `sentinel` subcommand named here against the repository. Every number quoted from a generated report or a test is registered in `tests/doc_claims.toml`, so `tests/test_docs.py` fails when the source moves.
 
@@ -47,6 +48,39 @@ The composition root is `sentinel/api/app.py`. `build_node` creates the clock, t
 5. runs any `startup` hooks that extensions put in `node.extensions`.
 
 Routers beyond the conjunction core are registered through `REGISTRARS` in `sentinel/api/extensions.py`: the AI assistant (`sentinel/api/ai_routes.py`), the pass module (`sentinel/api/pass_routes.py`) and demonstration-mode screening (`sentinel/api/screening_routes.py`). A registrar may add its module name to `node.extensions["modules"]`; `GET /api/node` reports the list, and the console shows a feature tab only for a module the node reports (`web/src/extensions.tsx`, `web/src/features.tsx`). A registrar may also add hooks: the pass module registers an `elements_changed` hook, which the element records call when a synced element set changes the store.
+
+### Where things live
+
+```
+sentinel/cdm/          CCSDS 508.0-B-1 KVN codec and admission policy (ADR-001 seam)
+sentinel/risk/         Foster-Estes 2D Pc, TCA refinement, dilution, applicability gate
+sentinel/conjunction/  mission module: ingest, events, triage policy, summaries, exercise scenario
+sentinel/bus/          Bus protocol: in-process and NATS implementations, node-scoped subjects
+sentinel/sync/         priority pull (edge) and manifest/fetch/ops server (hub) - mission-agnostic
+sentinel/crdt/         dots, signed decision log, multi-value registers (property-tested)
+sentinel/ops/          operator data service: decisions, triage, persistence, anti-entropy
+sentinel/triage/       class / deadline / consequence - the only thing sync knows about a mission
+sentinel/linkstate/    measured link state; Toxiproxy control for demos and the harness
+sentinel/ai/           assistant: tier policy, Jev and local routers, tools, narrators, grounding guard, eval
+sentinel/audit/        hash-chained JSON Lines audit log
+sentinel/passes/       Army overhead-pass module: imaging catalog, element sets, providers, gaps
+sentinel/ephemeris/    CCSDS OEM codec and Earth-fixed state tables
+sentinel/adapters/     source adapters (Wayfinder, on an assumed schema - see docs/adapters/)
+sentinel/screening/    demonstration mode: element-set close approaches, geometry only (ADR-002)
+sentinel/api/          the node: FastAPI, SSE, strict CSP, static console; composes module records for sync
+sentinel/validation/   NASA CARA published cases, shared by the Tier 3 tests, the report and the Validation tab
+sentinel/obs.py        structured logging: stable messages, values as fields
+web/                   React + TypeScript + CesiumJS console (offline imagery, no ion, no CDN)
+harness/               real two-node DDIL scenarios (nats-server + Toxiproxy, no containers)
+deploy/                offline installer and signature gate, systemd, NATS configs, container, AWS Terraform, Ansible
+fixtures/cara/         NASA CARA data, unmodified, with licence, provenance and checksums
+fixtures/omm/          public CelesTrak element-set snapshot, with provenance and checksums
+supplychain/           build-side tooling: SBOMs, Trivy + VEX, bundle manifests (not shipped)
+mbse/                  SysML v2 model and the trace generator -> docs/traceability.md
+compliance/            OSCAL generator and sources; generated SSP, assessment results and POA&M (docs/compliance.md)
+evals/                 labelled operator requests for the routing eval
+docs/                  ADRs, ICDs, supply chain, generated validation / DDIL / AI-eval / trace reports
+```
 
 ### Modules and their allowed dependencies
 
@@ -258,7 +292,17 @@ The property tests in `tests/property/test_crdt.py` drive three replicas through
 
 ## The AI assistant pipeline
 
-The assistant (ADR-007) routes an operator's request to one catalogued tool, lets code compute the facts, and phrases them. `sentinel/ai/assistant.py`:
+The assistant (ADR-007) is a safety pattern more than a feature: it shows how to put AI into a classified or disconnected system without letting it corrupt a decision. AI routes, code computes, AI phrases, the operator decides. Each property below is enforced in code and tested:
+
+- **It works with no keys.** The deterministic router and the template narrator always answer, with no network. A hosted SDK is imported only when its key is set.
+- **The tier follows the measured link and the marking** (the tier policy below).
+- **No path to the maths.** The `ai-does-no-math` contract forbids `sentinel.ai` the risk engine, the CDM codec, numpy and scipy.
+- **Any unsupported number is withheld** by the grounding guard.
+- **Writes are drafts** that a person confirms.
+
+No hosted router or narrator has been measured in this repository. `docs/ai-eval.md` scores only the deterministic floor, because no keyed run exists, so treat any benefit from Jev or Claude as unmeasured until `make ai-eval` publishes one.
+
+The pipeline, in `sentinel/ai/assistant.py`:
 
 ```
  text ─► router (Jev | deterministic) ─► Route: tool, arguments, confidence
@@ -610,7 +654,7 @@ Expected values come from closed forms or from files NASA published, transcribed
 | `tests/supplychain/` | The tools lock, checksums, SBOMs, Trivy and VEX handling, bundle manifests, and `verify_signature.sh`'s policy against a stub cosign |
 | `tests/compliance/` | The OSCAL generator, its sources and citations, the STIG role, deployment-config conformance, and that the committed OSCAL documents are what the sources generate |
 | `tests/mbse/` | The SysML reader, the evidence indexes, the trace generator, and that `docs/traceability.md` is current with no broken reference |
-| `tests/docs/` | Every interface control document against the code, both ways: the OpenAPI export is current and every route documented; the AsyncAPI document matches the subjects, headers and leaf policy, and every message real nodes send validates against it; the CDM profile matches the codec's codes, frames and units; the sync envelope matches `sentinel/sync`, `sentinel/triage` and the adapters. The program documents: every white-paper proof-point number is registered against a generated report, and the SVG quad chart gets the Markdown drift guards. Also this guide, `docs/index.md` and `CONTRIBUTING.md`: variables, `make` targets, CLI subcommands, import contracts, paths and the document list |
+| `tests/docs/` | Every interface control document against the code, both ways: the OpenAPI export is current and every route documented; the AsyncAPI document matches the subjects, headers and leaf policy, and every message real nodes send validates against it; the CDM profile matches the codec's codes, frames and units; the sync envelope matches `sentinel/sync`, `sentinel/triage` and the adapters. The program documents: every white-paper proof-point number is registered against a generated report, and the SVG quad chart gets the Markdown drift guards. The value-first rule (`tests/docs/test_value_first.py`): every ADR opens with what it buys and costs, the README states its limits straight after its value, and the index says who reads what. Also this guide, `docs/index.md` and `CONTRIBUTING.md`: variables, `make` targets, CLI subcommands, import contracts, paths and the document list |
 | `tests/test_docs.py`, `tests/doclint.py`, `tests/doc_claims.toml` | The drift guard for `README.md`, `CLAUDE.md`, `SECURITY.md` and `docs/`: every path, `make` target and `sentinel` subcommand exists, every package has a docstring, and every registered headline number matches its generated source at the precision stated |
 | `web/src/__tests__/` | The console: `PcValue`'s contract (a source scan allows a Pc to render only through it, plus three listed exceptions), formatting, the API client and stream reconnect, the assistant panel, the passes views, degraded panels, accessibility, and two security guards. `csp.test` holds the source to the node's Content-Security-Policy: no external origin, `eval`, `Function()`, HTML sink or inline script, and no Cesium widget, which would need `Function()`. `hostile.test` sends script and handler payloads through every place outside data reaches the screen, and each must arrive as text |
 
