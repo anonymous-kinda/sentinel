@@ -12,7 +12,7 @@ Output: dist/sentinel-<version>-<arch>.tar.gz (+ .sha256), containing
     web/               the built console (Cesium assets included)
     fixtures/          reference data, unmodified, with provenance: NASA CARA
                        (NOSA 1.3) and the public CelesTrak element-set snapshot
-    systemd/           hardened unit files
+    systemd/           the hardened unit, sentinel.service
     install.sh         offline installer
     verify_contents.sh the check install.sh and the release image run first: every
                        listed file matches SHA256SUMS, nothing unlisted is present
