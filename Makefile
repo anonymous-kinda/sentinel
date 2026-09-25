@@ -56,7 +56,7 @@ demo-local: web tools  ## hub on :8000 and edge on :8001 over an emulated link (
 	$(UV) run python -m harness.demo
 
 LIMITED_RUNS ?= 5
-ddil:  ## run every DDIL scenario on a real two-node cluster (LIMITED_RUNS per mode), then write docs/ddil-results.md
+ddil: tools  ## run every DDIL scenario on a real two-node cluster (LIMITED_RUNS per mode), then write docs/ddil-results.md
 	$(UV) run python -m harness.run all --limited-runs $(LIMITED_RUNS)
 	$(UV) run python -m harness.report
 
