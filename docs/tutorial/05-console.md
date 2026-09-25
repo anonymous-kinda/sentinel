@@ -200,13 +200,13 @@ Read the files in this order.
 
 **The scan.** `web/src/__tests__/pc-contract.test.tsx` reads every source file (through `web/src/__tests__/fixtures/sources.ts`, which loads them as raw text and leaves the tests out) and finds calls to the console's number formatters, `sci(...)`, `sciPlain(...)`, `.toExponential(`, `.toPrecision(` and `.toFixed(`, applied to anything named like a Pc (`pc`, `_pc`, `pc_`). `PcValue.tsx` and `format.ts` own the rendering. Three files are allowed, each with a reason and an exact count:
 
-- `DilutionCurve.tsx` (3): the Pc(k) curve's samples;
+- `DilutionCurve.tsx` (3): the Pc(k) curve's samples, stated only when the node says the 2D model applies;
 - `ValidationPanel.tsx` (4): this node's gate-off Pc beside CARA's published Pc;
 - `EventDetail.tsx` (1): the originator's asserted Pc, labelled "theirs, not Sentinel's".
 
 Because the counts are pinned, a fifth Pc in the Validation panel fails too.
 
-**Easy to get wrong.** The scan reads names, not data flow, and it is "conservative ... to catch a regression, not to prove the rule", as its own comment says. One gap is live today. The node serves `GET /api/events/<id>/dilution-curve` for an event that the applicability gate refused (`CURVILINEAR_UNCERTAINTY`, `LOW_RELATIVE_VELOCITY`), marked `"model_applies": false`. `DilutionCurve` does not check that flag, so its caption prints `k=1 Pc ...` and `peak ... Pc ...` under a headline that says `Pc refused`. The scan's reason for allowing the curve ("served only when it returned a Pc") holds for `NO_COVARIANCE` but not for these reasons. Try-it step 5 shows the reply.
+**Easy to get wrong.** The scan reads names, not data flow, and it is "conservative ... to catch a regression, not to prove the rule", as its own comment says. It cannot see this case: the node serves `GET /api/events/<id>/dilution-curve` for an event that the applicability gate refused (`CURVILINEAR_UNCERTAINTY`, `LOW_RELATIVE_VELOCITY`), with Pc samples in it and `"model_applies": false`. Only that flag keeps the curve from stating a Pc under a headline that says `Pc refused`, so `DilutionCurve` states its numbers only when `model_applies` is `true`. A behaviour test in the same file renders a refused curve and checks that none of its Pc values appear. `tests/api/test_api.py` shows the node really serves such a curve. Try-it step 5 shows the reply.
 
 ### `web/src/components/EventList.tsx` and `web/src/components/EventDetail.tsx`
 
@@ -224,6 +224,8 @@ Because the counts are pinned, a fifth Pc in the Validation panel fails too.
 **`BPlane`** draws the encounter plane from `/api/events/<id>/encounter`: the miss vector `mu_m`, the ellipse axes `sigma_major_m` and `sigma_minor_m` with their angle, and the disk `hbr_m`. At slider value `log10k` it scales each ellipse radius by `√k`, and fades the fill as `1/k`, because the density at the centre falls that way. The frame is sized from `k = 1` and `k*`, so growth is visible rather than rescaled away. A disk smaller than 3.5 px is drawn larger and labelled `(enlarged)`.
 
 **`DilutionCurve`** draws `log10 Pc` against `log10 k` from the engine's own samples (161 of them, spanning two decades beyond both `k = 1` and `k*`). It shades the dilution region to the right of `k*`, marks the operating point and the peak, and draws the slider line. `interpolatePc` reads the curve at the slider between samples, in log-log space, and the caption labels that value `(interpolated)`. The console never computes a Pc; it only reads between the engine's samples.
+
+When the reply does not say `model_applies: true`, the gate refused the Pc even though a covariance exists. The same curve is then drawn as shape alone. The vertical axis has no Pc ticks, a `shape only · Pc refused` label sits above the plot, and the caption says the 2D model does not apply. It names `k*`, but no probability. The slider still scales the ellipse on the encounter plane.
 
 **Easy to get wrong.** The slider scales *variance* by `k`, so a slider at `k = 100` makes the ellipse 10 times larger, not 100.
 
@@ -318,7 +320,7 @@ SENTINEL_VAR=/tmp/sentinel-ch5 SENTINEL_CLOCK=sim:now,60 uv run sentinel serve -
 - in Operations, a `Pc refused` row with its code (`NO_COVARIANCE`, `INVALID_COVARIANCE`, ...) and a diluted row showing `worst` beside its Pc;
 - on a diluted event, drag the slider under the curve: the ellipse on the encounter plane grows and fades, and the caption's `slider Pc≈` value is marked `(interpolated)`.
 
-**5. See the gap in the scan.** With the node from step 4 still running:
+**5. See a refused event's curve.** With the node from step 4 still running:
 
 ```bash
 curl -s http://127.0.0.1:8010/api/events/000029479-000054630-20230725T134006/dilution-curve | python3 -c '
@@ -327,7 +329,7 @@ d = json.load(sys.stdin)
 print({k: v for k, v in d.items() if k not in ("log10_k", "pc")})'
 ```
 
-This is a NASA reference event the gate refuses with `CURVILINEAR_UNCERTAINTY`. The reply has `'model_applies': False` and still carries `pc_at_k1` and `pc_max`. In the browser, open NASA reference and select any event refused with `CURVILINEAR_UNCERTAINTY`: the headline says `Pc refused`, and the curve's caption below it prints a Pc.
+This is a NASA reference event the gate refuses with `CURVILINEAR_UNCERTAINTY`. The reply has `'model_applies': False` and still carries `pc_at_k1` and `pc_max`. In the browser, open NASA reference and select any event refused with `CURVILINEAR_UNCERTAINTY`. The headline says `Pc refused`. The curve below it is labelled `shape only · Pc refused`, has no Pc ticks, and its caption states no Pc.
 
 **6. Read an edge node, if the demo is running.** `make demo-local` runs a hub on 8000 and an edge on 8001. Only read from them:
 
@@ -342,7 +344,7 @@ The edge reports `"role": "edge"`, `"demo_controls": true` and `sync` among its 
 
 **One component renders every Pc, and a scan enforces it** (no ADR; the rule is in `CLAUDE.md`, and it extends the engine's Tier 6 contract in `docs/risk-engine-design.md`; the engine's own refusals are [ADR-003](../system-design.md#adr-003--reimplement-foster-estes-2d-pc-in-python-nasa-caras-published-cases-as-the-oracle)).
 - *Buys:* a refusal is never a zero, a Pc never lacks its method, and a diluted Pc always has its worst case, on every screen at once. A new screen gets it by calling one component.
-- *Costs:* a regex scan with a list of exceptions to maintain, pinned by count. It checks names, not data flow, so a Pc can still arrive by another route (step 5).
+- *Costs:* a regex scan with a list of exceptions to maintain, pinned by count. It checks names, not data flow, so a Pc can still arrive by another route. The refused event's curve (step 5) is one such route, held by a behaviour test rather than by the scan.
 - *Alternatives:* trusting review, which misses a one-line `toExponential`; a branded "Pc" type, which would not stop a component from formatting the underlying number.
 
 **CesiumJS with bundled imagery, no ion and no widgets, under `default-src 'self'`** (no ADR; the reasoning is in the `Globe.tsx` doc comment and the README; the console being on the node is [ADR-009](../system-design.md#adr-009--each-node-serves-its-own-console-node-local-events-never-cross-a-link)).
@@ -382,12 +384,11 @@ The edge reports `"role": "edge"`, `"demo_controls": true` and `sync` among its 
 | A verification state this console does not know | shown by its raw name, with a tooltip saying so |
 | An object name containing `<script>` or `onerror=` | shown as literal text; nothing runs |
 | A refused assessment | `Pc refused`, the reason, and its tripping values; never a number |
+| A curve served for a refused event (`model_applies: false`) | drawn as shape alone, labelled `Pc refused`; no Pc in its caption or on its axis |
 | A diluted Pc | the worst case beside it at every size, a `DILUTED` chip, and a callout naming `k*` |
 | A read-only node | the write controls are not drawn; a write that reaches the node anyway gets 403, and `useAction` shows the node's reason |
 | An operator write fails | the server's reason beside the control, and `Operator data write failed` in the browser log |
 | A hosted AI answer states a number the tools did not produce | the answer is withheld, and the card says so and shows the facts |
-
-Two gaps are worth knowing. The dilution curve prints a Pc for an event the applicability gate refused (the PcValue walkthrough). And `OpsPanel` renders nothing at all when its first read of `/api/events/<id>/ops` fails: it ignores the resource's error, so a broken operator-data read looks like a node without the module.
 
 ## Check yourself
 
@@ -402,7 +403,7 @@ Two props can be passed separately, and one can be left out or taken from a diff
 
 <details><summary>Answer</summary>
 
-No. The scan finds formatter calls applied to names that look like a Pc. It does not follow data. The dilution curve formats `curve.pc_at_k1`, an allowed exception, and the node serves that curve for events the gate refused (with `model_applies: false`), so a refused event can show a Pc there. The scan catches regressions of the common kind; it is not a proof.
+No. The scan finds formatter calls applied to names that look like a Pc. It does not follow data. The dilution curve's caption formats the curve's Pc values, an allowed exception, and the node serves that curve for events the gate refused (with `model_applies: false`). What keeps a refused event's Pc off the screen there is the component's check of that flag, held by a test that renders a refused curve. The scan would pass without it. The scan catches regressions of the common kind; it is not a proof.
 </details>
 
 3. You select event A, then event B, and B's detail request fails. What does the detail pane show, and why not A's data?

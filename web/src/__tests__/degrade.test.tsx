@@ -2,6 +2,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EventDetail } from "../components/EventDetail";
 import { EventList } from "../components/EventList";
+import { OpsPanel } from "../components/OpsPanel";
 import { SyncPanel } from "../components/SyncPanel";
 import { ValidationPanel } from "../components/ValidationPanel";
 import { mockApi } from "./fixtures/api";
@@ -42,6 +43,14 @@ describe("a panel whose endpoint fails says why", () => {
     render(<EventDetail eventId={EVENT} version={0} />);
     expect((await screen.findByRole("alert")).textContent).toBe("Event unavailable: no such event");
     expect(screen.queryByText(/Loading/)).toBeNull();
+  });
+
+  it("Triage and decisions", async () => {
+    mockApi({ [`GET /api/events/${EVENT}/ops`]: { status: 500, body: { detail: "operator log unreadable" } } });
+    render(<OpsPanel eventId={EVENT} version={0} readOnly={false} />);
+    expect((await screen.findByRole("alert")).textContent).toBe("Triage and decisions unavailable: operator log unreadable");
+    expect(screen.queryByText(/Loading/)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Record decision" })).toBeNull();
   });
 
   it("still says Loading while the request is in flight", () => {
