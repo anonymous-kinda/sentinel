@@ -78,7 +78,10 @@ def test_connected_and_unclassified_routes_with_jev(registry, event_of):
     assert a.grounding["ok"]
 
 
-@pytest.mark.parametrize("link,marking", [("DENIED", "UNCLASSIFIED//EXERCISE"), ("CONNECTED", "SECRET//EXERCISE")])
+@pytest.mark.parametrize(
+    "link,marking",
+    [("DENIED", "UNCLASSIFIED//EXERCISE"), ("CONNECTED", "SECRET//EXERCISE"), ("CONNECTED", "UNCLASSIFIED//CUI")],
+)
 def test_denied_or_classified_never_calls_a_hosted_service(registry, link, marking):
     jev, llm = ScriptedRouter(jev_route("list_events", {}, 0.9)), ScriptedNarrator("8 events.")
     a = ask(make(registry, link=link, marking=marking, jev=jev, llm=llm), "/events red")

@@ -327,7 +327,7 @@ The pipeline, in `sentinel/ai/assistant.py`:
 | Eval | `sentinel/ai/evaluation.py`, `sentinel/ai/calibration.py`, `scripts/ai_eval.py` | routers scored through the same gate on `evals/routing.jsonl` |
 | HTTP | `sentinel/api/ai_routes.py` | `GET /api/ai/status`, `POST /api/ai/ask`, `POST /api/ai/confirm`, `GET /api/ai/audit`, `GET /api/ai/audit/verify` |
 
-**Tier policy.** Hosted AI needs a marking that starts with UNCLASSIFIED and operator opt-in (`SENTINEL_AI_CLOUD=1`). Then:
+**Tier policy.** Hosted AI needs exactly an allow-listed marking, `UNCLASSIFIED` or `UNCLASSIFIED // EXERCISE`, and operator opt-in (`SENTINEL_AI_CLOUD=1`). Case and the spacing around `//` are ignored; nothing else is. A caveat such as `UNCLASSIFIED//CUI` or `UNCLASSIFIED//FOUO` limits who may receive the text, and a hosted service is a recipient no caveat names, so a caveated or unknown marking keeps the assistant on the node and the tier's reason says so. Then:
 
 | Measured link | Router | Narrator |
 |---|---|---|
@@ -428,7 +428,7 @@ Every node setting is an environment variable read at start-up; `sentinel/api/se
 | `SENTINEL_DB` | `:memory:` | SQLite file for CDMs, assessments and operator data. The default keeps nothing across restarts. |
 | `SENTINEL_VAR` | `var` (relative to the working directory) | Writable state: `keys/<node_id>.ed25519.pem`, `keys/<node_id>.pub`, `ai-audit.jsonl` and the unit file `unit.json` (mode 0600). Under systemd it must point inside the writable prefix (`tests/test_deploy_env.py`). |
 | `SENTINEL_TRUST_FILE` | unset | JSON map of node id to Ed25519 public key (hex). Unset: the node trusts only itself and merges no one else's decision entries. |
-| `SENTINEL_MARKING` | `UNCLASSIFIED // EXERCISE` | Classification banner shown in the console. Hosted AI is allowed only when it starts with `UNCLASSIFIED`. |
+| `SENTINEL_MARKING` | `UNCLASSIFIED // EXERCISE` | Classification banner shown in the console. Hosted AI is allowed only under exactly `UNCLASSIFIED` or `UNCLASSIFIED // EXERCISE` (case and spacing around `//` aside); any caveat keeps it local. |
 | `SENTINEL_EXERCISE` | on | Run the scripted exercise scenario (`sentinel/conjunction/exercise.py`); its CDMs carry `ORIGINATOR=SENTINEL-EXERCISE` |
 | `SENTINEL_LIBRARY` | on | Load NASA CARA's 53 operational conjunctions as REAL reference events at start-up |
 | `SENTINEL_READ_ONLY` | off | Public node: ingest, screening, operator writes, setting or clearing the unit, and AI confirmation return HTTP 403 |

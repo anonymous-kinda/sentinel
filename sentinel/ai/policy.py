@@ -3,6 +3,15 @@
 Assumption, stated: an edge's route to a hosted AI service is the same
 constrained link it uses to reach its hub, so the measured hub-link state
 stands in for WAN state.
+
+Hosted AI sends the operator's question and a tool's facts to a commercial
+service, so the marking must say that content may go there. Only an exact
+allow-listed marking does. Starting with UNCLASSIFIED is not enough: a
+dissemination control or caveat (CUI, FOUO, NOFORN, PROPIN, ...) limits who
+may receive the content, and a hosted service is a recipient no caveat
+names. EXERCISE says what the data is for, not who may read it, and it is
+the banner this demonstrator ships with. Anything else, including a marking
+this list has never heard of, keeps the assistant on the node.
 """
 
 from __future__ import annotations
@@ -11,6 +20,20 @@ import dataclasses
 
 ROUTABLE_LINKS = {"CONNECTED", "DEGRADED", "LIMITED"}       # Jev: small answers
 PROSE_LINKS = {"CONNECTED", "DEGRADED"}                     # hosted LLM: kilobytes of text
+HOSTED_MARKINGS = ("UNCLASSIFIED", "UNCLASSIFIED // EXERCISE")
+MARKING_NOT_CLEARED = (
+    f"Marking not cleared for hosted AI (only {' or '.join(HOSTED_MARKINGS)}, with no caveat): "
+    "hosted AI services are not used"
+)
+
+
+def canonical_marking(marking: str) -> str:
+    """The words of a banner marking. Case and the spacing around // are how
+    it was typed; they are not part of what it says."""
+    return " // ".join(" ".join(part.split()) for part in marking.upper().split("//"))
+
+
+_CLEARED = frozenset(canonical_marking(m) for m in HOSTED_MARKINGS)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -31,8 +54,8 @@ class TierDecision:
 
 def _hosted_allowed(inputs: TierInputs) -> str | None:
     """None if hosted AI may be used at all; otherwise why not."""
-    if not inputs.marking.upper().startswith("UNCLASSIFIED"):
-        return "Classified marking: hosted AI services are not used"
+    if canonical_marking(inputs.marking) not in _CLEARED:
+        return MARKING_NOT_CLEARED
     if not inputs.cloud_opt_in:
         return "Hosted AI not approved on this node"
     return None

@@ -44,5 +44,41 @@ def test_tier_table(overrides, router, narrator):
 
 def test_reasons_name_the_constraint():
     assert "LIMITED" in decide(inputs(link_state="LIMITED")).reason
-    assert "classified" in decide(inputs(marking="SECRET")).reason.lower()
+    assert "marking" in decide(inputs(marking="SECRET")).reason.lower()
     assert "DENIED" in decide(inputs(link_state="DENIED")).reason
+
+
+# ---------------------------------------------------------------- marking
+@pytest.mark.parametrize(
+    "marking",
+    ["UNCLASSIFIED", "UNCLASSIFIED // EXERCISE", "UNCLASSIFIED//EXERCISE", "unclassified  //  exercise"],
+)
+def test_hosted_ai_is_allowed_under_an_allow_listed_marking(marking):
+    """Case and the spacing around // are how a banner is typed, not what it says."""
+    assert (decide(inputs(marking=marking)).router, decide(inputs(marking=marking)).narrator) == ("jev", "claude")
+
+
+@pytest.mark.parametrize(
+    "marking",
+    [
+        "UNCLASSIFIED//CUI",
+        "UNCLASSIFIED // FOUO",
+        "UNCLASSIFIED//FOR OFFICIAL USE ONLY",
+        "UNCLASSIFIED//NOFORN",
+        "UNCLASSIFIED // EXERCISE // CUI",
+        "UNCLASSIFIED//PROPIN",
+        "UNCLASSIFIED//",
+        "UNCLASSIFIED-ISH",
+        "CUI",
+        "SECRET",
+        "MARKING UNKNOWN",
+        "",
+    ],
+)
+def test_a_caveated_or_unknown_marking_keeps_ai_on_the_node(marking):
+    """Starting with UNCLASSIFIED is not enough: a dissemination caveat limits
+    who may receive the text, and a hosted service is a recipient no caveat
+    names. Only an exact allow-listed marking lets text leave the node."""
+    decision = decide(inputs(marking=marking))
+    assert (decision.router, decision.narrator) == ("deterministic", "template")
+    assert "UNCLASSIFIED // EXERCISE" in decision.reason and "caveat" in decision.reason
