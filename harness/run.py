@@ -4,14 +4,18 @@
                           [--denial-s 20] [--limited-runs 5]
 
 Writes harness/results/<scenario>.json and exits non-zero if any assertion
-fails. `python -m harness.report` turns the results into docs/ddil-results.md.
+fails. Every result one invocation writes carries the same `run_id`, and the
+next invocation gets a new one. `python -m harness.report` turns the results
+into docs/ddil-results.md, only when all six come from one run.
 """
 
 from __future__ import annotations
 
 import argparse
+import datetime as dt
 import json
 import pathlib
+import secrets
 import sys
 import traceback
 
@@ -50,9 +54,15 @@ def options_for(name: str, args: argparse.Namespace) -> dict:
     }.get(name, {})
 
 
-def main() -> int:
-    args = parse()
+def new_run_id() -> str:
+    """When the run started, and a random part so two runs never share an id."""
+    return f"{dt.datetime.now(dt.UTC):%Y%m%dT%H%M%SZ}-{secrets.token_hex(4)}"
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse(argv)
     names = list(SCENARIOS) if "all" in args.scenarios else args.scenarios
+    run_id = new_run_id()
     RESULTS.mkdir(exist_ok=True)
     failed = False
     for name in names:
@@ -64,7 +74,8 @@ def main() -> int:
             result.check("scenario ran to completion", False, f"{type(exc).__name__}: {exc}")
             traceback.print_exc()
         print_result(result)
-        (RESULTS / f"{name}.json").write_text(json.dumps(result.to_dict(), indent=1, default=str))
+        record = {**result.to_dict(), "run_id": run_id}
+        (RESULTS / f"{name}.json").write_text(json.dumps(record, indent=1, default=str))
         failed |= not result.passed
     return 1 if failed else 0
 

@@ -1,9 +1,12 @@
-"""docs/ddil-results.md is written from all six scenarios or not at all.
+"""docs/ddil-results.md is written from all six scenarios of one run, or not at all.
 
 The report renders harness/results/. Run one scenario on a fresh clone and
 that directory holds one result, so a report written from it would drop
-the other five from a committed document. It refuses instead, and names
-what is missing; `make opsec` runs its scenario and leaves the report be.
+the other five from a committed document. Run one scenario after a full
+run and the directory holds six results from two runs, so a report would
+mix old numbers with new. It refuses both, and names what is missing or
+which run each result came from; `make opsec` runs its scenario and leaves
+the report be.
 """
 
 import json
@@ -16,6 +19,8 @@ from harness.stats import speedup, summarize
 from tests.makefile import dry_run
 
 COMMITTED = "# DDIL test results\n\nevery scenario, from a complete run\n"
+RUN = "20260924T060000Z-0a1b2c3d"
+LATER_RUN = "20260925T090000Z-4e5f6a7b"
 
 
 def limited_run(mode: str, urgent: float, load: float) -> dict:
@@ -41,7 +46,7 @@ def result(name: str) -> dict:
     return {
         "scenario": name.upper(), "passed": True, "notes": [], "metrics": metrics,
         "assertions": [{"name": "it held", "passed": True, "detail": ""}],
-        "ran_at": "2026-09-24T06:00:00+00:00", "load_1min": {"start": 1.0, "end": 1.0},
+        "ran_at": "2026-09-24T06:00:00+00:00", "load_1min": {"start": 1.0, "end": 1.0}, "run_id": RUN,
     }
 
 
@@ -55,9 +60,9 @@ def harness_dirs(tmp_path, monkeypatch):
     return results, out
 
 
-def write_results(results: pathlib.Path, names) -> None:
+def write_results(results: pathlib.Path, names, **fields) -> None:
     for name in names:
-        (results / f"{name}.json").write_text(json.dumps(result(name)))
+        (results / f"{name}.json").write_text(json.dumps({**result(name), **fields}))
 
 
 def test_the_report_waits_for_every_scenario_the_harness_runs():
@@ -80,6 +85,37 @@ def test_if_complete_skips_an_incomplete_report_without_failing(harness_dirs, ca
     assert "no result for denied, limited, intermittent, degraded, recovery" in capsys.readouterr().err
 
 
+def test_results_from_different_runs_do_not_make_a_report(harness_dirs, capsys):
+    """`make ddil`, then `make opsec`: six results, but OPSEC's are newer."""
+    results, out = harness_dirs
+    write_results(results, report.ORDER)
+    write_results(results, ["opsec"], run_id=LATER_RUN)
+    assert report.main([]) == 1
+    assert out.read_text() == COMMITTED
+    err = capsys.readouterr().err
+    assert "not from one run" in err
+    assert f"denied, limited, intermittent, degraded, recovery: run {RUN}" in err
+    assert f"opsec: run {LATER_RUN}" in err
+
+
+def test_if_complete_skips_a_mixed_set_without_failing(harness_dirs, capsys):
+    results, out = harness_dirs
+    write_results(results, report.ORDER)
+    write_results(results, ["opsec"], run_id=LATER_RUN)
+    assert report.main(["--if-complete"]) == 0
+    assert out.read_text() == COMMITTED
+    assert "not from one run" in capsys.readouterr().err
+
+
+def test_results_that_name_no_run_are_refused(harness_dirs, capsys):
+    """Results written before run ids cannot show they come from one run."""
+    results, out = harness_dirs
+    write_results(results, report.ORDER, run_id=None)
+    assert report.main([]) == 1
+    assert out.read_text() == COMMITTED
+    assert "denied, limited, intermittent, degraded, recovery, opsec: no run id" in capsys.readouterr().err
+
+
 def test_every_result_present_writes_every_scenario(harness_dirs):
     results, out = harness_dirs
     write_results(results, report.ORDER)
@@ -92,7 +128,9 @@ def report_lines(target: str) -> list[str]:
     return [line for line in dry_run(target) if "harness.report" in line]
 
 
-def test_make_opsec_rewrites_the_report_only_from_a_complete_set():
+def test_make_opsec_leaves_the_report_alone_without_failing():
+    """One scenario is never all six from one run: the report says why and
+    exits 0, so `make opsec` succeeds on its own evidence."""
     assert report_lines("opsec") and all("--if-complete" in line for line in report_lines("opsec"))
 
 

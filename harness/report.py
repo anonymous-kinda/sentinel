@@ -2,10 +2,13 @@
 
     python -m harness.report [--if-complete]
 
-The report is written from every scenario or not at all: with any result
-missing it names the missing scenarios and writes nothing, so one scenario
-run on a fresh clone cannot drop the other five from the committed report.
-It exits 1 then, or 0 with --if-complete (for `make opsec`).
+The report is written from every scenario of one run or not at all. With
+any result missing it names the missing scenarios and writes nothing, so one
+scenario run on a fresh clone cannot drop the other five from the committed
+report. With results from different runs (each records the `run_id` of the
+`harness.run` invocation that wrote it) it names each result's run and
+writes nothing, so one scenario re-run after `make ddil` cannot mix old
+numbers with new. It exits 1 then, or 0 with --if-complete (for `make opsec`).
 """
 
 from __future__ import annotations
@@ -29,19 +32,39 @@ def missing() -> list[str]:
     return [name for name in ORDER if not (RESULTS / f"{name}.json").exists()]
 
 
+def runs(results: dict[str, dict]) -> dict[str | None, list[str]]:
+    """Scenario names by the run that wrote them; None for a result that names no run."""
+    by_run: dict[str | None, list[str]] = {}
+    for name, result in results.items():
+        by_run.setdefault(result.get("run_id"), []).append(name)
+    return by_run
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m harness.report", description=__doc__.split("\n\n")[0])
     parser.add_argument("--if-complete", action="store_true",
-                        help="with a result missing, skip the report and exit 0 instead of 1")
+                        help="with a result missing, or results from different runs, "
+                             "skip the report and exit 0 instead of 1")
     args = parser.parse_args(argv)
     absent = missing()
     if absent:
-        print(f"not writing {OUT.name}: no result for {', '.join(absent)} in {RESULTS}. "
-              "Run every scenario (make ddil) to regenerate it.", file=sys.stderr)
-        return 0 if args.if_complete else 1
-    OUT.write_text(render({name: json.loads((RESULTS / f"{name}.json").read_text()) for name in ORDER}))
+        return _refuse(f"no result for {', '.join(absent)} in {RESULTS}", args.if_complete)
+    results = {name: json.loads((RESULTS / f"{name}.json").read_text()) for name in ORDER}
+    by_run = runs(results)
+    if len(by_run) > 1 or None in by_run:
+        return _refuse(f"the results are not from one run ({_describe(by_run)})", args.if_complete)
+    OUT.write_text(render(results))
     print(f"wrote {OUT}")
     return 0
+
+
+def _describe(by_run: dict[str | None, list[str]]) -> str:
+    return "; ".join(f"{', '.join(names)}: " + (f"run {run}" if run else "no run id") for run, names in by_run.items())
+
+
+def _refuse(reason: str, if_complete: bool) -> int:
+    print(f"not writing {OUT.name}: {reason}. Run every scenario (make ddil) to regenerate it.", file=sys.stderr)
+    return 0 if if_complete else 1
 
 
 def render(results: dict[str, dict]) -> str:

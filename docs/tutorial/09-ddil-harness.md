@@ -96,9 +96,9 @@ LIMITED compares two orders for the same work: Sentinel's earliest-deadline-firs
 
 A median of five ignores one bad run, where a mean would be dragged by it. The range is printed next to it, so a noisy measurement looks noisy.
 
-### All six or none
+### All six from one run, or none
 
-`docs/ddil-results.md` is generated, and it is committed. Suppose someone runs one scenario on a fresh clone and then regenerates the report. Five scenarios would vanish from the committed evidence, silently. So `harness.report` writes the report from all six results or not at all. With any missing it names them and exits 1, or 0 with `--if-complete`, which is what `make opsec` passes. `make ddil` is the way to regenerate it: it runs all six, then writes the report.
+`docs/ddil-results.md` is generated, and it is committed. Suppose someone runs one scenario on a fresh clone and then regenerates the report. Five scenarios would vanish from the committed evidence, silently. Suppose instead they run one scenario after a full run. All six results exist, but one is newer, so the report would mix numbers from two runs, possibly two commits. So `harness.report` writes the report from all six results of one run, or not at all. Every result `harness.run` writes carries the `run_id` of that invocation, and the next invocation gets a new one. With a result missing, or results from different runs, the report names what is missing or which run each result came from, writes nothing, and exits 1, or 0 with `--if-complete`, which is what `make opsec` passes. `make ddil` is the way to regenerate it: it runs all six in one invocation, then writes the report.
 
 ### The machine-load column
 
@@ -162,7 +162,7 @@ Easy to get wrong: subscribing to `>` on the hub is the adversarial case, not a 
 
 ### `harness/report.py`
 
-`missing` lists scenarios with no result. `main` refuses a partial set. `render` writes the summary table (result, checks passed, load at start and end, when each scenario ran), each scenario's notes and checks, and a metrics table. `limited_section` writes the medians and ranges per mode, the workload both modes moved, a paragraph saying the edge's rate estimate is not the link's capacity, and every run in the order run with its load. `tests/test_harness_report.py` holds all of it.
+`missing` lists scenarios with no result, and `runs` groups the scenarios by the `run_id` that wrote them. `main` refuses a partial set and a mixed one, including results with no `run_id` (written before run ids existed). `render` writes the summary table (result, checks passed, load at start and end, when each scenario ran), each scenario's notes and checks, and a metrics table. `limited_section` writes the medians and ranges per mode, the workload both modes moved, a paragraph saying the edge's rate estimate is not the link's capacity, and every run in the order run with its load. `tests/test_harness_report.py` holds all of it.
 
 ### `harness/demo.py`
 
@@ -202,7 +202,7 @@ Times and latencies differ from `docs/ddil-results.md` and from run to run. That
 uv run python -m json.tool harness/results/denied.json | head -40
 ```
 
-The keys are `scenario`, `passed`, `assertions`, `metrics`, `notes`, `duration_s`, `ran_at` and `load_1min`. `harness/results/` is git-ignored: results are raw material, and only the report is committed.
+The keys are `scenario`, `passed`, `assertions`, `metrics`, `notes`, `duration_s`, `ran_at`, `load_1min` and `run_id`, which every result written by the same `harness.run` invocation shares. `harness/results/` is git-ignored: results are raw material, and only the report is committed.
 
 **Run LIMITED once per mode.**
 
@@ -243,7 +243,7 @@ With one run per mode, the median is that run, and no range is printed. With `--
 >>> missing()
 ```
 
-The ledger saw 57 new arrivals but only 50 in the window, so it holds 53 and says 7 went unseen. The one slow run moves the range, not the median. `missing()` lists the scenarios you have not run. While it lists anything, `uv run python -m harness.report` refuses: it prints the missing names, writes nothing and exits 1. When `missing()` returns an empty list, do not run it here: it would rewrite `docs/ddil-results.md`.
+The ledger saw 57 new arrivals but only 50 in the window, so it holds 53 and says 7 went unseen. The one slow run moves the range, not the median. `missing()` lists the scenarios you have not run. While it lists anything, `uv run python -m harness.report` refuses: it prints the missing names, writes nothing and exits 1. It refuses the same way while the results come from more than one run, as they do after you run single scenarios by hand. When all six come from one run, do not run it here: it would rewrite `docs/ddil-results.md`.
 
 **The offline tests.**
 
@@ -263,7 +263,7 @@ These take about a second and start no processes. They cover the ledger, the sta
 - **A baseline in the same agent** ([ADR-008](../system-design.md#adr-008--reference-data-application-level-priority-pull-not-transport-replication)). Buys: FIFO and EDF move the same bytes over the same transport, so only the order differs. Costs: the baseline is Sentinel's own FIFO mode, not a JetStream mirror. ADR-008 argues a mirror delivers in exactly that order.
 - **Medians of repeated runs, alternating order, with every run listed** ([ADR-006](../system-design.md#adr-006--bandwidth-triage-by-decision-urgency)). Buys: one bad run cannot make or break the headline, and the reader sees every run. Costs: LIMITED dominates the time `make ddil` takes.
 - **The simulated clock at scale 1.** Buys: reproducible element-set ages and orders, whatever the date. Costs: a six-hour denial is not run. The claim rests on the argument that length does not matter, backed by the nightly 900 s denial.
-- **All six or none.** Buys: the committed report is always one complete set. Costs: regenerating it means running everything.
+- **All six from one run, or none.** Buys: the committed report is always one complete set, measured together. Costs: regenerating it means running everything, even to refresh one scenario.
 - **Load recorded, not controlled.** Buys: honest context for every time. Costs: nothing stops a run on a busy machine; the reader has to look.
 
 ## How it fails
@@ -273,7 +273,7 @@ These take about a second and start no processes. They cover the ledger, the sta
 - **A process that dies.** The "no process restarted" check fails. `Cluster.logs` and `keep=True` show why. The demo prints the dead process's log and exits.
 - **An unfair LIMITED run.** A different link, compression, backlog or workload is a failed check naming the run and the point, never a quiet median.
 - **Arrivals the harness could not read.** Counted in `unseen`, and the checks that need every arrival fail.
-- **A partial result set.** `harness.report` names what is missing and writes nothing. It checks that all six results exist, not that they come from one run or one commit. The summary table's "ran" column shows when each scenario ran, so a stale result is visible. `make ddil` avoids the problem by running all six first.
+- **A partial or mixed result set.** `harness.report` names what is missing, or each result's run, and writes nothing. Results with no `run_id` count as mixed, so results written before run ids were recorded cannot make a report: run `make ddil`. `tests/test_harness_report.py` and `tests/test_harness_run.py` hold both halves.
 - **A busy machine.** Nothing refuses. The load column shows it, and in LIMITED so does each run's row.
 - **A failed check in the report.** The report prints it as **FAIL**, in bold, in the summary table and in the scenario's list. `harness.report` renders whatever the results say.
 
@@ -293,7 +293,7 @@ These take about a second and start no processes. They cover the ledger, the sta
 
 4. On a fresh clone you run `uv run python -m harness.run opsec`, then `make opsec`. What happens to `docs/ddil-results.md`?
 
-   <details><summary>Answer</summary>Nothing. `make opsec` runs `harness.report --if-complete`. Five scenarios have no result, so it names them, writes nothing and exits 0. Without `--if-complete` it would exit 1. Either way one scenario cannot replace the committed six.</details>
+   <details><summary>Answer</summary>Nothing. `make opsec` runs `harness.report --if-complete`. Five scenarios have no result, so it names them, writes nothing and exits 0. Without `--if-complete` it would exit 1. Either way one scenario cannot replace the committed six. After a full `make ddil`, `make opsec` leaves the report alone too: its OPSEC result carries a new `run_id`, so the six results are no longer from one run.</details>
 
 5. DEGRADED records "converges over a degraded link" as `True` unconditionally. How can that check ever fail?
 
