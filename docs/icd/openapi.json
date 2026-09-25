@@ -65,7 +65,7 @@
   "paths": {
     "/api/ai/ask": {
       "post": {
-        "description": "An answer phrased from tool facts (every number checked by the grounding guard), a\nquestion back when the request is ambiguous, or a draft action that takes effect only\non /api/ai/confirm. 422 on an empty or over-long question.",
+        "description": "An answer phrased from tool facts (every number checked by the grounding guard), a\nquestion back when the request is ambiguous, or a draft action that takes effect only\non /api/ai/confirm. A read-only node, which can record nothing, drafts nothing: it\nsays so instead. 422 on an empty or over-long question.",
         "operationId": "ai_ask_api_ai_ask_post",
         "requestBody": {
           "content": {
@@ -181,7 +181,7 @@
     },
     "/api/ai/confirm": {
       "post": {
-        "description": "The operator confirms a draft once; it becomes a signed DECISION. 404 for an unknown\ndraft, 409 when the event's CDM changed since the draft (stale), 403 on a read-only\nnode.",
+        "description": "The operator confirms a draft once; it becomes a signed DECISION. The node holds\nthe 100 newest unconfirmed drafts. 404 `unknown_draft` for a draft it does not hold\n(never made, already confirmed, or forgotten after 100 newer ones), 409 when the\nevent's CDM changed since the draft (stale), 403 on a read-only node.",
         "operationId": "ai_confirm_api_ai_confirm_post",
         "requestBody": {
           "content": {
