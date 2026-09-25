@@ -5,7 +5,8 @@ CLAUDE.md's "Docs are value-first" rule, in the parts a test can hold:
 - every ADR opens with what it buys and what it costs, right under its title;
 - the README's limits are a top-level section placed straight after its value
   section, and they name the exercise-only data, that nothing is fielded, that
-  no ATO is claimed, and the open gaps in SECURITY.md.
+  no ATO is claimed, and the open gaps in SECURITY.md;
+- the documentation index says which documents are for which reader.
 
 Numbers are not checked here: tests/doc_claims.toml holds each quoted number to
 its generated source. Each check is first shown to catch a deliberately wrong
@@ -18,6 +19,7 @@ from .doccheck import DOCS, ROOT
 
 SYSTEM_DESIGN = DOCS / "system-design.md"
 README = ROOT / "README.md"
+INDEX = DOCS / "index.md"
 
 _ADR = re.compile(r"^### (ADR-\d{3})\b")
 _FENCE = re.compile(r"^\s*(```|~~~)")
@@ -29,6 +31,12 @@ LIMITS = {
     "nothing fielded": "fielded",
     "no ATO claimed": "ATO",
     "the open gaps": "SECURITY.md",
+}
+
+# The reader split CLAUDE.md sets: who reads what first.
+READERS = {
+    "operator or program office": ("README.md", "docs/white-paper.md", "docs/quad-chart.md"),
+    "engineer": ("docs/technical-guide.md", "docs/system-design.md", "docs/icd/", "CONTRIBUTING.md"),
 }
 
 
@@ -100,6 +108,26 @@ def limits_problems(markdown: str) -> list[str]:
     return problems
 
 
+# -------------------------------------------------------------------- index
+
+
+def reader_problems(index: str) -> list[str]:
+    """Each reader's row in the index names the documents written for that reader."""
+    rows = {}
+    for line in index.splitlines():
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if line.lstrip().startswith("|") and len(cells) > 1:
+            rows[cells[0].strip("*").lower()] = " ".join(cells[1:])
+    problems = []
+    for reader, documents in READERS.items():
+        row = rows.get(reader)
+        if row is None:
+            problems.append(f"no row for the {reader}")
+            continue
+        problems += [f"{reader}: {doc}" for doc in documents if f"`{doc}`" not in row]
+    return problems
+
+
 # --------------------------------------------------------- the checks catch it
 
 
@@ -135,6 +163,19 @@ def test_a_readme_whose_limits_are_missing_buried_or_incomplete_is_caught():
     ]
 
 
+def test_an_index_that_does_not_say_who_reads_what_is_caught():
+    right = (
+        "| Reader | Start with |\n|---|---|\n"
+        "| **Operator or program office** | `README.md`, `docs/white-paper.md`, `docs/quad-chart.md` |\n"
+        "| **Engineer** | `docs/technical-guide.md`, `docs/system-design.md`, `docs/icd/`, `CONTRIBUTING.md` |\n"
+    )
+    assert reader_problems(right) == []
+    assert reader_problems(right.replace(", `docs/quad-chart.md`", "")) == [
+        "operator or program office: docs/quad-chart.md"
+    ]
+    assert reader_problems(right.splitlines()[2]) == ["no row for the engineer"]
+
+
 # ------------------------------------------------------ the real documents
 
 
@@ -146,3 +187,7 @@ def test_every_adr_opens_with_what_it_buys_and_what_it_costs():
 
 def test_the_readme_states_its_limits_straight_after_its_value():
     assert limits_problems(README.read_text(encoding="utf-8")) == []
+
+
+def test_the_index_says_which_documents_are_for_which_reader():
+    assert reader_problems(INDEX.read_text(encoding="utf-8")) == []
