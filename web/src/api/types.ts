@@ -11,7 +11,8 @@ export type RefusalReason =
   | "ILL_CONDITIONED_COVARIANCE"
   | "LOW_RELATIVE_VELOCITY"
   | "TCA_INCONSISTENT"
-  | "CURVILINEAR_UNCERTAINTY";
+  | "CURVILINEAR_UNCERTAINTY"
+  | "UNRESOLVED_INTEGRAL";
 
 export interface Assessment {
   method: Method;

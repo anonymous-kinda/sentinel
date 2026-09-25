@@ -443,19 +443,22 @@ class ConjunctionService:
         eigenvalues = finite_eigenvalues(plane.cov_2d_m2)
         if eigenvalues is None or eigenvalues[0] <= 0:
             return None
-        from ..risk.integrate import maximize_pc_over_scale
+        from ..risk.integrate import UnresolvedIntegral, maximize_pc_over_scale
 
-        k_star, pc_max, _ = maximize_pc_over_scale(plane.cov_2d_m2, plane.mu_m, plane.hbr_m)
-        lk_star = math.log10(k_star)
-        lo = min(0.0, lk_star) - 2.0
-        hi = max(0.0, lk_star) + 2.0
-        grid = np.linspace(lo, hi, samples)
+        try:
+            k_star, pc_max, _ = maximize_pc_over_scale(plane.cov_2d_m2, plane.mu_m, plane.hbr_m)
+            lk_star = math.log10(k_star)
+            grid = np.linspace(min(0.0, lk_star) - 2.0, max(0.0, lk_star) + 2.0, samples)
+            curve, pc_at_k1 = pc_curve(plane, grid), plane.pc(1.0)
+        except UnresolvedIntegral:
+            # The assessment already refuses (UNRESOLVED_INTEGRAL); there is no curve to draw.
+            return None
         return {
             "model_applies": a["method"] == Method.FOSTER_ESTES_2D.value,
             "log10_k": grid.tolist(),
-            "pc": pc_curve(plane, grid).tolist(),
+            "pc": curve.tolist(),
             "k_star": k_star,
-            "pc_at_k1": plane.pc(1.0),
+            "pc_at_k1": pc_at_k1,
             "pc_max": pc_max,
             "diluted": k_star < 1.0,
         }

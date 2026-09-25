@@ -30,6 +30,7 @@ package SentinelArchitecture {
         enum TCA_INCONSISTENT;
         enum CURVILINEAR_UNCERTAINTY;
         enum NO_HBR;
+        enum UNRESOLVED_INTEGRAL;
     }
 
     enum def VerificationStanding {

@@ -79,4 +79,5 @@ export const REFUSAL_TEXT: Record<string, string> = {
   LOW_RELATIVE_VELOCITY: "Relative speed too low for the straight-line encounter model. Needs 3D assessment.",
   TCA_INCONSISTENT: "States are not at closest approach. The message is internally inconsistent.",
   CURVILINEAR_UNCERTAINTY: "Along-track uncertainty bends too far along the orbit for a flat 2D Gaussian. Needs 3D assessment.",
+  UNRESOLVED_INTEGRAL: "Uncertainty too small against the hard-body radius to integrate in double precision. Refused, not guessed.",
 };
