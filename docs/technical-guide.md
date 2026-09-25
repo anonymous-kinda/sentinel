@@ -568,12 +568,12 @@ uv run python -m harness.run recovery                  # one scenario; needs nat
 uv run python -m harness.run denied --denial-s 60      # a longer denial
 uv run python -m harness.run limited --limited-runs 3  # fewer runs behind each median (CI runs 3)
 make ddil                                              # all six (LIMITED_RUNS=5 per mode), then rewrites docs/ddil-results.md
-make opsec                                             # the OPSEC scenario; rewrites docs/ddil-results.md only if all six have results
+make opsec                                             # the OPSEC scenario alone; never rewrites docs/ddil-results.md (its run id is new)
 ```
 
 The scenarios are `denied`, `limited`, `intermittent`, `degraded`, `recovery` and `opsec` (`harness/scenarios.py`). Each runs the hub's default configuration: the hub loads the vendored element sets and offers edges the imaging catalog, so conjunction CDMs and element sets share the link.
 
-`python -m harness.report` writes `docs/ddil-results.md` from all six results in `harness/results/` or not at all: with any missing, it names them, writes nothing and exits 1. `make opsec` passes `--if-complete`, so after one scenario on a fresh clone it says what is missing, leaves the report alone and succeeds. Commit the report only from a complete, passing run of all six (`make ddil`).
+`python -m harness.report` writes `docs/ddil-results.md` from all six results in `harness/results/`, all stamped with the same `run_id` by one `harness.run` invocation, or not at all: with any missing, or with results from different runs, it names them, writes nothing and exits 1. `make opsec` runs one scenario, so its result carries a new run id and the report is never rebuilt from a mixed set; it says so and exits 0. Commit the report only from a complete, passing run of all six (`make ddil`).
 
 For this guide, `recovery` and `opsec` were run through `python -m harness.run`, which writes only the git-ignored `harness/results/`. `recovery` passed. `opsec` failed one assertion, not from a leak but from a harness race: it counted element sets on the hub-side capture, which subscribes after the leaf connects and so could miss an early fetch. The scenario now counts them from the edge's own sync record (`SyncLedger` in `harness/ledger.py`) and keeps the capture for leak detection only. `make ddil` was not run, because it rewrites the committed report.
 
