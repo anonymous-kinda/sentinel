@@ -686,7 +686,7 @@ The goal is a module whose reference data crosses the link by priority without a
    git diff --stat main -- sentinel/sync sentinel/bus sentinel/crdt sentinel/triage     # must print nothing
    ```
 
-   The pass module's proof of the same property is a fixed commit range, `git diff --stat 67199b7 f16e294 -- sentinel/sync sentinel/bus sentinel/crdt sentinel/triage`, which prints nothing. The core changes only deliberately: a bug fix proven by a failing test, typing or documentation with no behaviour change, or a design change recorded in an ADR.
+   The pass module's proof of the same property is a fixed commit range, `git diff --stat dd69b7e ac317e6 -- sentinel/sync sentinel/bus sentinel/crdt sentinel/triage`, which prints nothing. The core changes only deliberately: a bug fix proven by a failing test, typing or documentation with no behaviour change, or a design change recorded in an ADR.
 7. **Interface control documents.** Each interface you add goes in `docs/icd/`, and `uv run pytest -q tests/docs` holds you to it:
    - your item-id prefix and any header your records set go in `docs/icd/sync-envelope.md`. `tests/docs/test_sync_envelope.py` finds every class under `sentinel/` that defines the `ReferenceRecords` methods, and every prefix given to `CompositeRecords`, so it fails on your header or prefix until the document lists it. Keep the prefix a string constant or literal it can read;
    - a new node-local event kind or bus header goes in `docs/icd/asyncapi.yaml`. `tests/docs/test_asyncapi.py` finds kinds at the `subjects.local` call sites, and fails on any it cannot find in the document;
