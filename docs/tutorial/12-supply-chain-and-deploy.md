@@ -104,7 +104,7 @@ sentinel-<ver>-<arch>/
   requirements.txt   2. export_requirements(): uv export --frozen --no-dev, with --hash lines
   bin/               4. uv and nats-server for the target arch, through fetch()
   web/ fixtures/     5. the built console; NASA CARA data and the element-set snapshot
-  systemd/ install.sh LICENSE VERSION
+  systemd/ install.sh verify_contents.sh LICENSE VERSION
   BUNDLE.json        6. bundle_manifest(): commit, clean|dirty, epoch, tools, wheel digests
   SHA256SUMS         6. write_manifest(): every file, written last
 -> sentinel-<ver>-<arch>.tar.gz (+ .sha256)   7. write_tarball()
@@ -112,6 +112,7 @@ sentinel-<ver>-<arch>/
 
 - `export_requirements` is the one definition of the runtime dependency set: no dev tools and no optional AI extras. The bundle, the container and the Python SBOM all install exactly this.
 - `stage_fixtures` copies `SHIPPED_FIXTURES` (`cara`, `cara_cases.json`, `omm`) unmodified, with their provenance files. If one is missing from the source, the build fails.
+- `stage_installer` copies `INSTALLER` (`install.sh` and `verify_contents.sh`, the contents check that `install.sh` and the release image both run) to the bundle's root, modes kept.
 - `bundle_manifest` records the pinned binaries with their upstream URL and digest, and the digest of every wheel. It also records `source_tree: dirty` when `git status` shows uncommitted changes, so a bundle built from an edited tree cannot pass as its commit.
 - `write_tarball` normalises every entry (`normalise`: uid and gid 0, owner `root`, mtime = epoch, mode 755 or 644) and writes the gzip header with the same epoch and no file name.
 - `manifest_text` in `supplychain/checksums.py` produces lines byte-compatible with `sha256sum --strict -c`, sorted by relative path, and never lists `SHA256SUMS` itself.
@@ -129,18 +130,17 @@ One script decides whether a signature is acceptable, for `make airgap-verify`, 
 
 Every refusal in steps 1 to 3 happens before cosign runs. `tests/supplychain/test_verify_signature.py` pins this with a stub cosign that records its argv. That makes it possible to assert, for example, that keyless mode never passes `--insecure-ignore-tlog`.
 
-### 4. The installer: `deploy/bundle/install.sh`
+### 4. The installer: `deploy/bundle/install.sh` and `deploy/bundle/verify_contents.sh`
 
 `install.sh` runs after the signature has been verified and the tarball unpacked. It does not verify the signature itself. It:
 
-1. runs `sha256sum --quiet --strict -c SHA256SUMS`;
-2. refuses any file under `web`, `fixtures`, `bin`, `wheels` or `systemd` that the list does not name, using `comm` on sorted lists;
+1. runs `verify_contents.sh`, which checks the bundle against its own list: `sha256sum --quiet --strict -c SHA256SUMS`, then it refuses any file anywhere in the bundle that the list does not name, using `comm` on sorted lists;
 3. requires `python3.12` on the host, and sets `UV_OFFLINE=1`, `UV_NO_CACHE=1` and `UV_PYTHON_DOWNLOADS=never`;
 4. installs dependencies with the bundled `uv`, using `--no-index --find-links wheels --require-hashes`, then the sentinel wheel with `--no-deps`;
 5. copies the console, fixtures and binaries under `PREFIX` (default `/opt/sentinel`), and writes `sentinel.env` only if none exists;
 6. with `SYSTEMD=1`, creates the `sentinel` system user, renders the unit with `@PREFIX@` substituted, and starts it.
 
-**Easy to get wrong:** `sha256sum -c` checks only the files the list names. The installer copies whole directories and globs `wheels/sentinel-*.whl`, so a file added after signing would have ridden along unverified. Step 2 closes that hole. It uses `! -type d`, so an added symlink is refused too. `tests/supplychain/test_install_integrity.py` runs the real installer against a miniature bundle with a stub `uv` to prove it.
+**Easy to get wrong:** `sha256sum -c` checks only the files the list names. The installer copies whole directories and globs `wheels/sentinel-*.whl`, so a file added after signing would have ridden along unverified. The second half of step 1 closes that hole. It uses `! -type d`, so an added symlink is refused too, and it looks at the whole bundle, so a hidden or top-level file is refused as well. The release image (`deploy/containers/Dockerfile`) builds from the same unpacked bundle and runs the same script (`RUN bash verify_contents.sh`) before it installs anything. It used to re-run only the `sha256sum` half, so a file added to its build context went into the image. `tests/supplychain/test_install_integrity.py` runs the real installer and the check against a miniature bundle with a stub `uv`, and reads the Dockerfile to prove the image runs the check before its first `pip install`.
 
 ### 5. The local proofs: `verify_offline.sh`, `sign_local.sh`, `selftest_signature.sh`
 
@@ -208,7 +208,7 @@ The whole of `release.yml` has `permissions: {}` at the top, and each job is gra
 | Ansible | `deploy/ansible/site.yml`, roles `baseline`, `sentinel`, `caddy`, `stig` | Installs the same signed bundle on a hub, with Caddy for TLS in front. `roles/sentinel/tasks/verify.yml` runs the signature gate on the target before anything is unpacked | `deploy/ansible/tests/test_verify.sh` (CI `supply-chain`), syntax check (CI `infra`) |
 | STIG role | `deploy/ansible/roles/stig/` | A documented subset of the DISA Ubuntu 24.04 STIG; checks the settings in effect (`sshd -T`), not the files written; optional OpenSCAP scan converted to a `.ckl` checklist | `tests/compliance/test_stig_role.py`, chapter 13 |
 | AWS | `deploy/aws/terraform/` | One Graviton instance in its own VPC: IMDSv2 only, encrypted root, SSH only from `admin_cidr` (which may never be `0.0.0.0/0`), Session Manager for break-glass access, leaf port closed unless allow-listed, a budget alarm | CI `infra` (fmt, validate) |
-| Release image | `deploy/containers/Dockerfile` | Built from an unpacked, verified bundle; re-checks `SHA256SUMS`; Chainguard base pinned by digest; non-root, read-only root | release `container` job |
+| Release image | `deploy/containers/Dockerfile` | Built from an unpacked, verified bundle; runs the installer's `verify_contents.sh` (every listed file matches, nothing unlisted); Chainguard base pinned by digest; non-root, read-only root | `tests/supplychain/test_install_integrity.py` (static); release `container` job |
 | Compose | `deploy/compose/compose.yaml`, `deploy/compose/Dockerfile` | Hub and edge, each with its own nats-server, over one Toxiproxy link; the image builds from source | `tests/test_compose_stack.py`, `tests/test_compose_config.py`, `tests/test_compose_image.py`, `tests/test_compose_wiring.py`, `tests/test_compose_smoke.py`; CI `compose-smoke` |
 
 In `deploy/ansible/roles/sentinel/tasks/verify.yml`, **the part that is easy to get wrong** is the verifier itself. The play copies the pinned cosign to the host and checks its sha256 *on the host* against the digest it pulls out of `deploy/tools.lock` (`sentinel_cosign_sha256` in the role's defaults). A cosign swapped on the controller or in transit would otherwise be trusted to judge the bundle.
@@ -266,14 +266,14 @@ Each exits 1, in turn with `no signature bundle`, `no verification policy`, `amb
 
 ```bash
 mkdir -p build/try/mini/web && echo '<!doctype html>' > build/try/mini/web/index.html
-cp deploy/bundle/install.sh build/try/mini/
+cp deploy/bundle/install.sh deploy/bundle/verify_contents.sh build/try/mini/
 uv run python -c 'import pathlib; from supplychain.checksums import write_manifest; write_manifest(pathlib.Path("build/try/mini"))'
 cat build/try/mini/SHA256SUMS
 echo 'added after signing' > build/try/mini/web/injected.js
 PREFIX=/nonexistent SYSTEMD=0 build/try/mini/install.sh
 ```
 
-Look for `install: refusing files that SHA256SUMS does not list:`, followed by the added file's path relative to the bundle. Now remove the added file and change a listed one instead (`rm build/try/mini/web/injected.js; echo changed >> build/try/mini/web/index.html`). Run the installer again, and `sha256sum` reports the changed file as `FAILED`. Both refusals happen before anything is written under `PREFIX`.
+Look for `verify_contents: refusing files that SHA256SUMS does not list:`, followed by the added file's path relative to the bundle. Now remove the added file and change a listed one instead (`rm build/try/mini/web/injected.js; echo changed >> build/try/mini/web/index.html`). Run the installer again, and `sha256sum` reports the changed file as `FAILED`. Both refusals happen before anything is written under `PREFIX`.
 
 **The dependency set every artifact installs:**
 
@@ -369,7 +369,7 @@ These are stated plainly because the configuration exists and is checked, which 
 | A trust root that is not the pinned one | Refused before cosign | `trusted root digest ... does not match the pinned ...` |
 | A tampered, re-signed or wrong-identity bundle | cosign rejects it | `verify_signature: FAIL: signature does not verify for ...`; `verify_offline.sh` adds `bundle not unpacked` |
 | A changed file inside the unpacked bundle | `sha256sum` fails; nothing installed | `<path>: FAILED`, `sha256sum: WARNING` |
-| A file added inside the unpacked bundle | Refused; nothing installed | `install: refusing files that SHA256SUMS does not list:` |
+| A file added inside the unpacked bundle, or to the release image's build context | Refused; nothing installed | `verify_contents: refusing files that SHA256SUMS does not list:` |
 | No `python3.12` on the host | Refused | `python3.12 is required on the host` |
 | The proof's namespace has network | `verify_offline.sh` stops | `FAIL: namespace has network` |
 | An SBOM missing a shipped component | Logged; exit 1 | `SBOM incomplete` with the missing names |

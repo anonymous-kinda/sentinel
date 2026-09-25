@@ -21,7 +21,7 @@ from sentinel.api import create_app
 from sentinel.api.settings import Settings
 from sentinel.passes.catalog import DEFAULT_CATALOG, load_catalog
 from sentinel.passes.element_store import SNAPSHOT_NAME
-from supplychain.bundle import bundle_manifest, stage_fixtures, write_tarball
+from supplychain.bundle import bundle_manifest, stage_fixtures, stage_installer, write_tarball
 from supplychain.checksums import sha256_file, write_manifest
 from supplychain.toolslock import ToolPin
 
@@ -172,3 +172,13 @@ def test_an_installed_hub_loads_the_bundled_snapshot_through_sentinel_fixtures(t
     assert all(i["element_age_days"] is not None for i in imagers)
     loaded = next(r for r in caplog.records if r.getMessage() == "Element sets loaded")
     assert loaded.fields["path"] == str(fixtures / "omm" / SNAPSHOT_NAME)
+
+
+def test_the_bundle_ships_the_installer_and_the_check_it_and_the_release_image_run(tmp_path):
+    """install.sh and deploy/containers/Dockerfile both run verify_contents.sh
+    from the bundle's root, so the bundle must carry it, executable."""
+    stage = tmp_path / "stage"
+    stage.mkdir()
+    stage_installer(REPO_FIXTURES.parent / "deploy" / "bundle", stage)
+    assert sorted(path.name for path in stage.iterdir()) == ["install.sh", "verify_contents.sh"]
+    assert all(os.access(path, os.X_OK) for path in stage.iterdir())

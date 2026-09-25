@@ -14,6 +14,8 @@ Output: dist/sentinel-<version>-<arch>.tar.gz (+ .sha256), containing
                        (NOSA 1.3) and the public CelesTrak element-set snapshot
     systemd/           hardened unit files
     install.sh         offline installer
+    verify_contents.sh the check install.sh and the release image run first: every
+                       listed file matches SHA256SUMS, nothing unlisted is present
     VERSION            human-readable identity
     BUNDLE.json        machine-readable manifest: commit, pinned tools, wheel digests
     SHA256SUMS         per-file integrity manifest, written last
@@ -38,7 +40,9 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from supplychain.bundle import PYTHON_TAG, bundle_manifest, export_requirements, stage_fixtures, write_tarball  # noqa: I001
+from supplychain.bundle import (  # noqa: I001
+    PYTHON_TAG, bundle_manifest, export_requirements, stage_fixtures, stage_installer, write_tarball,
+)
 from supplychain.checksums import sha256_file, write_manifest
 from supplychain.toolslock import read_lock
 
@@ -111,7 +115,7 @@ def build(arch: str, out_dir: pathlib.Path) -> pathlib.Path:
     shutil.copytree(web_dist, stage / "web")
     stage_fixtures(ROOT / "fixtures", stage)
     shutil.copytree(ROOT / "deploy" / "systemd", stage / "systemd")
-    shutil.copy2(ROOT / "deploy" / "bundle" / "install.sh", stage / "install.sh")
+    stage_installer(ROOT / "deploy" / "bundle", stage)
     shutil.copy2(ROOT / "LICENSE", stage / "LICENSE")
     commit = run("git", "rev-parse", "HEAD", cwd=ROOT, capture=True).strip()
     dirty = bool(run("git", "status", "--porcelain", "--untracked-files=no", cwd=ROOT, capture=True).strip())
