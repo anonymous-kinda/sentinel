@@ -5,7 +5,8 @@ to fail on a deliberately broken input, so a green run below means the rule
 was applied, not skipped. The second applies the rules to the real docs
 (README, CLAUDE.md, SECURITY.md and docs/**):
 
-- every repository path they name exists;
+- every repository path they name exists, and so does every one a
+  docstring or comment under sentinel/ names;
 - every `make` target they name is in the Makefile;
 - every `sentinel` subcommand they name is in the CLI parser;
 - every repository script they run goes through `uv run`, not the system python;
@@ -33,6 +34,7 @@ from tests.doclint import (
     makefile_targets,
     missing_paths,
     parse_markdown,
+    python_prose,
     scripts_outside_the_project,
     undocumented_packages,
     unknown_cli_commands,
@@ -134,6 +136,16 @@ def test_a_script_run_with_the_system_python_is_reported():
     assert scripts_outside_the_project(md) == ["python scripts/report.py", "python3 scripts/demo.py"]
 
 
+def test_a_path_a_docstring_or_comment_names_is_checked(repo):
+    source = (
+        '"""Keys are trusted from scripts/trust.json."""\n'
+        "def f():\n"
+        '    """Runs scripts/run.py."""\n'
+        '    return "docs/gone.md is a string, not prose"  # written to docs/old.md\n'
+    )
+    assert missing_paths(python_prose(source), repo, repo) == ["scripts/trust.json", "docs/old.md"]
+
+
 def test_a_package_without_a_docstring_is_reported(tmp_path):
     _write(tmp_path, "pkg/__init__.py", '"""Documented."""\n')
     _write(tmp_path, "pkg/bare/__init__.py", "from x import y\n")
@@ -211,6 +223,17 @@ def test_the_fixtures_readme_names_every_fixture():
 def test_every_path_a_doc_names_exists(doc):
     md = parse_markdown(doc.read_text(encoding="utf-8"))
     assert missing_paths(md, doc.parent, ROOT) == []
+
+
+def test_every_path_a_docstring_or_comment_in_sentinel_names_exists():
+    """The product's own prose: a docstring that sends a reader to a file
+    that is not there is documentation drift like any other."""
+    missing = {}
+    for path in sorted((ROOT / "sentinel").rglob("*.py")):
+        named = missing_paths(python_prose(path.read_text(encoding="utf-8")), path.parent, ROOT)
+        if named:
+            missing[_id(path)] = named
+    assert missing == {}
 
 
 @pytest.mark.parametrize("doc", DOCS, ids=_id)
