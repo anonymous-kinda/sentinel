@@ -20,8 +20,8 @@ from sentinel.api.settings import Settings
 from sentinel.bus import InProcessBus
 from sentinel.cdm import CdmRejected, parse, to_conjunction
 from sentinel.cdm.validate import (
-    EARTH_HILL_SPHERE_KM,
     MAX_POSITION_VARIANCE_M2,
+    MAX_RADIUS_KM,
     MAX_SPEED_KM_S,
     WGS84_POLAR_RADIUS_KM,
 )
@@ -62,6 +62,15 @@ def _state(position_km: tuple[float, float, float], velocity_km_s: tuple[float, 
     return text
 
 
+def _pair(r1_km, v1_km_s, r2_km, v2_km_s) -> str:
+    """Both objects' states, with no header miss distance to cross-check."""
+    text = NO_HEADER_MISS
+    for occurrence, (position, velocity) in ((1, (r1_km, v1_km_s)), (2, (r2_km, v2_km_s))):
+        for key, value in zip(("X", "Y", "Z", "X_DOT", "Y_DOT", "Z_DOT"), (*position, *velocity)):
+            text = _mutate(key, repr(value), occurrence, text=text)
+    return text
+
+
 POSITION_COVARIANCE = ("CR_R", "CT_R", "CT_T", "CN_R", "CN_T", "CN_N")
 
 
@@ -81,6 +90,10 @@ HOSTILE = {
     # Admitted, and refused by the engine (UNRESOLVED_INTEGRAL): a sigma so
     # far below the hard-body radius that the integral cannot be resolved.
     "covariance-too-small-to-integrate": _scaled_covariance(1e-36),
+    # r x v = 0 for object 1, with a geometry consistent at TCA, so the engine
+    # reaches the RTN frame the covariance is written in, which does not exist.
+    "velocity-zero": _pair((7000.0, 0.0, 0.0), (0.0, 0.0, 0.0), (7000.0, 0.0, 0.2), (0.0, 7.5, 0.0)),
+    "velocity-along-the-position": _pair((7000.0, 0.0, 0.0), (0.001, 0.0, 0.0), (7000.0, 0.0, 0.2), (0.0, 7.5, 0.0)),
     "originator-pc-not-a-number": _mutate("COLLISION_PROBABILITY", "abc"),
     "originator-pc-nan": _mutate("COLLISION_PROBABILITY", "NaN"),
     "originator-pc-infinite": _mutate("COLLISION_PROBABILITY", "inf"),
@@ -186,7 +199,7 @@ def test_unreadable_or_impossible_header_values_are_quarantined_with_a_reason(ke
 
 @pytest.mark.parametrize("key,value", [
     ("X", "1e100"),          # beyond Earth's sphere of influence: finite, but not an Earth orbit
-    ("X", "1.6e6"),          # just beyond Earth's Hill sphere (~1.5 million km)
+    ("X", "3.1e6"),          # just beyond the admitted radius (3 million km)
     ("X", "0.001"),          # with Y, Z below: at the Earth's centre
     ("X_DOT", "1e6"),        # faster than light, and the engine still computes a Pc
     ("CR_R", "1e308"),       # a variance no position estimate can have
@@ -202,10 +215,10 @@ def test_a_state_no_earth_orbiting_object_can_have_is_quarantined(key, value):
 
 @pytest.mark.parametrize("text", [
     _state((WGS84_POLAR_RADIUS_KM, 0.0, 0.0), (0.0, 7.9, 0.0)),
-    _state((EARTH_HILL_SPHERE_KM, 0.0, 0.0), (0.0, 0.5, 0.0)),
+    _state((MAX_RADIUS_KM, 0.0, 0.0), (0.0, 0.5, 0.0)),
     _state((7000.0, 0.0, 0.0), (0.0, MAX_SPEED_KM_S, 0.0)),
     _mutate("CR_R", repr(MAX_POSITION_VARIANCE_M2)),
-], ids=["on-the-surface", "at-the-hill-sphere", "at-the-speed-bound", "at-the-variance-bound"])
+], ids=["on-the-surface", "at-the-radius-bound", "at-the-speed-bound", "at-the-variance-bound"])
 def test_the_physical_bounds_themselves_are_admitted(text):
     to_conjunction(parse(text))
 
@@ -239,7 +252,8 @@ def test_a_repeated_keyword_is_ambiguous_and_quarantined(key, repeat):
 def test_an_event_whose_arcs_cannot_be_drawn_answers_422_not_500(tmp_path):
     settings = Settings(exercise=False, library=False, web_dist=None, var_dir=str(tmp_path))
     with TestClient(create_app(settings, clock=FixedClock(NOW)), raise_server_exceptions=False) as client:
-        accepted = client.post("/api/ingest/cdm", content=HOSTILE["radial-through-the-centre"].encode())
+        # Admitted, but its arcs run past the last date Python can represent.
+        accepted = client.post("/api/ingest/cdm", content=HOSTILE["tca-at-the-end-of-9999"].encode())
         assert accepted.status_code == 201, accepted.text
         r = client.get(f"/api/events/{accepted.json()['event_id']}/trajectory")
     assert r.status_code == 422
@@ -252,3 +266,19 @@ def test_a_covariance_too_small_to_integrate_is_refused_by_name_and_draws_no_cur
     [event] = service.list_events("all")
     assert event["assessment"]["refusal_reason"] == "UNRESOLVED_INTEGRAL"
     assert service.dilution_curve(event["event_id"]) is None
+
+
+@pytest.mark.parametrize("radius_km", [1.2e6, 1.5e6, 1.8e6], ids=["near-L1-L2", "at-L1-L2", "halo-far-side"])
+def test_a_spacecraft_on_a_sun_earth_l1_or_l2_orbit_is_admitted(radius_km):
+    """JWST, SOHO and Gaia-class orbits sit 1.2 to 1.8 million km from the Earth,
+    straddling its Hill sphere. A real CDM for one must never be quarantined."""
+    to_conjunction(parse(_state((radius_km, 0.0, 0.0), (0.0, 0.3, 0.0))))
+
+
+@pytest.mark.parametrize("velocity_km_s", [(0.0, 0.0, 0.0), (7.5, 0.0, 0.0), (-3.0, 0.0, 0.0)])
+def test_a_state_with_no_rtn_frame_is_quarantined_with_a_reason(velocity_km_s):
+    """The covariance is given in RTN, which needs r x v != 0. A velocity of
+    zero, or along the position, leaves the covariance with no frame."""
+    with pytest.raises(CdmRejected) as excinfo:
+        to_conjunction(parse(_pair((7000.0, 0.0, 0.0), velocity_km_s, (7000.0, 0.0, 0.2), (0.0, 7.5, 0.0))))
+    assert excinfo.value.code == "IMPLAUSIBLE_STATE"

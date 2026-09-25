@@ -115,6 +115,23 @@ def test_an_event_known_only_from_the_hubs_summary_has_no_geometry_yet(client):
     assert client.get("/api/events/HUB-ONLY/dilution-curve").json() == {"available": False}
 
 
+@pytest.mark.parametrize(
+    ("secondary", "reason"),
+    [("99207", "LOW_RELATIVE_VELOCITY"), ("99881", "CURVILINEAR_UNCERTAINTY")],
+)
+def test_refused_event_with_a_covariance_serves_a_curve_the_model_does_not_apply_to(client, secondary, reason):
+    """The engine refused a Pc, yet the curve is served with Pc samples in it.
+    `model_applies: false` is the console's only signal not to state one."""
+    events = {e["secondary"]["id"]: e for e in client.get("/api/events").json()}
+    event = events[secondary]
+    assert event["assessment"]["method"] == "REFUSED"
+    assert event["assessment"]["refusal_reason"] == reason
+    curve = client.get(f"/api/events/{event['event_id']}/dilution-curve").json()
+    assert curve["model_applies"] is False
+    assert len(curve["log10_k"]) == len(curve["pc"]) == 161
+    assert curve["pc_at_k1"] > 0 and curve["pc_max"] > 0
+
+
 def test_upload_is_idempotent_and_wrong_input_is_quarantined(client):
     raw = (CARA / "SampleCDMs" / "OmitronTestCase_Test01_HighPc.cdm").read_bytes()
     first = client.post("/api/ingest/cdm", content=raw)

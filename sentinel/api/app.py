@@ -349,7 +349,7 @@ def create_app(
     def trajectory(event_id: str) -> dict:
         """Earth-fixed arcs of both objects around TCA. Visualization only; 404 when the
         event is unknown, 422 when two-body arcs cannot be drawn for its states (a state
-        below the Earth's surface or beyond its Hill sphere, a propagation that fails, or
+        below the Earth's surface or beyond the admitted 3 million km, a propagation that fails, or
         an arc past the last representable date)."""
         try:
             data = node.conjunctions.trajectory(event_id)
