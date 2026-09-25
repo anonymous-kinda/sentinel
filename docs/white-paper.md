@@ -8,16 +8,26 @@
 
 A satellite operator gets warnings that a tracked object may pass close to one of their spacecraft. They must decide, before the maneuver commit point, whether to spend propellant to avoid it. Two things go wrong in practice. The probability of collision can look reassuring for the wrong reason. And the tools that compute it assume a network that a deployed unit will not always have.
 
-Sentinel is a decision aid built for that call. It computes collision risk with NASA's published method, checks itself against NASA's published results, and refuses to show a number the method cannot support. Each node keeps working when its link is cut. When the link is thin, the record due soonest crosses first. AI helps the operator ask questions and read answers, but it never computes a number. A second module tells a ground unit when public imaging satellites can see it, without the unit's position leaving its own node. A disconnected site can prove the software is authentic before it installs anything.
+Sentinel is a decision aid built for that call. What it gives an operator:
+
+- **No false reassurance.** It computes collision risk with NASA's published method and checks itself against NASA's published results. It flags a probability made low by poor tracking, and it refuses to show a number the method cannot support.
+- **The most urgent data first.** When the link is thin, the record due soonest crosses first, and the backlog as a whole takes about as long as it would in arrival order.
+- **Work that survives a cut link.** Each node keeps working when its link is cut. Decisions made offline merge without loss, and the edge re-computes the hub's numbers rather than trusting them.
+- **Built for the approval path.** In DoD, getting approval to operate often takes longer than building the software. A disconnected site can prove the software is authentic before it installs anything, and the evidence an assessor asks for is generated as the software is built.
+- **Pass warnings without giving away the unit's position.** A second module tells a ground unit when public imaging satellites can see it, without the unit's position leaving its own node.
+
+It also shows how to put AI into a classified or disconnected system without letting it corrupt a decision. AI routes the question and phrases the answer, validated code computes, and the operator decides. It works with no keys and no network. No benefit from hosted AI is claimed, because none has been measured.
+
+**Limits.** Sentinel is a demonstrator: it proves an architecture with measured numbers, not an operational capability. It runs on exercise and public data only. It is not fielded, and no authority to operate is claimed. Section 5 lists the open risks, including the security gaps, and section 6 what fielding would take.
 
 ## Win themes
 
 - **W1. Numbers you can defend.** Sentinel matches NASA's published results and refuses, with a stated reason, any probability the method cannot support.
 - **W2. Works when the link does not.** A cut-off node keeps working; on a thin link, the decision due soonest crosses first.
-- **W3. AI that cannot invent a number.** The assistant routes and phrases, validated code computes, and a person decides.
-- **W4. Trusted without a network.** A disconnected site verifies the signature offline, against a pinned trust root, before anything is unpacked.
+- **W3. Trusted without a network.** A disconnected site verifies the signature offline, against a pinned trust root, before anything is unpacked.
+- **W4. The unit's position stays at the edge.** Pass windows are computed where the unit is; nothing on the hub's wire or disk holds its position.
 - **W5. Open seams, traced evidence.** Standard formats at every seam, and a requirement trace that fails on any missing evidence.
-- **W6. The unit's position stays at the edge.** Pass windows are computed where the unit is; nothing on the hub's wire or disk holds its position.
+- **W6. AI that cannot corrupt a decision.** AI routes and phrases, validated code computes, a person decides, and it works with no keys.
 
 ## 1. The operational problem
 
@@ -39,7 +49,7 @@ Sentinel is a decision aid built for that call. It computes collision risk with 
 
 **Disconnected, degraded, intermittent, limited.** Nodes connect over NATS leaf links. Reference data (CDMs) is pulled by the edge in mission priority: a small summary of every event first, then full records by earliest maneuver deadline. The edge re-assesses each record itself and compares its answer with the hub's. Operator data (triage, notes, decisions) uses state-based replicated data types: nothing is lost, and concurrent edits are shown as a CONFLICT instead of one silently winning. Decisions are signed per node and hash-chained. A decision made offline against data that has since changed is flagged REVIEW REQUIRED.
 
-**AI that cannot compute.** The assistant turns an operator's words into one call to a catalogued tool. Sentinel's own validated code computes the facts, and the assistant phrases them. Local rules and templates always work with no network. Hosted models (a routing model and a language model) are optional. They are used only with an UNCLASSIFIED marking, operator opt-in and a usable measured link. Any number in an AI-written answer must match the tool output, or the answer is withheld. The assistant only drafts; a person confirms before anything is recorded.
+**AI as a safety pattern.** The assistant shows how to put AI into a classified or disconnected system without letting it corrupt a decision. It turns an operator's words into one call to a catalogued tool. Sentinel's own validated code computes the facts, and the assistant phrases them. Local rules and templates always work, with no keys and no network. Hosted models (a routing model and a language model) are optional. They are used only with an UNCLASSIFIED marking, operator opt-in and a usable measured link. Any number in an AI-written answer must match the tool output, or the answer is withheld. The assistant only drafts; a person confirms before anything is recorded. No hosted model has been measured yet, so this paper claims the pattern, not a benefit.
 
 **Overhead passes for a ground unit.** The pass module shows when catalogued public imaging satellites can observe a unit, and the gaps between. A gap is labelled "not observed by catalogued imagers", never "safe". The edge computes everything from public element sets its hub sends it. The unit's position is not a sync record, is never logged, and the edge's link permissions refuse to carry it (ADR-010 in the [system design](system-design.md)).
 
@@ -82,18 +92,18 @@ Each proof point names its theme and links its evidence. Numbers come only from 
 | W2 | Each event summary is at most 256 bytes, small enough to cross first. | [Requirements trace](traceability.md) (REQ-DDIL-003); `tests/sync/test_hub_edge.py::test_summaries_are_small_enough_to_send_first` |
 | W2 | Over a link that dropped 8 times, 24 notes were written and 24 arrived on each node: none lost, none duplicated. | [DDIL results: INTERMITTENT](ddil-results.md#intermittent) |
 | W2 | Over a degraded link (600 ± 200 ms latency, 32 kB/s) the nodes converged in 80.4 s. After a denial, the link re-established over the thin link in 10.5 s, and work done offline reached the hub in 12.3 s. | [DDIL results: DEGRADED](ddil-results.md#degraded), [RECOVERY](ddil-results.md#recovery) |
-| W3 | The AI package may not import the risk engine, the CDM codec, numpy or scipy. An import contract (`lint-imports`) fails the build if it does. | [Requirements trace](traceability.md) (REQ-AI-001); `.importlinter` |
-| W3 | An AI-written answer that states a number the tool results do not contain is withheld. The template answer is shown instead, with the unsupported number named. | `tests/ai/test_grounding.py::test_an_invented_number_is_caught`; `tests/ai/test_assistant.py::test_an_ungrounded_ai_answer_is_withheld_and_the_facts_shown` |
-| W3 | Hosted AI runs only with an UNCLASSIFIED marking, operator opt-in and a usable measured link. A DENIED link or a classified marking never calls a hosted service. | `tests/ai/test_policy.py::test_tier_table`; `tests/ai/test_assistant.py::test_denied_or_classified_never_calls_a_hosted_service` |
-| W3 | Routing is scored on 60 labelled requests. The always-available local rules pick the right tool for 0.460 of in-scope requests, which is the gap a model has to close. No hosted-model score is published, because none has been run. | [AI routing eval](ai-eval.md) |
-| W4 | With the real signing tool and no network, a tampered bundle, another key's signature, a missing signature and a wrong signer identity are all refused. | `deploy/bundle/selftest_signature.sh`; [Requirements trace](traceability.md) (REQ-SC-002) |
-| W4 | A locally built bundle, signed with a throwaway key, installs in a network namespace with only loopback. The installed node reproduces the validation: 53 events and 0 missed refusals. The `airgap-install` CI job is configured to repeat this full install for each architecture. | `deploy/bundle/verify_offline.sh`; [Validation report](validation-report.md#6-the-applicability-gate-against-caras-own-verdicts); [Requirements trace](traceability.md) (VC-DEP-002) |
+| W3 | With the real signing tool and no network, a tampered bundle, another key's signature, a missing signature and a wrong signer identity are all refused. | `deploy/bundle/selftest_signature.sh`; [Requirements trace](traceability.md) (REQ-SC-002) |
+| W3 | A locally built bundle, signed with a throwaway key, installs in a network namespace with only loopback. The installed node reproduces the validation: 53 events and 0 missed refusals. The `airgap-install` CI job is configured to repeat this full install for each architecture. | `deploy/bundle/verify_offline.sh`; [Validation report](validation-report.md#6-the-applicability-gate-against-caras-own-verdicts); [Requirements trace](traceability.md) (VC-DEP-002) |
+| W4 | On a real hub and edge, the edge received 38 public element sets through sync and computed 57 pass windows for a unit. Every message the hub's server carried was captured (179 messages, 90,804 bytes): none held the unit's id or coordinates, and a deliberate canary on the unit's subjects never arrived. All 10 checks passed, including controls that show the capture could see what the edge does export. | [DDIL results: OPSEC](ddil-results.md#opsec); `make opsec` |
+| W4 | Afterwards the hub has no unit (its unit endpoint returns 404), and none of its 8 files holds the unit. On the edge, the unit rests in one file, readable only by the service. | [DDIL results: OPSEC](ddil-results.md#opsec); `tests/api/test_passes_api.py` |
 | W5 | Every conjunction enters as a CCSDS CDM, and every NASA CDM parses and round-trips with its comments and units intact. | `tests/test_cdm_codec.py::test_every_nasa_cdm_parses_and_round_trips` |
 | W5 | A second mission module replicates through the same, unmodified sync layer, and urgent conjunction data still crosses first. | `tests/sync/test_modules_share_sync.py::test_both_modules_arrive_intact_through_one_unmodified_agent` |
 | W5 | Two independent pass providers pass one conformance suite; rise and set agree with a brute-force oracle to within 2 s. | [Requirements trace](traceability.md) (REQ-PASS-001); `tests/conformance/test_pass_providers.py::test_rise_and_set_agree_with_the_oracle_within_two_seconds` |
 | W5 | The trace covers 54 requirements: 54 verified, 0 unverified, and 0 broken references. | [Requirements trace](traceability.md) |
-| W6 | On a real hub and edge, the edge received 38 public element sets through sync and computed 57 pass windows for a unit. Every message the hub's server carried was captured (179 messages, 90,804 bytes): none held the unit's id or coordinates, and a deliberate canary on the unit's subjects never arrived. All 10 checks passed, including controls that show the capture could see what the edge does export. | [DDIL results: OPSEC](ddil-results.md#opsec); `make opsec` |
-| W6 | Afterwards the hub has no unit (its unit endpoint returns 404), and none of its 8 files holds the unit. On the edge, the unit rests in one file, readable only by the service. | [DDIL results: OPSEC](ddil-results.md#opsec); `tests/api/test_passes_api.py` |
+| W6 | The AI package may not import the risk engine, the CDM codec, numpy or scipy. An import contract (`lint-imports`) fails the build if it does. | [Requirements trace](traceability.md) (REQ-AI-001); `.importlinter` |
+| W6 | An AI-written answer that states a number the tool results do not contain is withheld. The template answer is shown instead, with the unsupported number named. | `tests/ai/test_grounding.py::test_an_invented_number_is_caught`; `tests/ai/test_assistant.py::test_an_ungrounded_ai_answer_is_withheld_and_the_facts_shown` |
+| W6 | Hosted AI runs only with an UNCLASSIFIED marking, operator opt-in and a usable measured link. A DENIED link or a classified marking never calls a hosted service. | `tests/ai/test_policy.py::test_tier_table`; `tests/ai/test_assistant.py::test_denied_or_classified_never_calls_a_hosted_service` |
+| W6 | Routing is scored on 60 labelled requests. The always-available local rules pick the right tool for 0.460 of in-scope requests, which is the gap a model has to close. No hosted-model score is published, because none has been run. | [AI routing eval](ai-eval.md) |
 
 ## 5. Risks and mitigations
 
@@ -104,6 +114,8 @@ Each proof point names its theme and links its evidence. Numbers come only from 
 | Events the 2D method cannot handle get no number at all | Refusing is the safe failure. The 3D method CARA publishes is the documented next step. | Detection built; 3D method not built. |
 | Operators are not authenticated | Decisions are signed per node today. A site identity provider (CAC/PIV) at the front proxy would bind them to people. | Open; listed in the plan of action and milestones. |
 | The link between nodes is not encrypted | The NATS templates leave a place for mutual TLS. Configure it before connecting any real link. | Open. |
+| Annotations (triage status, assignee, note) are not signed, so a peer that can reach the hub can erase one | The decision log is signed and is the record of what was decided. Signing the annotations, or authenticating peers on the link, would close the gap. | Open; a test records it, and `SECURITY.md` lists it. |
+| Removing the newest AI-audit lines while a node is stopped goes undetected | An edit, a deletion or a truncation made while the node runs is detected. Anchoring the chain's head outside the file would close the gap. | Open; `SECURITY.md` lists it. |
 | The unit's position leaks through a path the test does not exercise | Four layers keep it on the edge (data model, application, storage, transport), and the OPSEC scenario checks the wire and the hub's files. The hub does not yet also refuse those subjects from its side. | Shown between one hub and one edge; more nodes and hub-side denial not yet. |
 | A gap between passes is read as "safe" | Every gap is labelled "not observed by catalogued imagers", and the console says uncatalogued and non-public sensors are outside the model. | Built. |
 | Hosted AI at a classified site | Policy blocks hosted AI unless the marking is UNCLASSIFIED. The air-gap bundle carries no hosted AI libraries. The assistant can be switched off. | Built and tested. |
@@ -122,7 +134,7 @@ What is demonstrated here, and what fielding would still require.
 | Transport | A real leaf link, shaped to DENIED, DEGRADED, LIMITED and INTERMITTENT conditions on one machine | TLS on the leaf link, site key management, and testing on real tactical and satellite links |
 | Packaging | A signed bundle that installs a standalone node with no network; hub and edge messaging configuration as templates | A packaged messaging service and configuration for hub and edge roles, and a first signed release |
 | Pass module | The pass engine, the edge-local service, the console tab, and the OPSEC scenario between one hub and one edge | Review of the imaging catalog and its assumptions by the unit, hub-side denial of the unit's subjects, and the OPSEC test on the fielded topology |
-| AI | Local rules and templates; hosted tiers only on unclassified networks | A local model for classified networks, if the eval shows it earns its place; an assessment with the CDAO toolkit |
+| AI | Local rules and templates, scored on the routing eval; the policy that allows hosted tiers only on unclassified networks, tested with the hosted adapters on mock transports | A scored run of the hosted routing model; a local model for classified networks, if the eval shows it earns its place; an assessment with the CDAO toolkit |
 | Accreditation | A draft security plan, assessment results and a plan of action and milestones generated from tests; a STIG role for the host | An authorizing official, a security categorization, a STIG scan of a real host, and an authorization to operate |
 | Pipeline | CI configured for tests, import contracts, the trace, the security package and the supply-chain gates; each step run locally | CI running on a hosted service, and the release workflow run on a tag |
 
@@ -143,7 +155,7 @@ Only authorities checked against a primary or official source are cited. Sentine
 
 - *Responsible:* a person confirms every AI draft before it is recorded.
 - *Traceable:* every ask and confirm is in a hash-chained audit log, and each decision carries its router, confidence and model.
-- *Reliable:* the AI has one explicit use (routing to catalogued tools and phrasing their output), and that use is tested and scored.
+- *Reliable:* the AI has one explicit use (routing to catalogued tools and phrasing their output), and that use is tested. The local router is scored; no hosted router has been scored yet.
 - *Governable:* the assistant can be switched off. It drops to local rules by itself when the link or the marking requires, and it cannot reach the maths.
 - *Equitable:* not assessed. The eval set's limits are written down in `evals/README.md`.
 

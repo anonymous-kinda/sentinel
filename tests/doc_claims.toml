@@ -640,6 +640,67 @@ quoted = "Afterwards the hub has no unit (its unit endpoint returns 404), and no
 source = "docs/ddil-results.md"
 patterns = ["(HTTP 404)", "(8 files scanned)"]
 
+# The quad chart. Its numbers are also checked against the generated reports as
+# a whole (tests/docs/test_quad_chart.py), but a number can appear there for
+# another reason: "53 of 54 verified" once passed because 53 is the CARA event
+# count. Each measured line is registered here against the phrase it comes from.
+
+[[claim]]
+id = "quad-chart-cara"
+doc = "docs/quad-chart.svg"
+quoted = "Pc vs NASA CARA: 53 events, worst relative error 1.5e-8"
+source = "docs/validation-report.md"
+patterns = ["| 53 | **1.5e-08** |"]
+
+[[claim]]
+id = "quad-chart-gate"
+doc = "docs/quad-chart.svg"
+quoted = "Refusal gate: all 29 CARA-flagged events refused, 0 missed"
+source = "docs/validation-report.md"
+patterns = ["| **Sentinel refuses** | 29 | 5 |", "| **Sentinel returns Pc** | **0** | 19 |"]
+
+[[claim]]
+id = "quad-chart-limited"
+doc = "docs/quad-chart.svg"
+quoted = "Thin link, medians: urgent CDM 9.1 s by deadline, 136.9 s FIFO"
+source = "docs/ddil-results.md"
+patterns = ["EDF 9.1 s (8.6–9.1) vs FIFO 136.9 s (135.4–141.7) (15.0x)", "medians over 5 runs per mode"]
+
+[[claim]]
+id = "quad-chart-denied"
+doc = "docs/quad-chart.svg"
+quoted = "Cut off: edge console p95 3.2 ms"
+source = "docs/ddil-results.md"
+patterns = ["p95 3.2 ms over 40 requests"]
+
+[[claim]]
+id = "quad-chart-opsec"
+doc = "docs/quad-chart.svg"
+quoted = "OPSEC: 179 messages to the hub captured; none held the unit"
+source = "docs/ddil-results.md"
+patterns = ["hub capture: 179 messages, 90,804 bytes"]
+
+[[claim]]
+id = "quad-chart-opsec-checks"
+doc = "docs/quad-chart.svg"
+quoted = "OPSEC scenario 10 of 10"
+source = "docs/ddil-results.md"
+patterns = ["| OPSEC | PASS | 10/10 |"]
+
+[[claim]]
+id = "quad-chart-trace"
+doc = "docs/quad-chart.svg"
+quoted = "Requirement trace: 54 of 54 verified"
+source = "docs/traceability.md"
+patterns = ["| **total** | **54** | **54** | **0** | **0** |"]
+
+[[claim]]
+id = "quad-chart-text-trace"
+doc = "docs/quad-chart.md"
+quoted = "the requirement trace (54 of 54 verified)"
+source = "docs/traceability.md"
+patterns = ["| **total** | **54** | **54** | **0** | **0** |"]
+
 [[claim]]
 id = "install-guide-smoke-test"
 doc = "docs/install-guide.md"
