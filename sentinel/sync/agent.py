@@ -3,8 +3,10 @@
 One cycle:
 
   1. Operator data (P0). One request carries this node's CRDT contexts and
-     everything the hub was last known to lack; the reply carries
-     everything this node lacks. State-based: a lost reply just means the
+     what the hub was last known to lack; the reply carries what this node
+     lacks. Each way is held to a budget (what the link moves in
+     OPS_BUDGET_S), so a backlog drains over several cycles and never
+     starves the steps below. State-based: a lost reply just means the
      next cycle sends a little more.
   2. Manifest (P0). Compact summaries of every active event, so the
      console shows the whole picture - marked HUB-ASSERTED - within
@@ -15,7 +17,9 @@ One cycle:
      Admission control: if the measured link cannot deliver a record before
      its deadline, the event is marked SUMMARY-ONLY instead of spending the
      link on it. Each CDM is re-assessed here, and the result is compared
-     with what the hub asserted (VERIFIED / MISMATCH).
+     with what the hub asserted (VERIFIED / MISMATCH). A reply whose bytes
+     are not the record asked for, or that its module cannot ingest, is
+     refused and retried with back-off; the records behind it still come.
 
 Mode "fifo" replaces step 3's order with hub arrival order and turns
 admission control off: the same transport and the same bytes, used as the
