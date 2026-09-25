@@ -1,8 +1,9 @@
 """The Validation tab: Sentinel against NASA CARA, computed live on this node.
 
 The same comparison the test suite asserts and the report prints, run by
-the deployed engine at startup. If a node was built with a different
-engine than the one validated, its own Validation tab shows it.
+the deployed engine on the first request for it (GET /api/validation),
+then cached for the life of the process. If a node was built with a
+different engine than the one validated, its own Validation tab shows it.
 """
 
 from __future__ import annotations

@@ -1,10 +1,11 @@
 """Ed25519 node keys and the trust store that decides whose entries count.
 
 Every decision-log entry is signed by the node that authored it. A replica
-merges only entries whose signature verifies under a key in its trust store
-(deploy/trust/nodes.json in a deployment). Validity is a deterministic
-function of the entry and the trust store, so filtering before the union
-keeps merge a join (see log.py).
+merges only entries whose signature verifies under a key in its trust store:
+the keys in the JSON file SENTINEL_TRUST_FILE names, plus the node's own
+(sentinel.ops.service.load_identity); without that file, only its own.
+Validity is a deterministic function of the entry and the trust store, so
+filtering before the union keeps merge a join (see log.py).
 """
 
 from __future__ import annotations
@@ -51,7 +52,9 @@ class NodeKey:
 
 
 class TrustStore:
-    """node_id -> Ed25519 public key. Versioned: its digest is recorded."""
+    """node_id -> Ed25519 public key, read from a JSON map of node id to hex
+    key (`from_file`). Neither versioned nor hashed: nothing records which
+    trust store a merge ran under."""
 
     def __init__(self, keys: dict[str, str] | None = None):
         self._keys: dict[str, Ed25519PublicKey] = {}

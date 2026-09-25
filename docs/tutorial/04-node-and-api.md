@@ -219,7 +219,7 @@ The policy is enforced by reading the source: `tests/test_logging_policy.py` par
 
 `apidoc.py` holds OpenAPI metadata only: tags, the `KVN_BODY` and `json_body` declarations for routes that read their own body (FastAPI cannot infer a schema for those), and the documented ingest and SSE responses. Changing it changes the document, never behaviour.
 
-`ValidationView.summary` re-runs NASA CARA's published operational cases through this node's engine and caches the result, so a node built with a different engine shows it in its own Validation tab. It runs on the first request, not at start-up, although the module and route docstrings say "at startup". The first `GET /api/validation` does the work; later ones are served from the cache.
+`ValidationView.summary` re-runs NASA CARA's published operational cases through this node's engine and caches the result, so a node built with a different engine shows it in its own Validation tab. It runs on the first request, not at start-up, although the route's docstring, and so its OpenAPI description, says "at startup". The first `GET /api/validation` does the work; later ones are served from the cache.
 
 ### `sentinel/cli.py` and `sentinel/cli_ext.py`
 

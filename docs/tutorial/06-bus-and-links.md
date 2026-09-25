@@ -526,8 +526,9 @@ on a laptop or in CI. It found four NATS defaults that assume a LAN (the
 "Findings from the DDIL harness" section of `docs/system-design.md`). The
 longer handshake timeouts make a handshake that will never finish fail later,
 and the faster pings spend a little of a thin link. The emulation costs
-packet-level realism: TCP retransmits hide loss, so real packet loss is
-`tc netem`'s job, as the module docstring says.
+packet-level realism: TCP retransmits hide loss, and packet loss below TCP
+is not emulated at all. Nothing in the harness runs `tc netem`; the nightly
+job only lengthens the denial.
 
 ## How it fails
 
