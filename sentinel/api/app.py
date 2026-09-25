@@ -249,6 +249,13 @@ def create_app(
         version=__version__,
         description=apidoc.DESCRIPTION,
         openapi_tags=apidoc.TAGS,
+        # No Swagger UI or ReDoc page: FastAPI's load their scripts from a CDN
+        # (floating major versions) and start them with an inline script, which
+        # this node's CSP blocks, so they rendered blank. Serving them within
+        # the CSP would mean vendoring and pinning a JavaScript bundle on every
+        # node for a developer convenience. The schema stays at /openapi.json.
+        docs_url=None,
+        redoc_url=None,
         lifespan=lifespan,
         dependencies=[Depends(refuse_writes_on_read_only)],
     )

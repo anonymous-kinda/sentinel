@@ -152,6 +152,20 @@ def test_console_is_served_under_a_same_origin_content_security_policy(client):
     assert "frame-ancestors 'none'" in csp
 
 
+@pytest.mark.parametrize("page", ["/docs", "/docs/oauth2-redirect", "/redoc"])
+def test_no_api_page_the_nodes_own_csp_would_blank(tmp_path, page):
+    """FastAPI's Swagger UI and ReDoc pages load their scripts from a CDN
+    and start them with an inline script. The node's CSP blocks both, so
+    the pages rendered blank. They are not served; the schema they would
+    have shown stays at /openapi.json (and in docs/icd/openapi.json)."""
+    app = create_app(Settings(exercise=False, library=False, web_dist=None, var_dir=str(tmp_path)), start_background=False)
+    with TestClient(app) as c:
+        assert c.get(page).status_code == 404
+        schema = c.get("/openapi.json")
+    assert schema.status_code == 200
+    assert "/api/health" in schema.json()["paths"]
+
+
 def test_link_endpoint_logs_emulator_failure_instead_of_hiding_it(tmp_path, caplog):
     class BrokenEmulator:
         def status(self):
