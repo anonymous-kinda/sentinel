@@ -413,7 +413,7 @@ A hub offers only the imaging catalog's element sets unless `SENTINEL_SYNC_ELEME
 
 ## Configuration reference
 
-Every node setting is an environment variable read at start-up; `sentinel/api/settings.py` is the main reader (12-factor, systemd-friendly). A boolean is true when its value is `1`, `true`, `yes` or `on` (any case); any other value is false. The deployment templates that set these are `deploy/bundle/install.sh`, `deploy/ansible/roles/sentinel/templates/sentinel.env.j2`, `deploy/containers/Dockerfile` and `harness/cluster.py`.
+Every node setting is an environment variable read at start-up; `sentinel/api/settings.py` is the main reader (12-factor, systemd-friendly). A boolean accepts `1`, `true`, `yes` or `on` for true and `0`, `false`, `no` or `off` for false, in any case. Any other value, an empty one included, stops the node at start-up with a `ValueError` that names the variable (`SENTINEL_READ_ONLY=enabled` is refused, never read as false). The deployment templates that set these are `deploy/bundle/install.sh`, `deploy/ansible/roles/sentinel/templates/sentinel.env.j2`, `deploy/containers/Dockerfile` and `harness/cluster.py`.
 
 ### Node
 
@@ -832,5 +832,6 @@ The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and t
 | `GET /api/passes` returns 409 or 503 | 409: no unit is set. 503: an element set for a catalogued imager cannot be propagated | `PUT /api/passes/unit`; the node log `Pass computation refused` |
 | A node will not start: `SENTINEL_SYNC_ELEMENTS must be one of` | The value is not `catalog` or `all` | the configuration reference above |
 | A node will not start: `SENTINEL_ROLE must be one of` | The value is not `hub`, `edge` or `standalone` | the configuration reference above |
+| A node will not start: `SENTINEL_READ_ONLY must be one of` (or another boolean variable) | The value is not one of the eight boolean spellings, for example `enabled` or an empty value | the configuration reference above |
 | Requests reach a node you did not start | `make serve` and `make demo-local` use fixed ports 8000 and 8001; if another process holds them, your node fails to bind and your requests go to the other one | `node_id` and `role` in `GET /api/node`; `ss -ltn` |
 | `make scan` fails on a commit that passed yesterday | Trivy's vulnerability database is not pinned, by design (RA-5) | `dist/scan/`; `docs/supply-chain.md` |
