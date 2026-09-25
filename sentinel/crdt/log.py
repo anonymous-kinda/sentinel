@@ -10,9 +10,10 @@ Integrity rules, in the spirit of "wrong raises, incomplete degrades":
   * An entry whose signature does not verify under the trust store, or
     whose author node is not trusted, is rejected before merge and recorded.
     Incomplete trust (an unknown node) degrades; nothing is lost silently.
-  * The same dot arriving with a different digest can only happen through
-    a bug or a forgery. It raises IntegrityError: the replica stops
-    rather than choose which history to believe.
+  * The same dot arriving, validly signed, with a different digest can
+    only happen through a bug in a trusted node or a stolen key. It raises
+    IntegrityError: the replica stops rather than choose which history to
+    believe. An unsigned forgery that reuses a dot is rejected like any other.
   * Each node's entries form a hash chain (prev = digest of that node's
     previous entry). A chain break where both links are present raises.
 """
@@ -147,15 +148,17 @@ class SignedLog:
         added = []
         for entry in incoming:
             existing = self.entries.get(entry.dot)
-            if existing is not None:
-                if existing.digest() != entry.digest():
-                    raise IntegrityError(f"dot {entry.dot} arrived with a different digest")
-                continue
+            if existing is not None and existing.digest() == entry.digest():
+                continue  # already held, byte for byte
+            # Verify before comparing: only a validly signed entry can make
+            # the replica stop; a forgery that reuses a dot is rejected.
             if not self.verify(entry):
                 self.rejected.append(
                     {"dot": entry.dot.to_wire(), "reason": "untrusted-or-bad-signature", "author": entry.author}
                 )
                 continue
+            if existing is not None:
+                raise IntegrityError(f"dot {entry.dot} arrived with a different digest")
             self._check_chain(entry)
             self.entries[entry.dot] = entry
             self.ctx.add(entry.dot)

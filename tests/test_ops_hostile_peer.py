@@ -59,11 +59,10 @@ def memory_matches_disk(service: OpsService, db) -> bool:
 
 
 # ------------------------------------------------------------ signatures
-@pytest.mark.xfail(strict=True, reason=CORE + (
-    "SignedLog.merge compares an incoming entry's digest with the one already held for its "
-    "dot before verifying its signature, so an unsigned forgery that reuses a dot raises "
-    "IntegrityError (the replica 'stops') instead of being rejected and recorded"))
 def test_a_forgery_that_reuses_a_dot_is_rejected_and_recorded_not_raised():
+    """SignedLog.merge compared digests before verifying the signature, so
+    an unsigned forgery that reused a held dot raised IntegrityError (the
+    replica 'stops') instead of being rejected and recorded."""
     genuine = authored("alpha", 1)[0]
     log = SignedLog("hub", KEYS["hub"], TrustStore(TRUST))
     log.merge([genuine])
