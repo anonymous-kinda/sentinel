@@ -44,6 +44,7 @@ from .records import ReferenceRecords
 log = get_logger(__name__)
 
 LINK_ERRORS = (RequestTimeout, NoResponders, ConnectionError, OSError)
+RETRY_MAX_PULLS = 32        # the most pulls a refused record sits out
 
 
 @dataclasses.dataclass
@@ -81,6 +82,37 @@ def _is_the_record_asked_for(item: WantItem, reply: Msg) -> bool:
     return sha256.startswith(item.sha16) and reply.headers.get("Sentinel-Sha256") == sha256
 
 
+class RetryBackoff:
+    """When a refused record may be asked for again, counted in pulls.
+
+    It sits out 1 pull, then 2, 4 ... up to `max_pulls`: a fault in transit
+    is retried on the next pull, but a record that keeps failing never costs
+    a thin link a round trip every cycle. Arrival clears it.
+    """
+
+    def __init__(self, max_pulls: int = RETRY_MAX_PULLS):
+        self.max_pulls = max_pulls
+        self._waits: dict[str, tuple[int, int]] = {}      # sha16 -> (pulls sat out, next pull allowed)
+
+    def failed(self, sha16: str, pull: int) -> int:
+        """Record a failure at `pull`. Returns how many pulls the record sits out."""
+        previous = self._waits.get(sha16)
+        wait = 1 if previous is None else min(2 * previous[0], self.max_pulls)
+        self._waits[sha16] = (wait, pull + wait)
+        return wait
+
+    def due(self, sha16: str, pull: int) -> bool:
+        waiting = self._waits.get(sha16)
+        return waiting is None or pull >= waiting[1]
+
+    def clear(self, sha16: str) -> None:
+        self._waits.pop(sha16, None)
+
+    def retain(self, sha16s: set[str]) -> None:
+        """Forget records no longer wanted, so a hub cannot grow this without bound."""
+        self._waits = {sha: waiting for sha, waiting in self._waits.items() if sha in sha16s}
+
+
 class SyncAgent:
     def __init__(
         self,
@@ -114,6 +146,8 @@ class SyncAgent:
         self.last_cycle: dict[str, Any] = {}
         self.started_wall = time.monotonic()
         self._last_state: LinkState | None = None
+        self._pulls = 0
+        self._backoff = RetryBackoff()
 
     # ------------------------------------------------------------------ helpers
     def _timeout(self, expected_bytes: int) -> float:
@@ -231,6 +265,7 @@ class SyncAgent:
             by_key = {id(i.key): i for i in items}
             items = [by_key[id(k)] for k in order([i.key for i in items])]
         self.queue = items
+        self._backoff.retain({i.sha16 for i in items})
 
     # --------------------------------------------------------------- full CDMs
     async def pull(self, budget_s: float | None = None) -> int:
@@ -240,8 +275,9 @@ class SyncAgent:
         fetched = 0
         bytes_ahead = 0
         now = self.clock.now()
+        self._pulls += 1
         for item in self.queue:
-            if item.status in ("ARRIVED",):
+            if item.status in ("ARRIVED",) or not self._backoff.due(item.sha16, self._pulls):
                 continue
             eta_wall = self.link.eta_s(bytes_ahead + item.size)
             item.eta_s = None if eta_wall is None else round(eta_wall, 1)
@@ -274,13 +310,19 @@ class SyncAgent:
         if not _is_the_record_asked_for(item, reply):
             self._refuse(item, "hash_mismatch", hash_ok=False, hub_sha256=reply.headers.get("Sentinel-Sha256"))
             return
-        outcome = await self.records.ingest(
-            reply.data,
-            f"sync:{self.hub_id}",
-            reply.headers.get("Sentinel-Data-Class", "REAL"),
-            reply.headers.get("Sentinel-Event-Id"),
-        )
+        try:
+            outcome = await self.records.ingest(
+                reply.data,
+                f"sync:{self.hub_id}",
+                reply.headers.get("Sentinel-Data-Class", "REAL"),
+                reply.headers.get("Sentinel-Event-Id"),
+            )
+        except Exception:  # noqa: BLE001 - one record's failure must not stop the records behind it
+            wait = self._put_back(item)
+            log.exception("Sync record ingest failed", retry_in_pulls=wait, **self._about(item))
+            return
         item.status = "ARRIVED"
+        self._backoff.clear(item.sha16)
         self.summary_only.discard(item.event_id)
         arrival = {
             "event_id": item.event_id,
@@ -300,11 +342,17 @@ class SyncAgent:
 
     def _refuse(self, item: WantItem, reason: str, **fields: Any) -> None:
         """Put back a record whose reply the edge will not admit, and say why."""
+        wait = self._put_back(item)
+        log.warning("Sync record refused", reason=reason, retry_in_pulls=wait, **self._about(item), **fields)
+
+    def _put_back(self, item: WantItem) -> int:
+        """Re-queue a record the edge could not admit. Returns the pulls it sits out."""
         item.status = "QUEUED"
-        log.warning(
-            "Sync record refused",
-            hub_id=self.hub_id, item_id=item.event_id[:80], sha16=item.sha16, reason=reason, **fields,
-        )
+        return self._backoff.failed(item.sha16, self._pulls)
+
+    def _about(self, item: WantItem) -> dict[str, Any]:
+        """Log fields naming a record. The item id is the hub's, so it is cut short."""
+        return {"hub_id": self.hub_id, "item_id": item.event_id[:80], "sha16": item.sha16}
 
     # ------------------------------------------------------------------ status
     def status(self) -> dict[str, Any]:

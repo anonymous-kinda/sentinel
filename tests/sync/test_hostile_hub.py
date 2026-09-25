@@ -160,21 +160,43 @@ def test_a_missing_data_class_header_cannot_relabel_exercise_data_as_real(link):
     assert classes == {"EXERCISE"}
 
 
-@pytest.mark.xfail(strict=True, reason=CORE + (
-    "an exception from records.ingest() for one item escapes _fetch() and pull(), so the "
-    "cycle aborts there; the same reply comes back first every cycle, and nothing queued "
-    "behind it ever arrives (head-of-line blocking); run() also counts it as a link failure"))
-def test_one_unreadable_reply_does_not_block_every_record_behind_it(link):
-    def bad_class(body, headers):
-        headers["Sentinel-Data-Class"] = "BANANA"
-        return body, headers
+def bad_class(body, headers):
+    """The bytes are right; the module's own admission cannot read the reply."""
+    headers["Sentinel-Data-Class"] = "BANANA"
+    return body, headers
 
+
+def test_one_unreadable_reply_does_not_block_every_record_behind_it(link):
     tamper_fetch(link, bad_class, one_record=True)
     for _ in range(2):
         with contextlib.suppress(ValueError):  # run() logs it; the next cycle is what matters
             run(link.agent.cycle())
     held = {row.sha256[:16] for row in link.edge.conj.store.all_cdms()}
     assert len(announced(link.hub) - held) == 1, "only the unreadable record is missing"
+
+
+@pytest.mark.parametrize("tamper", [bad_class, corrupted], ids=["unreadable", "corrupted"])
+def test_a_refused_record_is_retried_with_back_off_not_every_cycle(link, tamper):
+    """Every attempt costs a round trip on a thin link, so a record the edge
+    refuses sits out a growing number of pulls; it arrives once the hub's
+    reply is good again."""
+    attempts = []
+
+    def counted(body, headers):
+        attempts.append(1)
+        return tamper(body, headers)
+
+    tamper_fetch(link, counted, one_record=True)
+    cycles = 8
+    for _ in range(cycles):
+        run(link.agent.cycle())
+    assert 2 <= len(attempts) <= cycles // 2, f"asked {len(attempts)} times in {cycles} cycles"
+
+    run(link.bus.serve(subjects.sync_fetch("hub"), link.server._fetch))   # the hub answers honestly again
+    for _ in range(4 * cycles):
+        run(link.agent.cycle())
+    held = {row.sha256[:16] for row in link.edge.conj.store.all_cdms()}
+    assert announced(link.hub) <= held
 
 
 # ------------------------------------------------------- the manifest

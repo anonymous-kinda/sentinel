@@ -41,6 +41,12 @@ The edge's `SyncAgent` runs a cycle every 2 s by default
    (`ingest`). A conjunction CDM is re-assessed on the edge and compared with
    what the hub asserted.
 
+A record the edge refuses (see `Sentinel-Sha256` below), or one whose
+`ingest` raises, does not stop the pull. It is logged (`Sync record refused`
+or `Sync record ingest failed`), re-queued, and sits out 1 pull, then 2, 4
+and so on up to 32, so it never costs a thin link a round trip every cycle.
+The records behind it are fetched. It is not a link failure.
+
 A request's timeout is 6 s + 1.5 × expected bytes ÷ max(measured rate,
 400 B/s). Before any rate is measured, 1000 B/s is assumed. A timeout or "no
 responders" is expected over a DDIL link: it counts as a link failure, and
