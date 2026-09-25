@@ -62,7 +62,7 @@ def same_pass(window, candidates):
 
 # --- the shape of the answer ---------------------------------------------------
 
-def test_every_window_is_a_pass_window_signed_by_its_provider(provider, day):
+def test_every_window_is_a_pass_window_labelled_with_its_provider(provider, day):
     assert all(isinstance(w, PassWindow) for w in day)
     assert {w.provider for w in day} == {provider.name}
 

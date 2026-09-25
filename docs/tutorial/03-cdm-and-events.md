@@ -412,7 +412,7 @@ uv run pytest -q tests/test_cdm_codec.py tests/test_ingest_hostile.py tests/conj
 - **A state the globe cannot draw** returns 422 from the trajectory route; the event and its assessment are unaffected.
 - **A denied link** does not stop ingest or assessment: both are local. What crosses a link is chapter 7.
 - **The CLI judges a file as the node would.** `sentinel assess` and `sentinel cdm parse` read it through the same `admit`, so whatever the node would quarantine, a parse error included, prints `REJECTED` with the node's code and reason on standard error and exits 2, never with a traceback.
-- **A known gap.** At the time of writing, a CDM in which one object's velocity is zero, or exactly parallel to its position, passes admission and then makes the engine raise (chapter 2, "How it fails"). The node stores the CDM before assessing it, so the ingest request fails with HTTP 500, and every later `GET /api/events` fails too, because listing events assesses each one. The catalogue in `tests/test_ingest_hostile.py` has no such variant yet. A fix needs one there, and a gate in `sentinel/risk/engine.py` or a bound in `sentinel/cdm/validate.py`.
+- **A state with no angular momentum is quarantined.** A CDM in which one object's velocity is zero, or along its position, used to pass admission and make the engine raise. The node had already stored it, so every later `GET /api/events` answered 500. Now `sentinel/cdm/validate.py` quarantines it as `IMPLAUSIBLE_STATE` (an orbit has angular momentum), and the engine refuses it if it ever arrives another way (chapter 2). `tests/test_ingest_hostile.py` holds both variants, with a geometry consistent at TCA so the engine would really reach the frame step.
 
 ## Check yourself
 

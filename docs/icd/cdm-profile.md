@@ -177,12 +177,14 @@ near them.
 
 ## Rejection codes
 
+A quarantined message is recorded in the quarantine table (`GET /api/quarantine`), published on the bus, returned in the 422 reply, and logged as `CDM quarantined` with its code, sha256 and source. The log line never carries the detail, because the detail can quote the message.
+
 Quarantined: the input would make the answer wrong.
 
 | Code | Raised by | Meaning |
 |---|---|---|
 | `PARSE_ERROR` | codec | Not structurally a KVN CDM: a line that is not `KEY = VALUE`, other than two object blocks, objects out of order, or no `CCSDS_CDM_VERS`. Also a keyword given twice in one block: which value was meant would be a guess. |
-| `UNREADABLE` | validator, service | Structurally a CDM, but a value cannot be read: a non-numeric number, or bytes that are not UTF-8. Also a `COLLISION_PROBABILITY` that is `NaN` or infinite: it is served beside Sentinel's Pc and must be a number. |
+| `UNREADABLE` | validator, service | Structurally a CDM, but a value cannot be read: a non-numeric number (including `AREA_PC` or a `COMMENT HBR` value), or bytes that are not UTF-8. Also a `COLLISION_PROBABILITY` that is `NaN` or infinite: it is served beside Sentinel's Pc and must be a number. |
 | `MISSING_TCA` | validator | No `TCA`. |
 | `BAD_TCA` | validator | `TCA` is not a CCSDS time, or not a date the calendar has (past 9999-12-31, which a day-of-year form can reach). Also a `TCA` before 1957-10-04, the launch of Sputnik 1: no conjunction precedes the first artificial satellite. |
 | `BAD_CREATION_DATE` | validator | `CREATION_DATE` is present but fails the same test as `BAD_TCA`: not a CCSDS time, past 9999-12-31, or before 1957-10-04. |

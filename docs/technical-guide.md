@@ -511,7 +511,7 @@ make screen PRIMARY=40115                                                   # de
 uv run python scripts/dilution_demo.py
 ```
 
-`sentinel assess` exits 0 when a message was assessed (a refusal is still an assessment), 2 when it was rejected as wrong, and 1 on usage or I/O errors.
+`sentinel assess` exits 0 when a message was assessed (a refusal is still an assessment), 2 when it was rejected as wrong (printed as `REJECTED <code>: <reason>`, exactly as the node would quarantine it) or on a usage error, and 1 on an I/O error.
 
 To push a CDM into a running node:
 

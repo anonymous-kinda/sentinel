@@ -515,7 +515,7 @@ def create_app(
 
     @app.get("/api/validation", tags=[apidoc.CONJUNCTIONS], summary="Engine against NASA CARA, computed on this node")
     def validation() -> dict:
-        """The deployed engine re-run against NASA CARA's published cases at startup, so a
+        """The deployed engine re-run against NASA CARA's published cases on the first request, then cached, so a
         node built with a different engine shows it."""
         return node.validation.summary()
 

@@ -1432,7 +1432,7 @@
     },
     "/api/validation": {
       "get": {
-        "description": "The deployed engine re-run against NASA CARA's published cases at startup, so a\nnode built with a different engine shows it.",
+        "description": "The deployed engine re-run against NASA CARA's published cases on the first request, then cached, so a\nnode built with a different engine shows it.",
         "operationId": "validation_api_validation_get",
         "responses": {
           "200": {
