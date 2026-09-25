@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { log } from "../lib/log";
 
 /** A non-2xx reply: the status code and whatever body the server sent. */
 export class HttpError extends Error {
@@ -19,6 +20,11 @@ export function apiErrorMessage(error: unknown): string {
   if (typeof detail === "string" && detail) return detail;
   if (Array.isArray(detail) && detail.length > 0) {
     return detail.map((d) => (d as { msg?: unknown })?.msg ?? JSON.stringify(d)).join("; ");
+  }
+  const { reason, field, code } = (detail ?? {}) as { reason?: unknown; field?: unknown; code?: unknown };
+  if (typeof reason === "string" && reason) {
+    const about = field ?? code;
+    return typeof about === "string" && about ? `${about}: ${reason}` : reason;
   }
   return error.message;
 }
@@ -44,37 +50,35 @@ export const postJSON = <T,>(path: string, body: unknown) => sendJSON<T>("POST",
 export const putJSON = <T,>(path: string, body: unknown) => sendJSON<T>("PUT", path, body);
 export const deleteJSON = <T = unknown,>(path: string) => sendJSON<T>("DELETE", path);
 
+interface Resource<T> {
+  data: T | null;
+  error: string | null;
+  status: number | null;
+}
+
+const NOTHING: Resource<never> = { data: null, error: null, status: null };
+
 /** Fetch `path` and refetch whenever `version` changes. Keeps the last good
- *  value while refetching so the console never blanks on an update. `error`
- *  is the server's reason for the last failure and `status` its HTTP status;
- *  both are null after a success. */
-export function useResource<T>(
-  path: string | null,
-  version = 0,
-): { data: T | null; error: string | null; status: number | null } {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState<number | null>(null);
+ *  value of the same path while refetching, so the console never blanks on
+ *  an update; a new path starts empty, so one event's data never shows
+ *  under another's name. `error` is the server's reason for the last
+ *  failure and `status` its HTTP status; both are null after a success. */
+export function useResource<T>(path: string | null, version = 0): Resource<T> {
+  const [held, setHeld] = useState<Resource<T> & { path: string | null }>({ ...NOTHING, path: null });
   useEffect(() => {
-    if (!path) {
-      setData(null);
-      return;
-    }
+    if (!path) return;
     const controller = new AbortController();
     getJSON<T>(path, controller.signal)
-      .then((value) => {
-        setData(value);
-        setError(null);
-        setStatus(null);
-      })
+      .then((data) => setHeld({ path, data, error: null, status: null }))
       .catch((e: unknown) => {
         if (controller.signal.aborted) return;
-        setError(apiErrorMessage(e));
-        setStatus(e instanceof HttpError ? e.status : null);
+        const failure = { error: apiErrorMessage(e), status: e instanceof HttpError ? e.status : null };
+        setHeld((last) => ({ path, data: last.path === path ? last.data : null, ...failure }));
       });
     return () => controller.abort();
   }, [path, version]);
-  return { data, error, status };
+  if (!path || held.path !== path) return NOTHING;
+  return { data: held.data, error: held.error, status: held.status };
 }
 
 export interface StreamEvent {
@@ -83,14 +87,23 @@ export interface StreamEvent {
   at: number;
 }
 
+/** Not a node event: the stream (re)opened. Events published while it was
+ *  down are lost, so a listener refetches what it shows. */
+export const STREAM_OPENED = "stream.opened";
+
+/** The server's own `retry:` interval. */
+const RECONNECT_MS = 3000;
+
 /** Server-sent events from this node. The stream is local to the node: it
- *  keeps working when the link to any other node is down. */
+ *  keeps working when the link to any other node is down. The browser
+ *  retries a dropped connection by itself but gives up for good on an HTTP
+ *  error, such as a proxy's 502 while the node restarts; then this hook
+ *  opens a new stream after the retry interval. */
 export function useStream(onEvent: (e: StreamEvent) => void): { connected: boolean } {
   const [connected, setConnected] = useState(false);
   const handler = useRef(onEvent);
   handler.current = onEvent;
   useEffect(() => {
-    const source = new EventSource("/api/stream");
     const kinds = [
       "cdm.accepted",
       "cdm.rejected",
@@ -101,25 +114,38 @@ export function useStream(onEvent: (e: StreamEvent) => void): { connected: boole
       "link.emulation",
       "passes.updated",
     ];
-    const listeners = kinds.map((kind) => {
-      const fn = (ev: MessageEvent) => {
-        let data: unknown = null;
-        try {
-          data = JSON.parse(ev.data);
-        } catch {
-          data = ev.data;
-        }
-        handler.current({ kind, data, at: Date.now() });
+    const emit = (kind: string, data: unknown) => handler.current({ kind, data, at: Date.now() });
+    let source: EventSource;
+    let reconnect: number | undefined;
+    const connect = () => {
+      source = new EventSource("/api/stream");
+      for (const kind of kinds) {
+        source.addEventListener(kind, ((ev: MessageEvent) => emit(kind, parseEventData(ev.data))) as EventListener);
+      }
+      source.onopen = () => {
+        setConnected(true);
+        emit(STREAM_OPENED, null);
       };
-      source.addEventListener(kind, fn as EventListener);
-      return [kind, fn] as const;
-    });
-    source.onopen = () => setConnected(true);
-    source.onerror = () => setConnected(false);
+      source.onerror = () => {
+        setConnected(false);
+        if (source.readyState !== EventSource.CLOSED) return; // the browser is retrying
+        log.warn({ retry_ms: RECONNECT_MS }, "Event stream closed, reconnecting");
+        reconnect = window.setTimeout(connect, RECONNECT_MS);
+      };
+    };
+    connect();
     return () => {
-      listeners.forEach(([kind, fn]) => source.removeEventListener(kind, fn as EventListener));
+      window.clearTimeout(reconnect);
       source.close();
     };
   }, []);
   return { connected };
+}
+
+function parseEventData(data: string): unknown {
+  try {
+    return JSON.parse(data);
+  } catch {
+    return data;
+  }
 }

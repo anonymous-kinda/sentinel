@@ -1,6 +1,7 @@
 import type { SyncStatus } from "../api/types";
 import { useResource } from "../api/client";
 import { countdown } from "../lib/format";
+import { Pending } from "./Pending";
 
 /**
  * What the sync agent is doing, live: the priority queue in the order it
@@ -9,8 +10,8 @@ import { countdown } from "../lib/format";
  * shows why the most urgent event arrives first.
  */
 export function SyncPanel({ version }: { version: number }) {
-  const { data } = useResource<SyncStatus>("/api/sync", version);
-  if (!data) return <div className="empty">Loading…</div>;
+  const { data, error } = useResource<SyncStatus>("/api/sync", version);
+  if (!data) return <Pending what="Sync status" error={error} />;
   if (data.role !== "edge") {
     return (
       <div className="sync">

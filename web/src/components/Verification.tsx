@@ -19,9 +19,12 @@ const TEXT: Record<string, { label: string; title: string; cls: string }> = {
   },
 };
 
+/** A state from a newer node: shown by name, never dropped. */
+const unknown = (v: string) => ({ label: v, title: "A verification state this console has no description for.", cls: "ver-unknown" });
+
 export function VerificationChip({ v }: { v: EventSummary["verification"] }) {
   if (!v || v === "LOCAL") return null;
-  const t = TEXT[v];
+  const t = TEXT[v] ?? unknown(v);
   return (
     <span className={`chip ${t.cls}`} title={t.title}>
       {t.label}

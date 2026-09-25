@@ -1,8 +1,7 @@
 import { useId, useState, type FormEvent } from "react";
 import type { PassUnit } from "../../api/types";
-import { HttpError, apiErrorMessage } from "../../api/client";
-import { log } from "../../lib/log";
 import { validateUnit, type UnitDraft, type UnitErrors } from "../../lib/passes";
+import { useAction } from "../../lib/useAction";
 
 /**
  * The unit whose exposure the tab reports: shown, edited or deleted here and
@@ -42,29 +41,11 @@ interface Props {
 export function UnitForm({ unit, readOnly, onSave, onDelete }: Props) {
   const [draft, setDraft] = useState<UnitDraft | null>(null);
   const [errors, setErrors] = useState<UnitErrors>({});
-  const [serverError, setServerError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  /** Run a request; on failure show and log the server's reason. */
-  async function request(action: () => Promise<unknown>, failure: string): Promise<boolean> {
-    setBusy(true);
-    setServerError(null);
-    try {
-      await action();
-      return true;
-    } catch (error) {
-      const reason = apiErrorMessage(error);
-      log.error({ status: error instanceof HttpError ? error.status : null, error: reason }, failure);
-      setServerError(reason);
-      return false;
-    } finally {
-      setBusy(false);
-    }
-  }
+  const { busy, error: serverError, run: request, clearError } = useAction();
 
   function edit(from: UnitDraft) {
     setErrors({});
-    setServerError(null);
+    clearError();
     setDraft(from);
   }
 

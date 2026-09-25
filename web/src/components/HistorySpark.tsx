@@ -1,5 +1,6 @@
 import type { HistoryEntry } from "../api/types";
-import { sciPlain } from "../lib/format";
+import { diamond } from "../lib/marks";
+import { pcText } from "./PcValue";
 
 /**
  * Pc and worst-case Pc across the CDM updates for one event. Operators
@@ -42,18 +43,17 @@ export function HistorySpark({ history }: { history: HistoryEntry[] }) {
               </text>
             );
           }
-          return (
-            <circle
-              key={h.sha256}
-              cx={X(i)}
-              cy={Y(Math.max(a.pc, 10 ** yMin))}
-              r={3.5}
-              className={a.dilution_flag ? "spark-dot spark-dot-diluted" : "spark-dot"}
-            >
-              <title>
-                {h.message_id}: Pc {sciPlain(a.pc)}
-                {a.dilution_flag ? ` (diluted; worst ${sciPlain(a.pc_max ?? 0)})` : ""}
-              </title>
+          const x = X(i);
+          const y = Y(Math.max(a.pc, 10 ** yMin));
+          const title = <title>{`${h.message_id ?? "CDM"}: ${pcText(a)}`}</title>;
+          // A diluted update is a diamond, not only another colour.
+          return a.dilution_flag ? (
+            <path key={h.sha256} d={diamond(x, y, 4.5)} className="spark-dot spark-dot-diluted">
+              {title}
+            </path>
+          ) : (
+            <circle key={h.sha256} cx={x} cy={y} r={3.5} className="spark-dot">
+              {title}
             </circle>
           );
         })}
@@ -69,7 +69,7 @@ export function HistorySpark({ history }: { history: HistoryEntry[] }) {
       </svg>
       <figcaption>
         <span className="legend-pc">—</span> Pc <span className="legend-max">- -</span> worst case{" "}
-        <span className="legend-dil">●</span> diluted update
+        <span className="legend-dil">◆</span> diluted update
       </figcaption>
     </figure>
   );
