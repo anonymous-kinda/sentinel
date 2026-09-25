@@ -37,7 +37,7 @@ JEV_KEY = "TYPESAFE_API_KEY"
 CLAUDE_KEY = "ANTHROPIC_API_KEY"
 GUIDE = 'docs/technical-guide.md ("The AI assistant pipeline")'
 NEXT = "Next: make ai-eval  (scores the routers on evals/routing.jsonl and rewrites docs/ai-eval.md; Jev only with its key)"
-HOW_TO_SET = "Set a key: export it, or copy .env.example to .env, fill it in and run `set -a; . ./.env; set +a`."
+HOW_TO_SET = "Set a key: copy .env.example to .env and fill it in (this command reads it), or export it."
 LABEL_WIDTH = 12
 # Loggers that write request and response bodies at DEBUG.
 WIRE_LOGGERS = ("typesafe_sdk", "anthropic", "httpx", "httpx2", "httpcore")

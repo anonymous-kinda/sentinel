@@ -141,9 +141,9 @@
   <text class="t h" x="570" y="514">Measured, from the generated reports</text>
   <text class="t b" x="570" y="535">• Pc vs NASA CARA: 53 events, worst relative error 1.5e-8</text>
   <text class="t b" x="570" y="554">• Refusal gate: all 29 CARA-flagged events refused, 0 missed</text>
-  <text class="t b" x="570" y="573">• Thin link, medians: urgent CDM 9.1 s by deadline, 136.9 s FIFO</text>
-  <text class="t b" x="570" y="592">• Cut off: edge console p95 3.2 ms; no operator data lost</text>
-  <text class="t b" x="570" y="611">• OPSEC: 179 messages to the hub captured; none held the unit</text>
+  <text class="t b" x="570" y="573">• Thin link, medians: urgent CDM 9.3 s by deadline, 137.4 s FIFO</text>
+  <text class="t b" x="570" y="592">• Cut off: edge console p95 18.9 ms; no operator data lost</text>
+  <text class="t b" x="570" y="611">• OPSEC: 147 messages to the hub captured; none held the unit</text>
 
   <text class="t h" x="570" y="638">Reproduce</text>
   <text class="m" x="570" y="658">make report</text>
