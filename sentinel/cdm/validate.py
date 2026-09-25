@@ -7,9 +7,9 @@ Wrong (CdmRejected - the message is quarantined with a reason):
   input that would make the engine's answer silently incorrect. A state in
   metres labelled as kilometres, a non-inertial frame treated as inertial,
   three covariance terms out of six, a header miss distance that disagrees
-  with the states it summarises, a state whose separation is not finite in
-  metres, a TCA before there were satellites, or a number the node reads or
-  displays that is not a finite number.
+  with the states it summarises, a state or covariance no Earth-orbiting
+  object can have, a TCA before there were satellites, or a number the node
+  reads or displays that is not a finite number.
 
 Incomplete (a CdmWarning - the message is accepted):
   input that limits what can be concluded, without corrupting it. No
@@ -73,6 +73,18 @@ MISS_DISTANCE_TOLERANCE_REL = 0.005
 # launched 1957-10-04). CARA's own sample cases sit at J2000.
 EARLIEST_TCA = dt.datetime(1957, 10, 4, tzinfo=dt.UTC)
 
+# A CDM screens objects in orbit about the Earth. These bounds on what such
+# an object can be are set from physics, generously; docs/icd/cdm-profile.md
+# ("Physical bounds") gives the reasoning.
+# The closest the surface comes to the centre: inside it is underground.
+WGS84_POLAR_RADIUS_KM = 6356.752314245
+# The Earth's Hill sphere: beyond it the Sun's pull wins.
+EARTH_HILL_SPHERE_KM = 1.5e6
+# Above anything bound to the Sun passing the Earth (~73 km/s), far below c.
+MAX_SPEED_KM_S = 100.0
+# A coordinate confined to +/-R has a variance of at most R**2 (Popoviciu).
+MAX_POSITION_VARIANCE_M2 = (EARTH_HILL_SPHERE_KM * 1000.0) ** 2
+
 
 class CdmRejected(ValueError):
     """The message would produce a wrong answer. Quarantine it."""
@@ -122,15 +134,33 @@ def _state_vector(section: CdmSection, index: int) -> tuple[np.ndarray, np.ndarr
     return np.array(values[:3]), np.array(values[3:])
 
 
-def _relative_state_m(states: list[tuple[np.ndarray, np.ndarray]]) -> tuple[float, float]:
-    """Separation (m) and relative speed (m/s) in the engine's units. A state
-    finite in km can still overflow there, and the engine would report inf."""
-    (r1, v1), (r2, v2) = states
-    miss_m = float(np.linalg.norm((r2 - r1) * 1000.0))
-    speed_m_s = float(np.linalg.norm((v2 - v1) * 1000.0))
-    if not (math.isfinite(miss_m) and math.isfinite(speed_m_s)):
-        raise CdmRejected("NONFINITE_STATE", "the relative state of the two objects is not finite in metres")
-    return miss_m, speed_m_s
+def _check_plausible_state(position_km: np.ndarray, velocity_km_s: np.ndarray, index: int) -> None:
+    """Raise for a state no Earth-orbiting object can have. hypot scales
+    before it squares, so even a state near the float limit is judged
+    without overflowing; past it, the magnitude is inf and fails the bound."""
+    radius_km = math.hypot(*position_km)
+    if not WGS84_POLAR_RADIUS_KM <= radius_km <= EARTH_HILL_SPHERE_KM:
+        raise CdmRejected(
+            "IMPLAUSIBLE_STATE",
+            f"|r| = {radius_km:.6g} km is not between the Earth's surface "
+            f"({WGS84_POLAR_RADIUS_KM:g} km) and its Hill sphere ({EARTH_HILL_SPHERE_KM:g} km)",
+            index,
+        )
+    speed_km_s = math.hypot(*velocity_km_s)
+    if speed_km_s > MAX_SPEED_KM_S:
+        raise CdmRejected("IMPLAUSIBLE_STATE", f"|v| = {speed_km_s:.6g} km/s exceeds {MAX_SPEED_KM_S:g} km/s", index)
+
+
+def _check_plausible_covariance(section: CdmSection, index: int) -> None:
+    """Raise for a position covariance no object inside the Hill sphere can have."""
+    for key in POSITION_COVARIANCE_KEYS:
+        value = _number(section, key, index)
+        if value is not None and abs(value) > MAX_POSITION_VARIANCE_M2:
+            raise CdmRejected(
+                "IMPLAUSIBLE_STATE",
+                f"|{key}| = {abs(value):.6g} m**2 exceeds the Hill sphere squared, {MAX_POSITION_VARIANCE_M2:.3g} m**2",
+                index,
+            )
 
 
 def _read_time(message: CdmMessage, key: str) -> None:
@@ -215,8 +245,12 @@ def validate(message: CdmMessage) -> list[CdmWarning]:
         for key in POSITION_COVARIANCE_KEYS:
             _check_unit(obj, key, _COVARIANCE_UNIT, index)
 
-        states.append(_state_vector(obj, index))
-        if covariance_status(obj, index) == "absent":
+        position_km, velocity_km_s = _state_vector(obj, index)
+        _check_plausible_state(position_km, velocity_km_s, index)
+        states.append((position_km, velocity_km_s))
+        if covariance_status(obj, index) == "present":
+            _check_plausible_covariance(obj, index)
+        else:
             warnings.append(
                 CdmWarning(
                     "COVARIANCE_ABSENT",
@@ -226,9 +260,10 @@ def validate(message: CdmMessage) -> list[CdmWarning]:
             )
 
     # --- cross-check: the header must describe these states --------------
-    state_miss, _ = _relative_state_m(states)
     header_miss = _number(message.preamble, "MISS_DISTANCE")
     if header_miss is not None and math.isfinite(header_miss):
+        (r1, _), (r2, _) = states
+        state_miss = float(np.linalg.norm((r2 - r1) * 1000.0))
         tolerance = max(MISS_DISTANCE_TOLERANCE_ABS_M, MISS_DISTANCE_TOLERANCE_REL * state_miss)
         if abs(state_miss - header_miss) > tolerance:
             raise CdmRejected(
