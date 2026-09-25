@@ -162,5 +162,8 @@ def register(app: FastAPI, node) -> None:
 
     @app.get("/api/ai/audit/verify", tags=[apidoc.ASSISTANT], summary="Verify the audit chain")
     def ai_audit_verify() -> dict:
-        """Recomputes the hash chain and reports the first entry that does not link, if any."""
+        """Reads the audit file as it is now, recomputes the hash chain and holds it against the
+        lines this node wrote. Reports the first line that does not link, cannot be read (a
+        write torn by a power cut) or has changed or gone since it was written, if any. A
+        broken chain stays broken: entries recorded after the break never make it verify."""
         return dataclasses.asdict(assistant.audit.verify())
