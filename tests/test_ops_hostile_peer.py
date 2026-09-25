@@ -163,14 +163,12 @@ def test_mvmap_keeps_what_the_peer_never_saw():
     assert mine.read("EV1|triage_status")
 
 
-@pytest.mark.xfail(strict=True, reason=CORE + (
-    "MVMap.missing_for enumerates every dot a register's context covers (DotContext.dots()), "
-    "so an exchange costs as much as the history a peer merely claims: one register pushed "
-    "with a context of {node: 10**9} makes the hub build a billion-element set per exchange "
-    "and stop answering every edge"))
 def test_the_cost_of_an_exchange_does_not_grow_with_the_history_a_peer_claims(tmp_path, monkeypatch):
-    """Counted in Dots constructed, for a claim of a million: enough to show
-    the enumeration, not enough to exhaust the test runner's memory."""
+    """MVMap.missing_for enumerated every dot a register's context covers,
+    so one register pushed with a context of {node: 10**9} made the hub
+    build a billion-element set on every exchange and stop answering every
+    edge. Counted in Dots constructed, for a claim of a million: enough to
+    show the enumeration, not enough to exhaust the test runner's memory."""
     from sentinel.crdt import DotContext
     from sentinel.crdt import dots as dots_module
 
