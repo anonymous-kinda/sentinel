@@ -36,6 +36,7 @@ from sentinel.passes.sync_adapter import PREFIX as ELEMENT_PREFIX
 from sentinel.passes.sync_adapter import ElementRecords
 from sentinel.sync import SyncAgent, SyncServer
 from sentinel.sync.agent import LINK_ERRORS
+from tests.linkclock import ManualClock
 
 from .conftest import EPOCH, KEYS, TRUST, Node
 
@@ -341,8 +342,8 @@ def test_a_reply_naming_another_item_is_refused(link):
 
 # ------------------------------------------------------ admission control
 class SmallRecords:
-    """Opaque records under 2 kB, so the link monitor's measured rate stays
-    where the test puts it (it only learns from transfers of 2 kB or more)."""
+    """Opaque records under 2 kB: a fetch of one measures the round trip,
+    not throughput (sentinel/linkstate/monitor.py)."""
 
     def __init__(self, summaries: list[dict] | None = None, records: dict[str, bytes] | None = None):
         self.summaries = summaries or []
@@ -377,49 +378,24 @@ def _record(tag: str, size: int) -> tuple[str, bytes]:
     return hashlib.sha256(raw).hexdigest()[:16], raw
 
 
-def test_admission_control_counts_the_time_spent_on_records_ahead():
-    now = dt.datetime(2026, 9, 24, 12, 0, tzinfo=dt.UTC)
-    clock = FixedClock(now)
-    sha_a, raw_a = _record("A", 500)
-    sha_b, raw_b = _record("B", 500)
-    summaries = [
-        {"e": "A", "dl": int(now.timestamp()) + 80, "q": 3, "c": [[sha_a, 500, 1]]},
-        {"e": "B", "dl": int(now.timestamp()) + 90, "q": 3, "c": [[sha_b, 500, 2]]},
-    ]
-    bus = InProcessBus()
-    server = SyncServer(bus, SmallRecords(summaries, {sha_a: raw_a, sha_b: raw_b}), None, "hub")
-    run(server.start())
-
-    async def fetch_takes_50_s(msg: Msg):
-        clock.advance(50)            # 500 B at 10 B/s: what the link monitor predicts
-        return await server._fetch(msg)
-
-    run(bus.serve(subjects.sync_fetch("hub"), fetch_takes_50_s))
-    monitor = LinkMonitor(rate_bytes_per_s=10.0)
-    agent = SyncAgent(bus, SmallRecords(), None, clock, "alpha", "hub", monitor)
-    agent.apply_manifest(summaries)
-    run(agent.pull())
-
-    status = {item.event_id: item.status for item in agent.queue}
-    arrived = {a["event_id"] for a in agent.arrivals}
-    assert "A" in arrived, "A fits: 50 s against 80 s"
-    assert status.get("B") == "SUMMARY_ONLY", "after A, B has 40 s left and needs 50 s"
-
-
 # ---------------------------------------------------------------- timeouts
 class ThinLinkBus(InProcessBus):
-    """A link that moves `rate` bytes per second. A request whose reply
-    needs longer than the requester's timeout to cross is lost, exactly as
-    a NATS request is."""
+    """A link that moves `rate` bytes per second, on `clock` (give it to the
+    link monitor). A request whose reply needs longer than the requester's
+    timeout to cross is lost, exactly as a NATS request is."""
 
-    def __init__(self, rate_bytes_per_s: float):
+    def __init__(self, rate_bytes_per_s: float, clock: ManualClock | None = None):
         super().__init__()
         self.rate = rate_bytes_per_s
+        self.clock = clock or ManualClock()
 
     async def request(self, subject, data, timeout, headers=None):
         reply = await super().request(subject, data, 3600.0, headers)
-        if (len(data) + len(reply.data)) / self.rate > timeout:
+        seconds = (len(data) + len(reply.data)) / self.rate
+        if seconds > timeout:
+            self.clock.advance(timeout)
             raise RequestTimeout(subject)
+        self.clock.advance(seconds)
         return reply
 
 
@@ -438,7 +414,8 @@ def test_a_manifest_larger_than_4_kb_still_reaches_the_edge_on_a_limited_link():
     hub_ops = OpsService("hub", KEYS["hub"], TrustStore(TRUST), bus, clock)
     run(SyncServer(bus, SmallRecords(summaries), hub_ops, "hub").start())
     edge_ops = OpsService("alpha", KEYS["alpha"], TrustStore(TRUST), bus, clock)
-    agent = SyncAgent(bus, SmallRecords(), edge_ops, clock, "alpha", "hub", LinkMonitor(rate_bytes_per_s=rate))
+    agent = SyncAgent(bus, SmallRecords(), edge_ops, clock, "alpha", "hub",
+                      LinkMonitor(rate_bytes_per_s=rate, clock=bus.clock))
 
     for _ in range(8):
         try:
@@ -446,6 +423,12 @@ def test_a_manifest_larger_than_4_kb_still_reaches_the_edge_on_a_limited_link():
         except LINK_ERRORS:
             agent.link.observe_failure()
     assert agent.manifest_digest is not None and agent.queue, "the edge never received the manifest"
+
+
+def frozen_link(rate_bytes_per_s: float) -> LinkMonitor:
+    """A monitor whose clock never moves: over an instant in-process bus an
+    exchange takes no time, so it measures nothing and the rate stays put."""
+    return LinkMonitor(rate_bytes_per_s=rate_bytes_per_s, clock=ManualClock())
 
 
 class LossyManifestBus(InProcessBus):
@@ -472,7 +455,7 @@ def test_the_manifest_wait_grows_after_each_timeout_up_to_a_cap_and_resets_when_
     of the manifest last received."""
     bus = LossyManifestBus()
     run(SyncServer(bus, SmallRecords([{"e": "A", "dl": 1_790_000_000, "q": 0, "c": []}]), None, "hub").start())
-    agent = SyncAgent(bus, SmallRecords(), None, FixedClock(EPOCH), "alpha", "hub", LinkMonitor(rate_bytes_per_s=1000.0))
+    agent = SyncAgent(bus, SmallRecords(), None, FixedClock(EPOCH), "alpha", "hub", frozen_link(1000.0))
 
     for _ in range(12):
         with contextlib.suppress(RequestTimeout):
@@ -506,7 +489,7 @@ def test_a_denial_never_lengthens_the_manifest_wait():
     hub_ops = OpsService("hub", KEYS["hub"], TrustStore(TRUST), bus, clock)
     run(SyncServer(bus, SmallRecords([{"e": "A", "dl": 1_790_000_000, "q": 0, "c": []}]), hub_ops, "hub").start())
     edge_ops = OpsService("alpha", KEYS["alpha"], TrustStore(TRUST), bus, clock)
-    agent = SyncAgent(bus, SmallRecords(), edge_ops, clock, "alpha", "hub", LinkMonitor(rate_bytes_per_s=1000.0))
+    agent = SyncAgent(bus, SmallRecords(), edge_ops, clock, "alpha", "hub", frozen_link(1000.0))
 
     for _ in range(10):
         with contextlib.suppress(*LINK_ERRORS):

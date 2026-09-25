@@ -12,7 +12,7 @@ import contextlib
 from typing import TYPE_CHECKING
 
 import nats
-from nats.errors import NoRespondersError
+from nats.errors import NoRespondersError, NoServersError
 from nats.errors import TimeoutError as NatsTimeout
 
 from ..obs import get_logger
@@ -41,15 +41,26 @@ class NatsBus:
 
     @classmethod
     async def connect(cls, url: str, name: str) -> NatsBus:
-        nc = await nats.connect(
-            servers=[url],
-            name=name,
-            allow_reconnect=True,
-            max_reconnect_attempts=-1,
-            reconnect_time_wait=1,
-            ping_interval=10,
-            max_outstanding_pings=5,
-        )
+        """Connect to this node's own nats-server.
+
+        The first connection is tried twice, at once, and a failure reaches
+        the caller as ConnectionError: the caller waits a bounded time for a
+        server that is still starting, and says so. Once connected, the
+        client reconnects for ever: the server restarting must never cost
+        the node its bus. The client reads these options at each reconnect."""
+        try:
+            nc = await nats.connect(
+                servers=[url],
+                name=name,
+                allow_reconnect=False,
+                max_reconnect_attempts=1,       # nats-py retries a first connect for ever at -1 or 0
+                reconnect_time_wait=0,
+                ping_interval=10,
+                max_outstanding_pings=5,
+            )
+        except NoServersError as exc:
+            raise ConnectionError("nats-server unreachable") from exc
+        nc.options.update(allow_reconnect=True, max_reconnect_attempts=-1, reconnect_time_wait=1)
         log.info("Connected to NATS", url=url, client_name=name)
         return cls(nc)
 

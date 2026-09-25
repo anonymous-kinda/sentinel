@@ -29,12 +29,20 @@ The edge's `SyncAgent` runs a cycle every 2 s by default
 1. **Operator data (P0).** `ops.<hub_id>.exchange` sends this node's CRDT
    contexts and what the hub was last known to lack. The reply carries what
    this node lacks. Each way is held to a budget, what the measured link
-   moves in 10 s (at most 256000 bytes): the oldest part that fits, always
-   at least one item. A backlog after a long denial drains over several
+   moves in 10 s (at most 256000 bytes): the leading part that fits, always
+   at least one item, taken in turns: one log entry from each author
+   (oldest first), then one register, and round again. A peer never counts
+   an entry it rejects as seen, so it is offered on every exchange; in
+   turns, no author, trusted or not, keeps the others out of the budget. A backlog after a long denial drains over several
    cycles, and the manifest and records still get the link in each. It is
    state-based, so a lost reply only means the next cycle sends a little
    more, and an item's dots enter the peer's context only when that item
-   is merged, so the part not yet sent is never lost.
+   is merged, so the part not yet sent is never lost. It runs before the
+   manifest, and only a lost request is a link failure. Anything else that
+   stops it (a `Sentinel-Error` reply, a reply this node cannot read, an
+   `IntegrityError` from the merge) is logged as `Operator data exchange
+   failed` and shown as the cycle's `ops` (`error`, `detail`) in
+   `GET /api/sync`, and the manifest and records still run.
 2. **Manifest (P0).** `sync.<hub_id>.manifest` fetches one summary per active
    item. It is skipped when the hub's digest is unchanged. Every event is then
    visible on the edge as `HUB_ASSERTED`, before any record arrives.
@@ -53,9 +61,13 @@ and so on up to 32, so it never costs a thin link a round trip every cycle.
 The records behind it are fetched. It is not a link failure.
 
 A request's timeout is 6 s + 1.5 × expected bytes ÷ max(measured rate,
-400 B/s). Before any rate is measured, 1000 B/s is assumed. A timeout or "no
-responders" is expected over a DDIL link: it counts as a link failure, and
-the next cycle tries again.
+400 B/s). Before any rate is measured, and after the link monitor forgets
+one because the round trip shows a different link
+(`sentinel/linkstate/monitor.py`), 1000 B/s is assumed. Every exchange is
+timed on the monitor's clock. A timeout or "no responders" is expected over
+a DDIL link: it counts as a link failure, and the next cycle tries again.
+One lost request reads DEGRADED; the link reads DENIED only when a second
+is lost in a row with no success for the grace period.
 
 A record's expected bytes are its size in the manifest. An operator-data
 exchange's are the request, the budget and 2000 bytes for the hub's
@@ -161,11 +173,16 @@ It orders by record creation time and turns admission control off.
 ## Admission control and queue states
 
 In EDF mode, when the link rate has been measured, the latest record of an
-item that cannot arrive before its deadline at that rate is not fetched: the
-item is held `SUMMARY_ONLY`, and the console shows the hub's summary. The
-link is spent on records that can still arrive in time. The node clock is
-read as each record comes up, so the time spent fetching the records ahead
-of it in the same pull counts against its deadline.
+item that cannot arrive before its deadline at that rate is held
+`SUMMARY_ONLY`, and the console shows the hub's summary, while the records
+that can still arrive in time get the link. The node clock is read as each
+record comes up, so the time spent fetching the records ahead of it in the
+same pull counts against its deadline.
+
+A held record is deferred, not withheld. Once no record that can still
+arrive in time is waiting in the pull, the held ones are fetched in triage
+order, within the same budget. An element set past its stale time, or a
+CDM past its commit point, is an input the operator still sees.
 
 ### Queue states
 
@@ -174,7 +191,7 @@ of it in the same pull counts against its deadline.
 | `QUEUED` | Waiting, or put back after the hub answered with `Sentinel-Error` or with a reply the edge refused (Headers, below). |
 | `FETCHING` | Request in flight. |
 | `ARRIVED` | Fetched and admitted; dropped from the queue at the end of the pull. |
-| `SUMMARY_ONLY` | Admission control: it cannot arrive before its deadline at the measured rate. |
+| `SUMMARY_ONLY` | Admission control: it cannot arrive before its deadline at the measured rate. It is fetched once nothing that can still arrive in time is waiting. |
 
 `GET /api/sync` on an edge shows the queue, recent arrivals and the items
 held summary-only.

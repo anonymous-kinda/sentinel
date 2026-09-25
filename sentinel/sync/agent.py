@@ -14,9 +14,10 @@ One cycle:
   3. Full CDMs. The want-list is a set difference - the hub's CDMs minus
      this node's - ordered by the mission-agnostic triage key: class, then
      earliest deadline (the maneuver commit point), then consequence.
-     Admission control: if the measured link cannot deliver a record before
-     its deadline, the event is marked SUMMARY-ONLY instead of spending the
-     link on it. Each CDM is re-assessed here, and the result is compared
+     Admission control: a record the measured link cannot deliver before
+     its deadline is held SUMMARY-ONLY while the records that still can get
+     the link, then fetched once none of them is waiting: deferred, never
+     withheld. Each CDM is re-assessed here, and the result is compared
      with what the hub asserted (VERIFIED / MISMATCH). A reply whose bytes
      are not the record asked for, or that its module cannot ingest, is
      refused and retried with back-off; the records behind it still come.
@@ -58,6 +59,17 @@ OPS_REPLY_OVERHEAD_BYTES = 2000     # the hub's contexts and counts around its p
 # What reading a summary sync cannot read raises. Each is skipped on its own.
 MALFORMED = (TypeError, ValueError, KeyError, OverflowError)
 _SHA16 = re.compile(r"[0-9a-f]{16}")
+
+
+class HubError(Exception):
+    """The hub answered with an error (Sentinel-Error) instead of a reply:
+    the link carried it, so it is not a link failure."""
+
+
+def raise_hub_error(reply: Msg) -> None:
+    error = reply.headers.get("Sentinel-Error")
+    if error:
+        raise HubError(error[:80])
 
 
 @dataclasses.dataclass(frozen=True)
@@ -212,6 +224,12 @@ class SyncAgent:
         manifest and records still get the link in each."""
         return int(min(self._rate() * OPS_BUDGET_S, OPS_BUDGET_MAX_BYTES))
 
+    async def _exchange(self, subject: str, request: bytes, timeout: float) -> tuple[Msg, float]:
+        """One request and its reply, timed on the link monitor's clock."""
+        started = self.link.clock()
+        reply = await self.bus.request(subject, request, timeout=timeout)
+        return reply, self.link.clock() - started
+
     async def _publish(self, kind: str, payload: dict[str, Any]) -> None:
         await self.bus.publish(
             subjects.local(self.node_id, kind),
@@ -228,21 +246,26 @@ class SyncAgent:
     # ------------------------------------------------------------------- cycle
     async def run(self) -> None:
         while True:
-            try:
-                await self.cycle()
-            except LINK_ERRORS as exc:
-                self.link.observe_failure()
-                self.last_cycle = {"error": type(exc).__name__, "at": self.clock.now().isoformat()}
-            except Exception:  # noqa: BLE001 - the agent must outlive any single bug
-                log.exception("Sync cycle failed", hub_id=self.hub_id, mode=self.mode)
-                self.link.observe_failure()
-            await self._link_changed()
-            await self._publish("sync.progress", self.status())
+            await self.step()
             await asyncio.sleep(self.interval_s)
+
+    async def step(self) -> None:
+        """One cycle, whatever it meets: a link failure is measured, and a bug
+        is logged without stopping the agent."""
+        try:
+            await self.cycle()
+        except LINK_ERRORS as exc:
+            self.link.observe_failure()
+            self.last_cycle = {"error": type(exc).__name__, "at": self.clock.now().isoformat()}
+        except Exception:  # noqa: BLE001 - the agent must outlive any single bug
+            log.exception("Sync cycle failed", hub_id=self.hub_id, mode=self.mode)
+            self.link.observe_failure()
+        await self._link_changed()
+        await self._publish("sync.progress", self.status())
 
     async def cycle(self) -> None:
         started = time.monotonic()
-        ops_stats = await self.exchange_ops()
+        ops_stats = await self._operator_data()
         manifest = await self.fetch_manifest()
         if manifest is not None:
             self.apply_manifest(manifest)
@@ -256,21 +279,36 @@ class SyncAgent:
         }
 
     # ------------------------------------------------------------ operator data
+    async def _operator_data(self) -> dict[str, Any]:
+        """The operator-data exchange, isolated from the rest of the cycle.
+
+        Only a lost request is a link failure. Anything else that stops the
+        exchange (a hub error, a reply this node cannot read, an
+        IntegrityError from the merge) is logged and reported as the
+        cycle's `ops`, and the manifest and records still run."""
+        try:
+            return await self.exchange_ops()
+        except LINK_ERRORS:
+            raise
+        except Exception as exc:  # noqa: BLE001 - operator data must not stop reference data
+            failure = {"error": type(exc).__name__, "detail": str(exc)[:200]}
+            log.warning("Operator data exchange failed", hub_id=self.hub_id, **failure)
+            return failure
+
     async def exchange_ops(self) -> dict[str, Any]:
         budget = self._ops_budget()
         peer = self.ops.peer_contexts(self.hub_id)
         push = self.ops.payload_for(peer["log_ctx"], peer["mv_ctx"], budget)
         request = codec.encode({"from": self.node_id, **self.ops.contexts(), "push": push, "budget": budget})
-        t0 = time.monotonic()
-        reply_msg = await self.bus.request(
+        reply_msg, rtt = await self._exchange(
             subjects.ops_exchange(self.hub_id), request,
-            timeout=self._timeout(len(request) + budget + OPS_REPLY_OVERHEAD_BYTES),
+            self._timeout(len(request) + budget + OPS_REPLY_OVERHEAD_BYTES),
         )
-        rtt = time.monotonic() - t0
+        self.link.observe_success(rtt, len(request) + len(reply_msg.data), rtt)
+        raise_hub_error(reply_msg)
         reply = codec.decode(reply_msg.data)
         merged = await self.ops.merge_payload(reply["pull"])
         self.ops.remember_peer(self.hub_id, reply["ctx"])
-        self.link.observe_success(rtt, len(request) + len(reply_msg.data), rtt)
         return {
             "sent_entries": len(push["log"]),
             "sent_registers": len(push["reg"]),
@@ -282,17 +320,13 @@ class SyncAgent:
     async def fetch_manifest(self) -> list[dict[str, Any]] | None:
         request = codec.encode({"from": self.node_id, "known": self.manifest_digest})
         expected_bytes = self._manifest_expected_bytes()
-        t0 = time.monotonic()
         try:
-            reply = await self.bus.request(
-                subjects.sync_manifest(self.hub_id), request, timeout=self._timeout(expected_bytes)
-            )
+            reply, rtt = await self._exchange(subjects.sync_manifest(self.hub_id), request, self._timeout(expected_bytes))
         except RequestTimeout:
             self._manifests_lost += 1
             log.info("Manifest request timed out", hub_id=self.hub_id, expected_bytes=expected_bytes,
                      next_expected_bytes=self._manifest_expected_bytes())
             raise
-        rtt = time.monotonic() - t0
         self.link.observe_success(rtt, len(reply.data), rtt)
         self._manifests_lost = 0
         if reply.headers.get("Sentinel-Unchanged") == "1":
@@ -361,32 +395,51 @@ class SyncAgent:
 
     # --------------------------------------------------------------- full CDMs
     async def pull(self, budget_s: float | None = None) -> int:
-        """Fetch queued CDMs in order. Returns how many arrived."""
+        """Fetch queued records in triage order, within `budget_s` of wall
+        time. Returns how many were fetched.
+
+        Admission control (EDF): a latest record that cannot arrive before
+        its deadline at the measured rate is held SUMMARY_ONLY while the
+        records that still can get the link. It is deferred, not withheld:
+        once none of those is waiting, it is fetched too, because a stale
+        input is shown, not hidden."""
         budget_s = budget_s if budget_s is not None else max(self.interval_s * 5, 10.0)
-        started = time.monotonic()
+        ends = time.monotonic() + budget_s
         fetched = 0
         self._pulls += 1
-        for item in self.queue:
-            if item.status in ("ARRIVED",) or not self._backoff.due(item.sha16, self._pulls):
+        late: list[WantItem] = []
+        for item in [i for i in self.queue if i.status != "ARRIVED" and self._backoff.due(i.sha16, self._pulls)]:
+            if self._too_late(item):
+                item.status = "SUMMARY_ONLY"
+                self.summary_only.add(item.event_id)
+                late.append(item)
                 continue
-            eta_wall = self.link.eta_s(item.size)
-            item.eta_s = None if eta_wall is None else round(eta_wall, 1)
-            if self.mode == "edf" and item.latest and eta_wall is not None and item.key.deadline is not None:
-                # Read the clock per record: the fetches ahead of it spent node time.
-                seconds_left = (item.key.deadline - self.clock.now()).total_seconds()
-                if eta_wall * self.clock.scale > seconds_left:
-                    item.status = "SUMMARY_ONLY"
-                    self.summary_only.add(item.event_id)
-                    continue
-            if time.monotonic() - started > budget_s:
+            if time.monotonic() > ends:
                 break
-            item.status = "FETCHING"
             await self._fetch(item)
             fetched += 1
+        else:                                   # every record in time was fetched: the late ones follow
+            for item in late:
+                if time.monotonic() > ends:
+                    break
+                await self._fetch(item)
+                fetched += 1
         self.queue = [i for i in self.queue if i.status != "ARRIVED"]
         return fetched
 
+    def _too_late(self, item: WantItem) -> bool:
+        """Whether a record cannot arrive before its deadline at the measured
+        rate (EDF only). Reads the clock per record: the fetches ahead of it
+        in this pull spent node time."""
+        eta_wall = self.link.eta_s(item.size)
+        item.eta_s = None if eta_wall is None else round(eta_wall, 1)
+        if self.mode != "edf" or not item.latest or eta_wall is None or item.key.deadline is None:
+            return False
+        seconds_left = (item.key.deadline - self.clock.now()).total_seconds()
+        return eta_wall * self.clock.scale > seconds_left
+
     async def _fetch(self, item: WantItem) -> None:
+        item.status = "FETCHING"
         reply = await self._request_record(item)
         if reply.headers.get("Sentinel-Error"):
             item.status = "QUEUED"
@@ -411,9 +464,7 @@ class SyncAgent:
 
     async def _request_record(self, item: WantItem) -> Msg:
         request = codec.encode({"sha": item.sha16, "from": self.node_id})
-        t0 = time.monotonic()
-        reply = await self.bus.request(subjects.sync_fetch(self.hub_id), request, timeout=self._timeout(item.size))
-        elapsed = time.monotonic() - t0
+        reply, elapsed = await self._exchange(subjects.sync_fetch(self.hub_id), request, self._timeout(item.size))
         self.link.observe_success(elapsed, len(reply.data), elapsed)
         return reply
 

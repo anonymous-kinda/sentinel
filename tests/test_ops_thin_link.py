@@ -24,7 +24,7 @@ from sentinel.sync.agent import LINK_ERRORS
 from tests.sync.test_hostile_hub import ThinLinkBus
 
 NOW = dt.datetime(2026, 9, 24, 12, 0, tzinfo=dt.UTC)
-KEYS = {n: NodeKey.generate(n) for n in ("hub", "alpha")}
+KEYS = {n: NodeKey.generate(n) for n in ("hub", "alpha", "bravo")}
 TRUST = {n: k.public_hex() for n, k in KEYS.items()}
 RATE = 1000.0                                   # ~8 kbit/s: the LIMITED scenario
 
@@ -125,6 +125,31 @@ def test_each_exchange_spends_a_bounded_share_of_the_link_and_both_backlogs_conv
     assert all(sent <= budget + 2000 and got <= budget + 2000 for sent, got in bus.exchanges), bus.exchanges
     assert hub.digest()["log"] == edge.digest()["log"] and len(edge.log.entries) == 120
     assert hub.digest()["annotations"] == edge.digest()["annotations"]
+
+
+def test_entries_a_peer_rejects_do_not_starve_the_ones_it_accepts():
+    """A rejected entry never enters the peer's context, so it is offered
+    again on every exchange (sentinel/crdt/log.py). Offered oldest first,
+    the rejected ones filled the budget before anything else: with the hub
+    trusting bravo and alpha not, 60 bravo notes kept the hub's own 5 from
+    alpha for good at 400 B/s."""
+    bus = ThinLinkBus(400.0)
+    hub = replica("hub", bus)
+    bravo = replica("bravo", bus)
+    for n in range(60):
+        run(bravo.append(f"EVENT-{n % 12:03d}", "NOTE", {"text": f"bravo item {n}: " + "x" * 80}, "op@bravo"))
+    run(hub.merge_payload(bravo.payload_for(**hub.contexts())))
+    for n in range(5):
+        run(hub.append("EVENT-000", "NOTE", {"text": f"hub item {n}"}, "capt.lee@hub"))
+    run(SyncServer(bus, None, hub, "hub").start())
+    alpha = OpsService("alpha", KEYS["alpha"], TrustStore({n: TRUST[n] for n in ("hub", "alpha")}), bus, FixedClock(NOW))
+    agent = SyncAgent(bus, None, alpha, FixedClock(NOW), "alpha", "hub",
+                      LinkMonitor(rate_bytes_per_s=400.0, clock=bus.clock))
+
+    for _ in range(20):
+        run(agent.exchange_ops())
+    from_hub = {dot for dot in hub.log.entries if dot.node == "hub"}
+    assert from_hub <= set(alpha.log.entries), f"{len(from_hub - set(alpha.log.entries))} of the hub's 5 never arrived"
 
 
 @pytest.mark.parametrize("budget", [0, -1, "10000", True, 2.5, None])
