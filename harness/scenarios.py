@@ -19,11 +19,14 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import os
 import statistics
 import sys
 import time
 
-from .cluster import ROOT, Cluster, http, wait_until
+from .cluster import ROOT, Cluster, http, preset_toxics, wait_until
+from .ledger import SyncLedger
+from .stats import MODES, describe, link_mismatches, run_order, speedup, spread, summarize
 
 sys.path.insert(0, str(ROOT))
 
@@ -38,6 +41,12 @@ DEFAULT_HUB = (
     "Default hub configuration: conjunction CDMs plus the imaging catalog's public element sets "
     "(SENTINEL_SYNC_ELEMENTS=catalog) share the link."
 )
+# The vendored element-set snapshot's day. Scenarios whose result depends
+# on element sets run their nodes' clocks from it, so the sets are fresh and
+# a run is reproducible whatever day it runs on: a stale set's sync deadline
+# has passed, and FIFO orders sets by epoch against CDMs dated from "now".
+SNAPSHOT_EPOCH = dt.datetime(2026, 9, 24, 6, 0, tzinfo=dt.UTC)
+SNAPSHOT_CLOCK = f"sim:{SNAPSHOT_EPOCH.isoformat()},1"
 OPERATOR_EDGE = {"X-Sentinel-Operator": "maj.ortiz@edge-alpha"}
 OPERATOR_HUB = {"X-Sentinel-Operator": "capt.lee@hub"}
 
@@ -49,6 +58,7 @@ class Result:
         self.metrics: dict = {}
         self.notes: list[str] = []
         self.started = time.time()
+        self.load_start = load_1min()
 
     def check(self, name: str, passed: bool, detail: str = "") -> bool:
         self.assertions.append({"name": name, "passed": bool(passed), "detail": detail})
@@ -67,7 +77,13 @@ class Result:
             "notes": self.notes,
             "duration_s": round(time.time() - self.started, 1),
             "ran_at": dt.datetime.now(dt.UTC).isoformat(),
+            "load_1min": {"start": self.load_start, "end": load_1min()},
         }
+
+
+def load_1min() -> float:
+    """The machine's 1-minute load average: latency results move with CPU contention."""
+    return round(os.getloadavg()[0], 2)
 
 
 # --------------------------------------------------------------------- helpers
@@ -170,11 +186,18 @@ def denied(denial_s: float = 20.0) -> Result:
         r.metrics["edge_events_during_denial"] = len(edge_during)
         r.metrics["hub_events_during_denial"] = hub_events
 
+        # The catch-up is read as it happens: the edge shows only its latest arrivals.
+        catch_up = SyncLedger(after=http("GET", f"{c.edge}/api/sync")["arrivals_total"])
+
+        def caught_up() -> bool:
+            catch_up.record(http("GET", f"{c.edge}/api/sync"))
+            return converged(c)
+
         c.link("CONNECTED")
         t_reconnect = time.monotonic()
-        arrivals_before = http("GET", f"{c.edge}/api/sync")["arrivals_total"]
-        wait_until(lambda: converged(c), 120, what="reconnect convergence")
+        wait_until(caught_up, 120, what="reconnect convergence")
         r.metrics["convergence_after_reconnect_s"] = round(time.monotonic() - t_reconnect, 2)
+        catch_up.record(http("GET", f"{c.edge}/api/sync"))
 
         p95 = statistics.quantiles(latencies, n=20)[18]
         r.metrics["edge_api_p95_ms_while_denied"] = round(p95, 1)
@@ -204,7 +227,7 @@ def denied(denial_s: float = 20.0) -> Result:
         r.check("the edge's offline decision is signed and verified at the hub",
                 all(e["signature_valid"] for e in http("GET", f"{c.hub}/api/events/{dil['event_id']}/ops")["entries"]))
 
-        arrivals = http("GET", f"{c.edge}/api/sync")["arrivals"][-(http('GET', f'{c.edge}/api/sync')['arrivals_total'] - arrivals_before):]
+        arrivals = catch_up.arrivals
         latest = [a for a in arrivals if a["latest"]]
         classes = [a["class"] for a in arrivals]
         order_ok = classes == sorted(classes, key=lambda k: ["P0_SUMMARY", "P1_URGENT", "P2_ROUTINE", "P3_REFERENCE", "P4_BULK"].index(k))
@@ -212,75 +235,143 @@ def denied(denial_s: float = 20.0) -> Result:
         tau = kendall_tau(p1)
         r.metrics["catch_up_records"] = len(arrivals)
         r.metrics["catch_up_p1_kendall_tau"] = round(tau, 3)
-        r.check("catch-up order: urgent before routine before history", order_ok, " > ".join(dict.fromkeys(classes)))
+        r.check("catch-up order: urgent before routine before history (every arrival read)", order_ok and not catch_up.unseen,
+                " > ".join(dict.fromkeys(classes)) + (f"; {catch_up.unseen} arrivals scrolled out unread" if catch_up.unseen else ""))
         r.check("catch-up order: earliest deadline first within urgent (Kendall tau >= 0.95)", tau >= 0.95, f"tau {tau:.3f} over {len(p1)} records")
         r.check("no process restarted", alive(c))
     return r
 
 
 # -------------------------------------------------------------------- LIMITED
+LIMITED_RUNS = 5              # runs per mode for `make ddil`; CI runs 3 (harness.yml)
+# NATS s2_auto picks each side's compression from the round trip that side
+# measured. The leaf connects over the shaped link (about 1.2 s round trip),
+# so both sides measure it and pick s2_best. A leaf that connected before
+# shaping can keep s2_uncompressed on the hub's side for a whole run.
+LIMITED_COMPRESSION = {"hub": "s2_best", "edge": "s2_best"}
+
+
+def limited_link() -> dict:
+    """The link every LIMITED run must be measured on, at link-up and at the end."""
+    return {"toxics": preset_toxics("LIMITED"), "compression": LIMITED_COMPRESSION}
+
+
+def limited_milestones(hub_events: dict, urgent_id: str, edge_events: dict, sync: dict) -> dict[str, bool]:
+    """Which of the moments a LIMITED run times the edge has reached, from one look at it.
+    `all_records`: the backlog is settled, every record delivered or held summary-only."""
+    visible = set(edge_events) >= set(hub_events)
+    settled = all(i["status"] in ("ARRIVED", "SUMMARY_ONLY") for i in sync["queue"])
+    return {
+        "all_summaries": visible,
+        "most_urgent_full": edge_events.get(urgent_id, {}).get("verification") == "VERIFIED",
+        "all_latest_verified": visible and all(e.get("verification") == "VERIFIED" for e in edge_events.values()),
+        "all_records": visible and bool(sync["last_cycle"]) and settled,
+    }
+
+
 def _limited_run(mode: str) -> dict:
-    epoch = dt.datetime.now(dt.UTC)
-    initial, _ = scenario_cdms(epoch)
-    with Cluster(sync_mode=mode, hub_exercise=False, sync_interval_s=0.5) as c:
-        wait_until(c.leaf_connected, 20, what="leaf")
-        c.link("LIMITED")
-        time.sleep(2)
+    """One run from a fixed start: the whole backlog waits at the hub before
+    the link exists, then the leaf connects over the shaped link.
+
+    No byte crosses an unshaped link. So no record slips across before the
+    clock starts, the edge's rate estimate starts on the thin link, and NATS
+    picks its compression from a round trip measured on it. Times run from
+    the moment the leaf connection is up."""
+    initial, _ = scenario_cdms(SNAPSHOT_EPOCH)
+    load_start = load_1min()
+    with Cluster(sync_mode=mode, clock=SNAPSHOT_CLOCK, hub_exercise=False, sync_interval_s=0.5,
+                 initial_link="DENIED") as c:
         for item in initial:
             post_cdm(c.hub, item.kvn)
-        t0 = time.monotonic()
         hub_events = {e["event_id"]: e for e in active(c.hub)}
         urgent = min(
             (e for e in hub_events.values() if e["consequence"] in ("CRITICAL", "SERIOUS")),
             key=lambda e: e["mcp"],
         )
+        ledger = SyncLedger()
+        ledger.record(http("GET", f"{c.edge}/api/sync"))
+        crossed_before = len(ledger.arrivals) + ledger.unseen
+        c.link("LIMITED")
+        t_shaped = time.monotonic()
+        wait_until(c.leaf_connected, 90, interval=0.1, what="leaf over LIMITED")
+        t0 = time.monotonic()
+        link_start = c.link_now()
         times: dict = {}
 
         def poll() -> bool:
-            events = {e["event_id"]: e for e in active(c.edge)}
+            sync = http("GET", f"{c.edge}/api/sync")
+            ledger.record(sync)
+            edge_events = {e["event_id"]: e for e in active(c.edge)}
             now = round(time.monotonic() - t0, 1)
-            if "all_summaries" not in times and set(events) >= set(hub_events):
-                times["all_summaries"] = now
-            if "most_urgent_full" not in times and events.get(urgent["event_id"], {}).get("verification") == "VERIFIED":
-                times["most_urgent_full"] = now
-            if "all_latest_verified" not in times and set(events) >= set(hub_events) and all(
-                e.get("verification") == "VERIFIED" for e in events.values()
-            ):
-                times["all_latest_verified"] = now
-            return len(times) == 3
+            reached = limited_milestones(hub_events, urgent["event_id"], edge_events, sync)
+            for name in (name for name, done in reached.items() if done):
+                times.setdefault(name, now)
+            return len(times) == len(reached)
 
         wait_until(poll, 400, interval=0.5, what=f"{mode} LIMITED sync")
         sync = http("GET", f"{c.edge}/api/sync")
+        ledger.record(sync)
         return {
             "mode": mode,
+            "load_1min": {"start": load_start, "end": load_1min()},
+            "link_up_s": round(t0 - t_shaped, 1),
             "times_s": times,
             "most_urgent_event": urgent["event_id"],
-            "records": len(initial),
-            "record_bytes": sum(len(i.kvn.encode()) for i in initial),
-            "summary_only_marked": sync["summary_only"],
-            "measured_rate_bytes_per_s": sync["link"]["rate_bytes_per_s"],
+            "records_before_link_up": crossed_before,
+            "records_fetched": len(ledger.arrivals),
+            "records_unseen": ledger.unseen,
+            "record_bytes": sum(a["bytes"] for a in ledger.arrivals),
+            "records_digest": ledger.digest(),
+            "cdms": len(initial),
+            "cdm_bytes": sum(len(i.kvn.encode()) for i in initial),
+            "element_sets": len(ledger.items(ELEMENT_PREFIX)),
+            "rate_estimate_bytes_per_s": sync["link"]["rate_bytes_per_s"],
             "link_state": sync["link"]["state"],
+            "summary_only_marked": sync["summary_only"],
+            "link": {"start": link_start, "end": c.link_now()},
         }
 
 
-def limited() -> Result:
+def limited(runs_per_mode: int = LIMITED_RUNS) -> Result:
     r = Result("LIMITED")
-    r.notes.append("Toxiproxy bandwidth 1 kB/s each way plus 600 ms latency; NATS leafnode s2_auto compression on.")
+    r.notes.append(
+        "Toxiproxy bandwidth 1 kB/s each way plus 600 +/- 100 ms latency; NATS leafnode s2_auto compression. "
+        f"Each mode runs {runs_per_mode} times, each on a fresh cluster, alternating which mode goes first. "
+        "Every run starts from the same backlog: the exercise CDMs and the imaging catalog's element sets wait "
+        "at the hub while the link is down, then the leaf connects over the shaped link, so no byte crosses an "
+        "unshaped link. Node clocks run from the element-set snapshot's day (2026-09-24T06:00Z), so the order "
+        "of the records does not drift with the day the scenario runs."
+    )
     r.notes.append(DEFAULT_HUB)
-    edf = _limited_run("edf")
-    fifo = _limited_run("fifo")
-    r.metrics["edf"] = edf
-    r.metrics["fifo"] = fifo
-    speedup = fifo["times_s"]["most_urgent_full"] / max(edf["times_s"]["most_urgent_full"], 0.1)
-    r.metrics["most_urgent_speedup"] = round(speedup, 1)
-    r.check("every event visible as a summary before its full record (EDF)",
-            edf["times_s"]["all_summaries"] <= edf["times_s"]["all_latest_verified"],
-            f"summaries at {edf['times_s']['all_summaries']} s, all verified at {edf['times_s']['all_latest_verified']} s")
-    r.check("most urgent full CDM arrives sooner with EDF than with FIFO (same link, same bytes)",
-            edf["times_s"]["most_urgent_full"] < fifo["times_s"]["most_urgent_full"],
-            f"EDF {edf['times_s']['most_urgent_full']} s vs FIFO {fifo['times_s']['most_urgent_full']} s ({speedup:.1f}x)")
-    r.check("the edge measured the link as LIMITED", edf["link_state"] in ("LIMITED", "DEGRADED"),
-            f"measured {edf['measured_rate_bytes_per_s']} B/s")
+    runs = [_limited_run(mode) for mode in run_order(runs_per_mode)]
+    edf, fifo = (summarize([run for run in runs if run["mode"] == mode]) for mode in MODES)
+    ratio = speedup(edf, fifo)
+    r.metrics.update({
+        "runs_per_mode": runs_per_mode, "edf": edf, "fifo": fifo, "most_urgent_speedup": ratio,
+        "link": limited_link(), "runs": runs,
+    })
+    mismatches = link_mismatches(runs, limited_link())
+    workloads = {(run["records_fetched"], run["record_bytes"], run["records_digest"]) for run in runs}
+    unseen = sum(run["records_unseen"] for run in runs)
+    first = runs[0]
+    r.check("every run on the same link: the LIMITED toxics, and s2_best compression on both sides, "
+            "at link-up and at the end", not mismatches, ", ".join(mismatches) or f"{len(runs)} runs checked")
+    r.check("every run starts from the same backlog: no record crossed before the link was shaped",
+            all(run["records_before_link_up"] == 0 for run in runs),
+            f"records before link-up: {sorted({run['records_before_link_up'] for run in runs})}")
+    r.check("every run moved the same records (same bytes), every arrival read", len(workloads) == 1 and not unseen,
+            f"{first['records_fetched']} records, {first['record_bytes']:,} bytes, in each of {len(runs)} runs"
+            if len(workloads) == 1 else f"differing workloads: {sorted(workloads)}; unread arrivals {unseen}")
+    r.check("every event visible as a summary before the most urgent full record (EDF, every run)",
+            all(run["times_s"]["all_summaries"] <= run["times_s"]["most_urgent_full"] for run in runs if run["mode"] == "edf"),
+            f"summaries at {describe(edf['all_summaries'])}, most urgent full record at {describe(edf['most_urgent_full'])}")
+    r.check("most urgent full CDM arrives sooner with EDF than with FIFO (medians; same link, same records)",
+            edf["most_urgent_full"]["median"] < fifo["most_urgent_full"]["median"],
+            f"EDF {describe(edf['most_urgent_full'])} vs FIFO {describe(fifo['most_urgent_full'])} ({ratio}x), "
+            f"medians over {runs_per_mode} runs per mode")
+    r.check("the edge measured the link as LIMITED (every run)", all(run["link_state"] == "LIMITED" for run in runs),
+            f"states {sorted({run['link_state'] for run in runs})}; rate estimate "
+            f"{describe(spread([run['rate_estimate_bytes_per_s'] for run in runs]), 'B/s', 0)}")
     return r
 
 
@@ -383,9 +474,6 @@ def recovery() -> Result:
 
 
 # ---------------------------------------------------------------------- OPSEC
-# The vendored snapshot's day, so element sets are fresh and the run is
-# reproducible whatever day it runs on (a stale set's sync deadline has passed).
-OPSEC_CLOCK = "sim:2026-09-24T06:00:00+00:00,1"
 # An exercise position (ORIGINATOR=SENTINEL-EXERCISE), never a real unit.
 OPSEC_UNIT = {"unit_id": "EX-OPSEC-UNIT-7", "lat_deg": 35.26417, "lon_deg": -116.68273, "alt_m": 701.0, "reaction_time_min": 30.0}
 OPSEC_SETTLE_S = 8.0          # many sync cycles: time for anything that would leak to cross
@@ -429,7 +517,7 @@ def opsec() -> Result:
     fetch: it looks for leaks only. Element sets are counted from the edge's
     own record of what it fetched (`GET /api/sync`).
     """
-    from .opsec import Capture, SyncLedger, find_leaks, leak_patterns, publish, scan_tree
+    from .opsec import Capture, find_leaks, leak_patterns, publish, scan_tree
 
     r = Result("OPSEC")
     r.notes.append(
@@ -442,7 +530,7 @@ def opsec() -> Result:
     patterns = leak_patterns(OPSEC_UNIT)
     nonce = f"opsec-control-{time.time_ns()}".encode()
     edge_sync = SyncLedger()
-    with Cluster(clock=OPSEC_CLOCK, hub_exercise=True, sync_interval_s=0.5) as c:
+    with Cluster(clock=SNAPSHOT_CLOCK, hub_exercise=True, sync_interval_s=0.5) as c:
         hub_url, edge_url = (f"nats://127.0.0.1:{c.ports[p]}" for p in ("hub_client", "edge_client"))
 
         def edge_catalog_complete() -> bool:

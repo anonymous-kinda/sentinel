@@ -5,28 +5,28 @@ below was measured on a real two-node deployment: two nats-server processes
 joined by a leafnode connection, with Toxiproxy shaping that TCP link, and
 two Sentinel nodes (hub and edge) on top. Nothing is simulated in-process.
 
-| scenario | result | assertions | ran |
-|---|---|---|---|
-| DENIED | PASS | 11/11 | 2026-09-24T08:10Z |
-| LIMITED | PASS | 3/3 | 2026-09-24T08:13Z |
-| INTERMITTENT | PASS | 4/4 | 2026-09-24T08:13Z |
-| DEGRADED | PASS | 3/3 | 2026-09-24T08:14Z |
-| RECOVERY | PASS | 3/3 | 2026-09-24T08:14Z |
-| OPSEC | PASS | 10/10 | 2026-09-24T08:14Z |
+| scenario | result | assertions | load (1 min, start → end) | ran |
+|---|---|---|---|---|
+| DENIED | PASS | 11/11 | 0.95 → 2.44 | 2026-09-25T02:51Z |
+| LIMITED | PASS | 6/6 | 2.44 → 1.49 | 2026-09-25T03:17Z |
+| INTERMITTENT | PASS | 4/4 | 1.49 → 2.4 | 2026-09-25T03:18Z |
+| DEGRADED | PASS | 3/3 | 2.4 → 2.59 | 2026-09-25T03:20Z |
+| RECOVERY | PASS | 3/3 | 2.59 → 2.17 | 2026-09-25T03:20Z |
+| OPSEC | PASS | 10/10 | 2.17 → 2.14 | 2026-09-25T03:20Z |
 
 ## DENIED
 
 Default hub configuration: conjunction CDMs plus the imaging catalog's public element sets (SENTINEL_SYNC_ELEMENTS=catalog) share the link.
 
-- PASS - edge console stays available while denied (p95 < 200 ms) (p95 2.8 ms over 40 requests)
+- PASS - edge console stays available while denied (p95 < 200 ms) (p95 3.2 ms over 40 requests)
 - PASS - edge measured the link as DENIED (not configured - measured)
 - PASS - no data loss: every hub CDM reached the edge (set difference empty) (16 events, 29 CDMs)
 - PASS - every event re-assessed at the edge and VERIFIED against the hub
 - PASS - operator data converged (log and annotations digests equal) (1 log entries, 1 annotation registers)
 - PASS - concurrent triage edits kept as a CONFLICT, not last-writer-wins (values ['MANEUVER_PLANNING', 'WATCH'])
-- PASS - the decision made offline is flagged REVIEW REQUIRED (its CDM was superseded) (decided against EX-DIL-03-20260924T041015)
+- PASS - the decision made offline is flagged REVIEW REQUIRED (its CDM was superseded) (decided against EX-DIL-03-20260924T225123)
 - PASS - the edge's offline decision is signed and verified at the hub
-- PASS - catch-up order: urgent before routine before history (P1_URGENT > P2_ROUTINE > P4_BULK)
+- PASS - catch-up order: urgent before routine before history (every arrival read) (P1_URGENT > P2_ROUTINE > P4_BULK)
 - PASS - catch-up order: earliest deadline first within urgent (Kendall tau >= 0.95) (tau 1.000 over 5 records)
 - PASS - no process restarted
 
@@ -35,31 +35,58 @@ Default hub configuration: conjunction CDMs plus the imaging catalog's public el
 | denial_wall_s | 20.0 |
 | edge_events_during_denial | 8 |
 | hub_events_during_denial | 16 |
-| convergence_after_reconnect_s | 2.41 |
-| edge_api_p95_ms_while_denied | 2.8 |
+| convergence_after_reconnect_s | 1.37 |
+| edge_api_p95_ms_while_denied | 3.2 |
 | catch_up_records | 16 |
 | catch_up_p1_kendall_tau | 1.0 |
 
 ## LIMITED
 
-Toxiproxy bandwidth 1 kB/s each way plus 600 ms latency; NATS leafnode s2_auto compression on.
+Toxiproxy bandwidth 1 kB/s each way plus 600 +/- 100 ms latency; NATS leafnode s2_auto compression. Each mode runs 5 times, each on a fresh cluster, alternating which mode goes first. Every run starts from the same backlog: the exercise CDMs and the imaging catalog's element sets wait at the hub while the link is down, then the leaf connects over the shaped link, so no byte crosses an unshaped link. Node clocks run from the element-set snapshot's day (2026-09-24T06:00Z), so the order of the records does not drift with the day the scenario runs.
 
 Default hub configuration: conjunction CDMs plus the imaging catalog's public element sets (SENTINEL_SYNC_ELEMENTS=catalog) share the link.
 
-- PASS - every event visible as a summary before its full record (EDF) (summaries at 5.5 s, all verified at 86.8 s)
-- PASS - most urgent full CDM arrives sooner with EDF than with FIFO (same link, same bytes) (EDF 12.1 s vs FIFO 46.8 s (3.9x))
-- PASS - the edge measured the link as LIMITED (measured 735 B/s)
+- PASS - every run on the same link: the LIMITED toxics, and s2_best compression on both sides, at link-up and at the end (10 runs checked)
+- PASS - every run starts from the same backlog: no record crossed before the link was shaped (records before link-up: [0])
+- PASS - every run moved the same records (same bytes), every arrival read (51 records, 79,996 bytes, in each of 10 runs)
+- PASS - every event visible as a summary before the most urgent full record (EDF, every run) (summaries at 6.5 s (6.1–6.6), most urgent full record at 9.1 s (8.6–9.1))
+- PASS - most urgent full CDM arrives sooner with EDF than with FIFO (medians; same link, same records) (EDF 9.1 s (8.6–9.1) vs FIFO 136.9 s (135.4–141.7) (15.0x), medians over 5 runs per mode)
+- PASS - the edge measured the link as LIMITED (every run) (states ['LIMITED']; rate estimate 1,777 B/s (1,731–1,840))
 
-| measured over ~8 kbit/s + 600 ms | EDF (Sentinel) | FIFO (transport order) |
+| over ~8 kbit/s + 600 ms: median (range) of 5 runs per mode | EDF (Sentinel) | FIFO (transport order) |
 |---|---|---|
-| every event visible (summaries) | 5.5 s | 12.6 s |
-| **most urgent event's full CDM** | **12.1 s** | **46.8 s** |
-| every event verified | 86.8 s | 58.9 s |
-| measured payload rate | 735 B/s | 9096 B/s |
+| leaf connection up over the shaped link | 10.8 s (4.7–11.2) | 10.6 s (4.8–12.3) |
+| every event visible (summaries) | 6.5 s (6.1–6.6) | 6.0 s (6.0–6.2) |
+| **most urgent event's full CDM** | **9.1 s (8.6–9.1)** | **136.9 s (135.4–141.7)** |
+| every event verified | 47.6 s (46.1–47.9) | 149.0 s (147.0–153.8) |
+| every record delivered or held summary-only | 150.9 s (148.6–150.9) | 149.0 s (147.0–153.8) |
+| edge's rate estimate at the end | 1,777 B/s (1,761–1,833) | 1,771 B/s (1,731–1,840) |
 
-Same link, same 13 records (64,058 bytes of KVN), only the order differs:
-the most urgent full record arrives **3.9x sooner** with earliest-deadline-first.
-The payload rate exceeds the 1 kB/s link rate because NATS compresses the leafnode stream (s2).
+Same link, same 51 records (13 CDMs, 64,058 bytes of KVN, and 38 element sets; 79,996 bytes in all), queued at the hub before
+the link came up; only the order differs. The most urgent full record arrives
+**15.0x sooner** with earliest-deadline-first (the ratio of the medians).
+Times run from the moment the leaf connection came up over the shaped link.
+
+The rate estimate is the edge's own measure (`sentinel/linkstate/monitor.py`): payload bytes over
+each round trip's duration, smoothed, for transfers of 2,000 bytes or more. It is not the link's
+capacity. It counts bytes before NATS compresses them (s2), and every round trip carries about
+1.2 s of latency, so it moves with record size and compressibility. The link itself is the
+Toxiproxy preset above, checked at link-up and at the end of every run.
+
+Every run, in the order run:
+
+| run | mode | load (1 min, start → end) | link up | summaries | most urgent | all verified | all records | rate estimate |
+|---|---|---|---|---|---|---|---|---|
+| 1 | EDF | 2.44 → 4.31 | 11.2 s | 6.1 s | 8.6 s | 46.1 s | 148.6 s | 1,813 B/s |
+| 2 | FIFO | 4.31 → 1.46 | 12.3 s | 6.2 s | 137.4 s | 149.0 s | 149.0 s | 1,802 B/s |
+| 3 | FIFO | 1.46 → 0.22 | 4.8 s | 6.1 s | 141.7 s | 153.8 s | 153.8 s | 1,755 B/s |
+| 4 | EDF | 0.2 → 0.58 | 6.5 s | 6.6 s | 9.1 s | 47.6 s | 149.9 s | 1,777 B/s |
+| 5 | EDF | 0.58 → 0.29 | 10.8 s | 6.1 s | 9.1 s | 47.6 s | 150.9 s | 1,761 B/s |
+| 6 | FIFO | 0.29 → 2.04 | 11.2 s | 6.0 s | 136.9 s | 149.1 s | 149.1 s | 1,731 B/s |
+| 7 | FIFO | 2.04 → 2.5 | 5.6 s | 6.0 s | 135.4 s | 147.0 s | 147.0 s | 1,840 B/s |
+| 8 | EDF | 2.5 → 1.56 | 11.0 s | 6.5 s | 9.1 s | 47.9 s | 150.9 s | 1,777 B/s |
+| 9 | EDF | 1.56 → 2.38 | 4.7 s | 6.6 s | 9.1 s | 47.9 s | 150.9 s | 1,833 B/s |
+| 10 | FIFO | 2.38 → 1.49 | 10.6 s | 6.0 s | 136.2 s | 147.9 s | 147.9 s | 1,771 B/s |
 
 ## INTERMITTENT
 
@@ -83,27 +110,27 @@ Toxiproxy latency 600 +/- 200 ms each way, bandwidth 32 kB/s.
 
 Default hub configuration: conjunction CDMs plus the imaging catalog's public element sets (SENTINEL_SYNC_ELEMENTS=catalog) share the link.
 
-- PASS - converges over a degraded link (23.8 s)
+- PASS - converges over a degraded link (80.4 s)
 - PASS - edge measured degradation (DEGRADED or LIMITED, not CONNECTED) (DEGRADED)
 - PASS - no process restarted
 
 | metric | value |
 |---|---|
-| convergence_s | 23.8 |
+| convergence_s | 80.4 |
 | measured_state | DEGRADED |
 
 ## RECOVERY
 
 Default hub configuration: conjunction CDMs plus the imaging catalog's public element sets (SENTINEL_SYNC_ELEMENTS=catalog) share the link.
 
-- PASS - leaf re-establishes over ~8 kbit/s after a denial (11.8 s)
-- PASS - operator data written while denied reaches the hub over the thin link (converged in 13.4 s)
+- PASS - leaf re-establishes over ~8 kbit/s after a denial (10.5 s)
+- PASS - operator data written while denied reaches the hub over the thin link (converged in 12.3 s)
 - PASS - no process restarted
 
 | metric | value |
 |---|---|
-| leaf_reconnect_s | 11.8 |
-| convergence_s | 13.4 |
+| leaf_reconnect_s | 10.5 |
+| convergence_s | 12.3 |
 
 ## OPSEC
 

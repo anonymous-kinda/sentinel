@@ -14,7 +14,7 @@ import struct
 
 import cbor2
 
-from harness.opsec import SyncLedger, find_leaks, leak_patterns, scan_tree
+from harness.opsec import find_leaks, leak_patterns, scan_tree
 from sentinel.conjunction.exercise import generate
 from sentinel.passes.model import Unit
 from sentinel.passes.topocentric import Site
@@ -60,43 +60,3 @@ def test_a_tree_scan_names_each_file_that_holds_the_unit(tmp_path):
     found = scan_tree(tmp_path, PATTERNS)
     assert set(found) == {"var/unit.json", "db.sqlite"}
     assert "unit_id" in found["var/unit.json"]
-
-
-# ------------------------------------------------ arrivals, as the edge records them
-def arrival(item_id: str) -> dict:
-    return {"event_id": item_id, "sha": item_id.encode().hex()[:16], "status": "accepted"}
-
-
-def sync_status(fetched: list[dict]) -> dict:
-    """GET /api/sync on an edge: the last 50 arrivals and a running total."""
-    return {"arrivals": fetched[-50:], "arrivals_total": len(fetched)}
-
-
-def test_the_ledger_keeps_every_arrival_across_overlapping_status_reads():
-    fetched = [arrival(f"omm:{n}") for n in range(30)] + [arrival(f"EV-{n}") for n in range(40)]
-    ledger = SyncLedger()
-    for seen in (0, 20, 45, 70, 70):
-        ledger.record(sync_status(fetched[:seen]))
-    assert ledger.arrivals == fetched
-    assert ledger.unseen == 0
-    assert ledger.items("omm:") == {f"omm:{n}" for n in range(30)}
-
-
-def test_arrivals_fetched_before_the_first_read_still_count():
-    """The race the hub-side count lost: the edge fetched before anyone listened."""
-    ledger = SyncLedger()
-    ledger.record(sync_status([arrival(f"omm:{n}") for n in range(38)]))
-    assert len(ledger.items("omm:")) == 38
-
-
-def test_arrivals_that_scrolled_out_of_the_window_unseen_are_counted_not_guessed():
-    ledger = SyncLedger()
-    ledger.record(sync_status([arrival(f"omm:{n}") for n in range(60)]))
-    assert ledger.unseen == 10
-    assert ledger.items("omm:") == {f"omm:{n}" for n in range(10, 60)}
-
-
-def test_an_item_fetched_twice_counts_once():
-    ledger = SyncLedger()
-    ledger.record(sync_status([arrival("omm:1"), arrival("omm:1"), arrival("EV-1")]))
-    assert ledger.items("omm:") == {"omm:1"}

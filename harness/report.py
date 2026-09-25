@@ -16,6 +16,7 @@ import pathlib
 import sys
 
 from .scenarios import SCENARIOS
+from .stats import describe
 
 HERE = pathlib.Path(__file__).resolve().parent
 OUT = HERE.parent / "docs" / "ddil-results.md"
@@ -52,13 +53,15 @@ def render(results: dict[str, dict]) -> str:
         "joined by a leafnode connection, with Toxiproxy shaping that TCP link, and",
         "two Sentinel nodes (hub and edge) on top. Nothing is simulated in-process.",
         "",
-        "| scenario | result | assertions | ran |",
-        "|---|---|---|---|",
+        "| scenario | result | assertions | load (1 min, start → end) | ran |",
+        "|---|---|---|---|---|",
     ]
     for r in results.values():
         passed = sum(a["passed"] for a in r["assertions"])
+        load = r["load_1min"]
         lines.append(
-            f"| {r['scenario']} | {'PASS' if r['passed'] else '**FAIL**'} | {passed}/{len(r['assertions'])} | {r['ran_at'][:16]}Z |"
+            f"| {r['scenario']} | {'PASS' if r['passed'] else '**FAIL**'} | {passed}/{len(r['assertions'])} "
+            f"| {load['start']} → {load['end']} | {r['ran_at'][:16]}Z |"
         )
     lines.append("")
     for name, r in results.items():
@@ -69,25 +72,60 @@ def render(results: dict[str, dict]) -> str:
             lines.append(f"- {'PASS' if a['passed'] else '**FAIL**'} - {a['name']}" + (f" ({a['detail']})" if a["detail"] else ""))
         lines.append("")
         if name == "limited":
-            e, f = r["metrics"]["edf"], r["metrics"]["fifo"]
-            lines += [
-                "| measured over ~8 kbit/s + 600 ms | EDF (Sentinel) | FIFO (transport order) |",
-                "|---|---|---|",
-                f"| every event visible (summaries) | {e['times_s']['all_summaries']} s | {f['times_s']['all_summaries']} s |",
-                f"| **most urgent event's full CDM** | **{e['times_s']['most_urgent_full']} s** | **{f['times_s']['most_urgent_full']} s** |",
-                f"| every event verified | {e['times_s']['all_latest_verified']} s | {f['times_s']['all_latest_verified']} s |",
-                f"| measured payload rate | {e['measured_rate_bytes_per_s']} B/s | {f['measured_rate_bytes_per_s']} B/s |",
-                "",
-                f"Same link, same {e['records']} records ({e['record_bytes']:,} bytes of KVN), only the order differs:",
-                f"the most urgent full record arrives **{r['metrics']['most_urgent_speedup']}x sooner** with earliest-deadline-first.",
-                "The payload rate exceeds the 1 kB/s link rate because NATS compresses the leafnode stream (s2).",
-                "",
-            ]
+            lines += limited_section(r["metrics"])
         else:
             metrics = {k: v for k, v in r["metrics"].items() if not isinstance(v, dict)}
             if metrics:
                 lines += ["| metric | value |", "|---|---|"] + [f"| {k} | {v} |" for k, v in metrics.items()] + [""]
     return "\n".join(lines) + "\n"
+
+
+def limited_section(m: dict) -> list[str]:
+    """LIMITED: medians and ranges over repeated runs, what every run moved, and every run."""
+    e, f, first = m["edf"], m["fifo"], m["runs"][0]
+
+    def row(label: str, key: str, unit: str = "s", digits: int = 1, bold: bool = False) -> str:
+        mark = "**" if bold else ""
+        return f"| {mark}{label}{mark} | {mark}{describe(e[key], unit, digits)}{mark} | {mark}{describe(f[key], unit, digits)}{mark} |"
+
+    return [
+        f"| over ~8 kbit/s + 600 ms: median (range) of {m['runs_per_mode']} runs per mode | EDF (Sentinel) | FIFO (transport order) |",
+        "|---|---|---|",
+        row("leaf connection up over the shaped link", "link_up_s"),
+        row("every event visible (summaries)", "all_summaries"),
+        row("most urgent event's full CDM", "most_urgent_full", bold=True),
+        row("every event verified", "all_latest_verified"),
+        row("every record delivered or held summary-only", "all_records"),
+        row("edge's rate estimate at the end", "rate_estimate_bytes_per_s", "B/s", 0),
+        "",
+        f"Same link, same {first['records_fetched']} records ({first['cdms']} CDMs, {first['cdm_bytes']:,} bytes of KVN, "
+        f"and {first['element_sets']} element sets; {first['record_bytes']:,} bytes in all), queued at the hub before",
+        "the link came up; only the order differs. The most urgent full record arrives",
+        f"**{m['most_urgent_speedup']}x sooner** with earliest-deadline-first (the ratio of the medians).",
+        "Times run from the moment the leaf connection came up over the shaped link.",
+        "",
+        "The rate estimate is the edge's own measure (`sentinel/linkstate/monitor.py`): payload bytes over",
+        "each round trip's duration, smoothed, for transfers of 2,000 bytes or more. It is not the link's",
+        "capacity. It counts bytes before NATS compresses them (s2), and every round trip carries about",
+        "1.2 s of latency, so it moves with record size and compressibility. The link itself is the",
+        "Toxiproxy preset above, checked at link-up and at the end of every run.",
+        "",
+        "Every run, in the order run:",
+        "",
+        "| run | mode | load (1 min, start → end) | link up | summaries | most urgent | all verified | all records | rate estimate |",
+        "|---|---|---|---|---|---|---|---|---|",
+        *(_limited_run_row(number, run) for number, run in enumerate(m["runs"], start=1)),
+        "",
+    ]
+
+
+def _limited_run_row(number: int, run: dict) -> str:
+    t, load = run["times_s"], run["load_1min"]
+    return (
+        f"| {number} | {run['mode'].upper()} | {load['start']} → {load['end']} | {run['link_up_s']} s "
+        f"| {t['all_summaries']} s | {t['most_urgent_full']} s | {t['all_latest_verified']} s | {t['all_records']} s "
+        f"| {run['rate_estimate_bytes_per_s']:,} B/s |"
+    )
 
 
 if __name__ == "__main__":

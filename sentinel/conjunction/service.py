@@ -35,7 +35,7 @@ from ..risk.engine import assess, finite_eigenvalues
 from ..risk.types import AssessedConjunction, AssessmentConfig, Method, RefusalReason
 from .policy import ConjunctionPolicy, triage
 from .store import CdmRow, ConjunctionStore, EventRow
-from .summaries import compact_summary, expand_summary
+from .summaries import compact_summary, disagreements, expand_summary, record_hashes
 from .trajectory import encounter_arcs_ecef
 
 EVENT_TCA_WINDOW_S = 60.0
@@ -79,6 +79,8 @@ class ConjunctionService:
         self.policy = policy or ConjunctionPolicy()
         self.engine_config = engine_config or AssessmentConfig()
         self.engine_version = f"{__version__}+{_config_hash(self.engine_config)}"
+        # (store version, [(TCA, compact summary)]) of the events this node offers; see manifest().
+        self._offered: tuple[int, list[tuple[dt.datetime, dict]]] | None = None
 
     # ------------------------------------------------------------------ ingest
     async def ingest(
@@ -149,11 +151,16 @@ class ConjunctionService:
         return IngestResult("rejected", sha, code=code, detail=detail)
 
     def _event_for(self, message: CdmMessage, data_class: str, event_id: str | None = None) -> EventRow:
-        """Group CDM updates into events: same object pair, TCA within 60 s.
+        """Group CDM updates into events: same object pair, same data class,
+        TCA within 60 s.
 
         CCSDS 508.0-B-1 has no event identifier, so the rule has to be
         explicit. Identity is assigned where a CDM is first ingested and
         travels with it; downstream nodes never re-derive it.
+
+        An event holds one data class. A screening CDM (DERIVED, geometry
+        only) for the pair of a REAL event would otherwise become its latest
+        CDM, and its refusal would replace the real Pc.
         """
         pri = message.object_designator(0) or "OBJECT1"
         sec = message.object_designator(1) or "OBJECT2"
@@ -166,10 +173,11 @@ class ConjunctionService:
             self.store.add_event(row)
             return row
         for ev in self.store.events_for_pair(pri, sec):
-            if abs((dt.datetime.fromisoformat(ev.tca_ref) - tca).total_seconds()) <= EVENT_TCA_WINDOW_S:
+            same_class = ev.data_class == data_class
+            if same_class and abs((dt.datetime.fromisoformat(ev.tca_ref) - tca).total_seconds()) <= EVENT_TCA_WINDOW_S:
                 return ev
         row = EventRow(
-            event_id=f"{pri}-{sec}-{tca:%Y%m%dT%H%M%S}",
+            event_id=self._new_event_id(pri, sec, tca, data_class),
             primary_id=pri,
             primary_name=message.object_name(0),
             secondary_id=sec,
@@ -179,6 +187,13 @@ class ConjunctionService:
         )
         self.store.add_event(row)
         return row
+
+    def _new_event_id(self, pri: str, sec: str, tca: dt.datetime, data_class: str) -> str:
+        """`<pri>-<sec>-<TCA to the second>`. A screening TCA often falls in
+        the same second as the REAL one, so when an event of another class
+        already has the id, the new one carries its data class as well."""
+        event_id = f"{pri}-{sec}-{tca:%Y%m%dT%H%M%S}"
+        return event_id if self.store.event(event_id) is None else f"{event_id}-{data_class}"
 
     # --------------------------------------------------------------- assessment
     @functools.lru_cache(maxsize=4096)  # noqa: B019 - bounded, keyed by content hash
@@ -268,24 +283,26 @@ class ConjunctionService:
             if scope == "all" or (scope == "active") == future:
                 out.append(summary)
         if scope == "active":
-            out.sort(key=lambda s: (s["time_to_mcp_s"], -_consequence_rank(s)))
+            out.sort(key=_triage_order)
         else:
             out.sort(key=lambda s: s["tca"], reverse=True)
         return out
 
-    @staticmethod
-    def _verification(summary: dict, remote: dict | None) -> str:
-        """LOCAL: this node's own data. VERIFIED: fetched and re-assessed here,
-        identical to what the hub asserted. UPDATING: the hub has a newer CDM
-        not yet fetched. MISMATCH: same CDM, different result - flag it."""
+    def _verification(self, summary: dict, remote: dict | None) -> str:
+        """LOCAL: this node's own data - no hub summary, or a CDM newer than
+        any the hub listed. UPDATING: the hub's latest CDM is not here yet.
+        VERIFIED: what this node shows is its own assessment of a record the
+        hub listed, and it is the result the hub asserted, field for field
+        (`disagreements`). MISMATCH: it is not - flag it."""
         if remote is None:
             return "LOCAL"
-        latest = summary["latest_cdm_sha256"]
-        hub_latest = remote["c"][-1][0] if remote.get("c") else None
-        if hub_latest and not latest.startswith(hub_latest):
+        listed = record_hashes(remote)
+        if listed and not self.store.has_cdm_prefix(listed[-1]):
             return "UPDATING"
-        mine = summary["assessment"]["inputs_hash"][:16]
-        return "VERIFIED" if mine == remote.get("h") else "MISMATCH"
+        latest = summary["latest_cdm_sha256"]
+        if listed and not any(latest.startswith(sha16) for sha16 in listed):
+            return "LOCAL"
+        return "MISMATCH" if disagreements(summary, remote) else "VERIFIED"
 
     def current_ref(self, event_id: str) -> dict | None:
         """What a decision about this event is made against, right now. For
@@ -300,24 +317,35 @@ class ConjunctionService:
 
     def _asserted_ref(self, event_id: str) -> dict | None:
         remote = self.store.remote_summaries().get(event_id)
-        if remote is None or not remote.get("c"):
+        listed = [] if remote is None else record_hashes(remote)
+        if not listed:
             return None
-        return {"cdm_sha256": remote["c"][-1][0], "inputs_hash": remote.get("h"), "message_id": None,
+        return {"cdm_sha256": listed[-1], "inputs_hash": remote.get("h"), "message_id": None,
                 "asserted_by": remote.get("_origin")}
 
     def manifest(self) -> list[dict]:
-        """Compact summaries of every active event, for edges (P0)."""
-        out = []
-        for summary in self.list_events("active"):
-            if summary.get("verification") in (None, "LOCAL"):
+        """Compact summaries of every active event, for edges (P0).
+
+        Every edge asks every sync cycle, and building the list costs a
+        summary per stored event, so it is built once per store version.
+        Only "active" (TCA in the future) depends on the clock; that is
+        applied on every call."""
+        version = self.store.version
+        if self._offered is None or self._offered[0] != version:
+            self._offered = (version, self._offered_events())
+        now = self.clock.now()
+        return [compact for tca, compact in self._offered[1] if tca > now]
+
+    def _offered_events(self) -> list[tuple[dt.datetime, dict]]:
+        """(TCA, compact summary) of every event described by this node's own
+        data, past ones included, in triage order."""
+        offered = []
+        for summary in sorted(self.list_events("all"), key=_triage_order):
+            if summary["verification"] == "LOCAL":
                 rows = self.store.cdms_for_event(summary["event_id"])
-                out.append(
-                    compact_summary(
-                        summary,
-                        [(r.sha256[:16], len(r.raw), _epoch(r.creation_date or r.received_at)) for r in rows],
-                    )
-                )
-        return out
+                records = [(r.sha256[:16], len(r.raw), _epoch(r.creation_date or r.received_at)) for r in rows]
+                offered.append((dt.datetime.fromisoformat(summary["tca"]), compact_summary(summary, records)))
+        return offered
 
     def event_detail(self, event_id: str) -> dict | None:
         if self.store.event(event_id) is None or not self.store.cdms_for_event(event_id):
@@ -450,6 +478,11 @@ def _epoch(iso: str) -> int:
 
 def _consequence_rank(summary: dict) -> int:
     return ["ROUTINE", "WATCH", "SERIOUS", "CRITICAL"].index(summary["consequence"])
+
+
+def _triage_order(summary: dict) -> tuple[float, int]:
+    """Soonest maneuver commit point first, then the worse consequence."""
+    return summary["time_to_mcp_s"], -_consequence_rank(summary)
 
 
 def _from_dict(d: dict) -> AssessedConjunction:

@@ -121,7 +121,7 @@ CARA publishes expected values for real conjunctions, including its own judgemen
 
 **Rationale.** Microservices, event-driven architectures and modular monoliths are often offered as alternatives. The interesting answer is knowing when each applies. For an edge-deployable system the honest answer is both: decompose in the cloud where orchestration is free, and ship a single deployable at the edge where it is not.
 
-A node's console, store and engine talk only to their *local* NATS server. So a denied link never breaks the node; the leaf reconnects by itself. The DENIED scenario measures this: 2.8 ms p95 console latency while the link is cut.
+A node's console, store and engine talk only to their *local* NATS server. So a denied link never breaks the node; the leaf reconnects by itself. The DENIED scenario measures this: 3.2 ms p95 console latency while the link is cut.
 
 **Amendment: what NATS is used for.**
 - Leafnode connectivity, request/reply, and compression (s2).
@@ -181,11 +181,13 @@ State-based rather than operation-based CRDTs, because state-based merge tolerat
 
 **Rationale.** Every system claims to prioritise; the question is by what. Ordering by how soon someone has to act, and how badly, is an answer that encodes the mission. Earliest-deadline-first is optimal on a single resource when a feasible schedule exists (Liu & Layland, 1973).
 
-**Answer to the open question.** Summaries measure **≤ 256 bytes** each, asserted in `tests/sync`. At about 8 kbit/s, every event was visible as a summary within 5.5 s in the latest run (`docs/ddil-results.md`), with the imaging catalog's element-set summaries sharing the manifest.
+**Answer to the open question.** Summaries measure **≤ 256 bytes** each, asserted in `tests/sync`. At about 8 kbit/s, every event was visible as a summary within 6.5 s, the median of 5 runs (`docs/ddil-results.md`), with the imaging catalog's element-set summaries sharing the manifest.
 
 Admission control handles the case where the full record can't make it in time. If the link rate measured by the agent cannot deliver a full CDM before its deadline, the event is marked SUMMARY-ONLY rather than spending the link on it. At the bottom of the ladder a summary renders as one voice-readable line.
 
-**Measured.** Same link, same bytes, same 13 CDMs: the most urgent event's full CDM arrives in **12.1 s with EDF vs 46.8 s with FIFO** (3.9×) in the latest run (`docs/ddil-results.md`, generated).
+**Measured.** Same link, same bytes, the same 51 records (13 CDMs and 38 element sets): the most urgent event's full CDM arrives in **9.1 s with EDF vs 136.9 s with FIFO** (15.0×), medians of 5 runs per mode (`docs/ddil-results.md`, generated, with every run and its range). Over one link, the same bytes take the same time in any order: the order decides which record lands first, not when the last one does.
+
+**How the comparison is kept fair.** An earlier single run reported FIFO verifying every event sooner than EDF, with a link-rate reading many times higher under FIFO. The two modes had not run on equal links. In some runs the element sets crossed before the harness shaped the link. NATS also picked the hub's compression from a round trip measured before shaping, so in some runs every CDM crossed uncompressed and took far longer. Now every run starts with the backlog waiting at the hub and the link down, and the leaf connects over the shaped link. Before comparing medians, the scenario checks each run's toxics, the compression on both sides, and the records it moved.
 
 ---
 
@@ -245,7 +247,7 @@ Its documented weaknesses are arithmetic, dates and prompt injection, and each i
 
 An event stays HUB-ASSERTED until that comparison passes (VERIFIED), and any disagreement is flagged MISMATCH.
 
-**Why not a JetStream mirror.** A mirror replicates in stream order. That is exactly the FIFO baseline the LIMITED scenario measures at 3.9× slower for the record that matters in the latest run (`docs/ddil-results.md`).
+**Why not a JetStream mirror.** A mirror replicates in stream order. That is exactly the FIFO baseline the LIMITED scenario measures at 15.0× slower for the record that matters, as a ratio of medians over 5 runs per mode (`docs/ddil-results.md`).
 
 **Why this also buys modularity.** The pull agent reads only generic fields: id, deadline, consequence and record list. It reaches a mission module only through the `ReferenceRecords` protocol, and `.importlinter` forbids `sync` from importing any mission module. The pass module (M3) does: its element sets travel through the same agent, and it landed with no change to `sentinel/sync`, `bus`, `crdt` or `triage` (`git diff --stat 67199b7 f16e294` over those paths is empty).
 
@@ -255,7 +257,7 @@ An event stays HUB-ASSERTED until that comparison passes (VERIFIED), and any dis
 
 A hub therefore offers edges only what their missions use: the 38-set imaging catalog (`SENTINEL_SYNC_ELEMENTS=catalog`; `all` to widen). It still holds everything for its own screening.
 
-Even that costs something. In the latest run every event summary arrived at 5.5 s, not sooner, because 38 more summaries ride in the manifest, and the urgent record followed. Two sync changes would remove the cost: batched fetch, and a reference-data class below routine CDMs. They are open question 6, not done, so the generated DDIL numbers describe the code as it is.
+Even that costs something. Every event summary arrived at 6.5 s (the median of 5 runs), not sooner, because 38 more summaries ride in the manifest, and the urgent record followed. In FIFO order the cost is larger: the element sets are older than the new CDMs, so they queue ahead of the urgent record along with the superseded CDMs. Two sync changes would remove the cost: batched fetch, and a reference-data class below routine CDMs. They are open question 6, not done, so the generated DDIL numbers describe the code as it is.
 
 ---
 
@@ -284,7 +286,7 @@ The real-process harness surfaced four defaults that would have failed a satelli
 | Leaf authentication timeout 2 s | The handshake could not complete over the thin link. | `authorization { timeout: 30 }` |
 | Ping interval 2 min | A black-holed link took minutes to detect. | `ping_interval: 5s`, `ping_max: 3` |
 
-The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and third fixes were in. It now re-establishes the leaf in 11.8 s.
+The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and third fixes were in. It now re-establishes the leaf in 10.5 s.
 
 ---
 
