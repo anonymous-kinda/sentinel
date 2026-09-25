@@ -532,12 +532,22 @@ components:
       payload:
         type: object
         additionalProperties: false
-        required: [from, log_ctx, mv_ctx, push]
+        required: [from, log_ctx, mv_ctx, push, budget]
         properties:
           from: {type: string}
           log_ctx: {$ref: '#/components/schemas/DotContext'}
           mv_ctx: {$ref: '#/components/schemas/DotContext'}
           push: {$ref: '#/components/schemas/OpsPayload'}
+          budget:
+            type: integer
+            minimum: 1
+            description: |
+              Bytes of operator data the edge will take in the reply: what the
+              measured link moves in 10 s, at most 256000. The push is held to
+              the same budget. The hub replies with the oldest part of what the
+              edge lacks that fits, always at least one item; the rest follows
+              in later exchanges. A hub given no budget, or one that is not a
+              positive integer, replies with everything.
     opsExchangeReply:
       name: ops.exchange
       contentType: application/cbor

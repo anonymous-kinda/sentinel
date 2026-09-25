@@ -27,9 +27,14 @@ The edge's `SyncAgent` runs a cycle every 2 s by default
 (`SENTINEL_SYNC_INTERVAL_S`):
 
 1. **Operator data (P0).** `ops.<hub_id>.exchange` sends this node's CRDT
-   contexts and everything the hub was last known to lack. The reply
-   carries everything this node lacks. It is state-based, so a lost reply
-   only means the next cycle sends a little more.
+   contexts and what the hub was last known to lack. The reply carries what
+   this node lacks. Each way is held to a budget, what the measured link
+   moves in 10 s (at most 256000 bytes): the oldest part that fits, always
+   at least one item. A backlog after a long denial drains over several
+   cycles, and the manifest and records still get the link in each. It is
+   state-based, so a lost reply only means the next cycle sends a little
+   more, and an item's dots enter the peer's context only when that item
+   is merged, so the part not yet sent is never lost.
 2. **Manifest (P0).** `sync.<hub_id>.manifest` fetches one summary per active
    item. It is skipped when the hub's digest is unchanged. Every event is then
    visible on the edge as `HUB_ASSERTED`, before any record arrives.
@@ -41,10 +46,25 @@ The edge's `SyncAgent` runs a cycle every 2 s by default
    (`ingest`). A conjunction CDM is re-assessed on the edge and compared with
    what the hub asserted.
 
+A record the edge refuses (see `Sentinel-Sha256` below), or one whose
+`ingest` raises, does not stop the pull. It is logged (`Sync record refused`
+or `Sync record ingest failed`), re-queued, and sits out 1 pull, then 2, 4
+and so on up to 32, so it never costs a thin link a round trip every cycle.
+The records behind it are fetched. It is not a link failure.
+
 A request's timeout is 6 s + 1.5 × expected bytes ÷ max(measured rate,
 400 B/s). Before any rate is measured, 1000 B/s is assumed. A timeout or "no
 responders" is expected over a DDIL link: it counts as a link failure, and
 the next cycle tries again.
+
+A record's expected bytes are its size in the manifest. An operator-data
+exchange's are the request, the budget and 2000 bytes for the hub's
+contexts. It does not grow after a timeout, so a denial never lengthens
+the wait. A manifest's are
+the size of the last manifest received, at least 4000, doubled for each
+manifest timeout in a row up to 256 KiB. A manifest that outgrew the wait
+still reaches the edge over a thin link, and the first one that arrives
+brings the wait back to its own size.
 
 ## Summary
 
@@ -65,6 +85,11 @@ The pass module lists the element sets the hub offers (below).
 Sync reads nothing else. Whatever else a module puts in a summary travels
 with it, is stored as the hub's assertion (`put_summaries`), and is the
 module's business.
+
+A summary whose four fields sync cannot read as above (a non-empty string
+id, an epoch deadline, a consequence 0-3, records of 16 lowercase hex
+digits, bytes ≥ 0 and a created epoch) queues nothing. It is logged as
+`Manifest entry skipped`, and the rest of the manifest is applied.
 
 ### Conjunction summary
 
@@ -138,13 +163,15 @@ It orders by record creation time and turns admission control off.
 In EDF mode, when the link rate has been measured, the latest record of an
 item that cannot arrive before its deadline at that rate is not fetched: the
 item is held `SUMMARY_ONLY`, and the console shows the hub's summary. The
-link is spent on records that can still arrive in time.
+link is spent on records that can still arrive in time. The node clock is
+read as each record comes up, so the time spent fetching the records ahead
+of it in the same pull counts against its deadline.
 
 ### Queue states
 
 | State | Meaning |
 |---|---|
-| `QUEUED` | Waiting, or put back after the hub answered with `Sentinel-Error`. |
+| `QUEUED` | Waiting, or put back after the hub answered with `Sentinel-Error` or with a reply the edge refused (Headers, below). |
 | `FETCHING` | Request in flight. |
 | `ARRIVED` | Fetched and admitted; dropped from the queue at the end of the pull. |
 | `SUMMARY_ONLY` | Admission control: it cannot arrive before its deadline at the measured rate. |
@@ -203,7 +230,7 @@ manifest and never leave the node (ADR-010).
 
 | Subject | Request (CBOR) | Reply |
 |---|---|---|
-| `ops.<hub_id>.exchange` | `from`, `log_ctx`, `mv_ctx`, `push` (`log` entries and `reg` registers the hub lacks) | CBOR `pull` (what the edge lacks), `ctx` (the hub's contexts), `merged` (counts) |
+| `ops.<hub_id>.exchange` | `from`, `log_ctx`, `mv_ctx`, `push` (`log` entries and `reg` registers the hub lacks, within the budget), `budget` (bytes the edge will take in the reply) | CBOR `pull` (what the edge lacks, within the budget; everything if `budget` is missing or not a positive integer), `ctx` (the hub's contexts), `merged` (counts) |
 | `sync.<hub_id>.manifest` | `from`, `known` (the last digest, or null) | CBOR array of summaries; or an empty body with `Sentinel-Unchanged` when `known` is current |
 | `sync.<hub_id>.fetch` | `sha` (sha16), `from` | The record's bytes, exactly as the hub received them |
 
@@ -211,12 +238,12 @@ manifest and never leave the node (ADR-010).
 
 | Header | On | Value |
 |---|---|---|
-| `Sentinel-Digest` | manifest reply | sha256 of the manifest's canonical CBOR. The edge sends it back as `known`. |
+| `Sentinel-Digest` | manifest reply | sha256 of the manifest's canonical CBOR. The edge sends it back as `known` once it has applied that manifest, so a manifest that failed to apply is fetched again. |
 | `Sentinel-Unchanged` | manifest reply | `1` when `known` matched: the body is empty. |
 | `Sentinel-Schema` | manifest reply with a body | `sentinel.manifest/1`. |
-| `Sentinel-Event-Id` | fetch reply | The item id the hub assigned. The edge uses it and never re-derives it; otherwise updates fetched out of order would split one event into two. |
+| `Sentinel-Event-Id` | fetch reply | The item id the hub assigned. The edge files the record under the item id the manifest named for it, which is the same hub-assigned id, and never re-derives one; otherwise updates fetched out of order would split one event into two. If this header is sent, it must equal that id, or the reply is refused. |
 | `Sentinel-Data-Class` | fetch reply | `REAL`, `DERIVED` or `EXERCISE`. A generator's ORIGINATOR mark still wins on admission (`docs/icd/cdm-profile.md`). |
-| `Sentinel-Sha256` | fetch reply | The full sha256 of the record bytes. The edge hashes what it received and records the comparison as `hash_ok`. |
+| `Sentinel-Sha256` | fetch reply | The full sha256 of the record bytes. The edge hashes what it received and admits the record only if that hash begins with the `sha16` it asked for and equals this header. A missing header is not a match. Anything else is refused before ingest: logged as `Sync record refused` with `hash_ok` false, and re-queued. Every arrival therefore carries `hash_ok` true. |
 | `Nats-Msg-Id` | fetch reply | The same sha256, as a NATS message id. The agent does not read it. |
 | `Sentinel-Kind` | fetch and ops replies; node-local events | `record.full` on a fetch reply, `ops.exchange` on an ops reply. |
 | `Sentinel-Error` | any reply | `not-found` when the hub holds no record with that prefix (the item is re-queued). `responder-failed` when the hub's responder raised (NATS transport). |
