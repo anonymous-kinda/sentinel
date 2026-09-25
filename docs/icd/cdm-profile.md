@@ -150,15 +150,15 @@ near them.
 
 | Quantity | Admitted | Why |
 |---|---|---|
-| Position magnitude | 6,356.752 km to 1,500,000 km | The lower bound is the WGS-84 polar radius, the closest the Earth's surface comes to its centre. A point inside it is underground at every latitude. The upper bound is the Earth's Hill sphere, a·(m⊕ / 3M☉)^(1/3) ≈ 1.5 million km, beyond which the Sun's pull wins and nothing orbits the Earth. It holds the Moon (at most 405,500 km away) and the Earth–Moon L2 point (about 449,000 km) with a margin of three. |
+| Position magnitude | 6,356.752 km to 3,000,000 km | The lower bound is the WGS-84 polar radius, the closest the Earth's surface comes to its centre. A point inside it is underground at every latitude. The upper bound is twice the distance to the Sun–Earth L1 and L2 points (about 1.5 million km). Spacecraft on halo and Lissajous orbits there reach about 1.8 million km from the Earth and straddle its Hill sphere, a·(m⊕ / 3M☉)^(1/3) ≈ 1.5 million km, so the Hill sphere itself would quarantine real CDMs. The bound also holds the Moon (at most 405,500 km away) with a wide margin. |
 | Speed | at most 100 km/s | Every orbit about the Earth is slower than escape speed, which is highest at the lowest radius admitted: √(2μ/b) = 11.2 km/s. A departing probe is faster (New Horizons left at 16.3 km/s). Nothing bound to the Sun passes the Earth faster than about 73 km/s: solar escape speed at 1 au (42.1 km/s) plus the Earth's orbital speed (29.8 km/s), raised slightly by the Earth's own pull. 100 km/s is about nine times escape speed and still 3,000 times slower than light. |
-| Each position covariance term | magnitude at most `2.25e+18` m**2 | The Hill-sphere radius squared, (1.5 × 10⁹ m)². A coordinate confined to ±R has a variance of at most R² (Popoviciu's inequality), and no covariance term is larger than the variances beside it (Cauchy–Schwarz). A larger term describes no object inside the admitted region. |
+| Each position covariance term | magnitude at most `9e+18` m**2 | The admitted radius squared, (3 × 10⁹ m)². A coordinate confined to ±R has a variance of at most R² (Popoviciu's inequality), and no covariance term is larger than the variances beside it (Cauchy–Schwarz). A larger term describes no object inside the admitted region. |
 
 - **Order.** The state is checked once it is known to be finite, position
   before speed. The covariance is checked after `PARTIAL_COVARIANCE`. A `NaN`
   or infinite term keeps its meaning above: absent, or partial.
 - **A unit error is caught too.** A position written in metres under a `km`
-  label reads as at least 6.36 million km, beyond the Hill sphere.
+  label reads as at least 6.36 million km, beyond the admitted radius.
 - **No real CDM comes near.** Every NASA CARA fixture is admitted
   (`tests/test_cdm_codec.py`). They lie between 6,700 and 46,000 km, move
   below 10 km/s, and carry no covariance term above 10¹³ m**2.
@@ -186,7 +186,7 @@ Quarantined: the input would make the answer wrong.
 | `WRONG_UNIT` | validator | A state or covariance term is labelled with a unit other than the one required. |
 | `MISSING_STATE` | validator | An object lacks one of `X` `Y` `Z` `X_DOT` `Y_DOT` `Z_DOT`. |
 | `NONFINITE_STATE` | validator | A state component is `NaN` or infinite. |
-| `IMPLAUSIBLE_STATE` | validator | A state or position covariance no Earth-orbiting object can have: a position inside the Earth or beyond its Hill sphere, a speed above 100 km/s, or a covariance term wider than the Hill sphere squared. See "Physical bounds" above. |
+| `IMPLAUSIBLE_STATE` | validator | A state or position covariance no Earth-orbiting object can have: a position inside the Earth or beyond 3 million km, a speed above 100 km/s, or a covariance term wider than that radius squared. See "Physical bounds" above. |
 | `PARTIAL_COVARIANCE` | validator | Some but not all of the six position covariance terms are present and finite. |
 | `MISS_DISTANCE_MISMATCH` | validator | The header `MISS_DISTANCE` disagrees with the distance between the two states by more than max(2 m, 0.5 %). |
 
