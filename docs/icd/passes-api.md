@@ -8,9 +8,21 @@ The module reports itself as `"passes"` in `GET /api/node` → `modules`.
 
 `GET /api/passes/unit` → `200 Unit` or `404` when no unit is set.
 
-`PUT /api/passes/unit` with a `Unit` body → `200 Unit`. `422` on wrong input:
-latitude outside [-90, 90], longitude outside [-180, 180], reaction time not
-positive, missing id. `403` on a read-only node.
+`PUT /api/passes/unit` with a `Unit` body → `200 Unit`. `403` on a read-only
+node. `422` on a unit the node cannot compute for. Its `detail` names the
+`field` and gives a `reason`, never the submitted value:
+
+- a body that is not a JSON object, or a field a unit does not have;
+- `unit_id`, `lat_deg` or `lon_deg` missing (`alt_m` defaults to 0 and
+  `reaction_time_min` to 30);
+- a `unit_id` that is not a string, is blank, or is over 64 characters;
+- a coordinate, altitude or reaction time that is not a finite number;
+- latitude outside [-90, 90], or longitude outside [-180, 180];
+- altitude outside [-500, 9000] m. That runs from below the Dead Sea shore
+  (about -430 m) to above Everest (8,849 m), with a margin;
+- reaction time not positive or over 4320 min. That is the 72 hours of the
+  longest interval the node computes, and a longer gap could never be
+  found.
 
 `DELETE /api/passes/unit` → `204`.
 
