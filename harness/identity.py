@@ -1,7 +1,7 @@
 """Enrol a node: create (or load) its signing key, and add its public key to
 the trust file every node of the deployment reads at start.
 
-    python harness/identity.py <node_id> <var_dir> <trust_file>
+    uv run python harness/identity.py <node_id> <var_dir> <trust_file>
 
 The key is made by `sentinel.ops.service.load_identity`, the call the node
 itself makes at start, so it lands exactly where the node will look. The

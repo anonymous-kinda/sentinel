@@ -1,10 +1,18 @@
 """Mission-agnostic triage (ADR-006).
 
-Every mission module reduces its items to three things the core
-understands: a priority class, a deadline, and a consequence level. The
-sync layer orders by those alone - it never learns what a conjunction or a
-pass window is. That is what lets a new mission module plug in without
-touching sync (asserted by .importlinter and by the M3 zero-diff check).
+Every mission module reduces each item it offers over sync to a summary
+with a deadline and a consequence level (docs/icd/sync-envelope.md). The
+sync agent derives the priority class from those itself
+(SyncAgent._wanted in sentinel/sync/agent.py): an item's latest record is
+P1_URGENT when its consequence is SERIOUS or higher and its deadline falls
+inside the urgent window, otherwise P2_ROUTINE, and its superseded records
+are P4_BULK. No record is given P0_SUMMARY: summaries and operator deltas
+are first by construction, because the operator-data exchange and the
+manifest run before any record is fetched. P3_REFERENCE is defined, and
+nothing assigns it today. The sync layer orders by class, deadline and
+consequence alone - it never learns what a conjunction or a pass window
+is. That is what lets a new mission module plug in without touching sync
+(asserted by .importlinter and by the M3 zero-diff check).
 
 Order: class first (P0 before P4), then earliest deadline first within a
 class (Liu & Layland: EDF is optimal on a single resource when a feasible

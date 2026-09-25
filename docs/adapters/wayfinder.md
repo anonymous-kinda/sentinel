@@ -89,5 +89,13 @@ Nothing downstream changes, because the provider only ever sees a `StateTable`.
 ## Not in scope
 
 The adapter parses bytes. It does not fetch them. An API client (keys, rate
-limits, retries) belongs in its own module. An air-gapped edge node receives
-tables through the sync layer rather than calling out.
+limits, retries) belongs in its own module.
+
+Neither the adapter nor `TabulatedEphemerisProvider` is wired into a node
+yet. A node computes passes only with the SGP4 provider, from its element
+sets: `PassService` defaults to `SkyfieldProvider`, and nothing passes it
+another. The sync layer carries CDMs and element sets, never state tables.
+The tabulated path runs in the tests above (the conformance suite and the
+contract test) and nowhere else. Getting tables to an air-gapped edge is
+not built. Offering them over sync would be a decision about reference
+data on a thin link (ADR-008), taken deliberately.

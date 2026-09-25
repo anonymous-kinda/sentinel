@@ -14,27 +14,30 @@ import argparse
 import pathlib
 import platform
 import sys
+import urllib.request
+from collections.abc import Sequence
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from supplychain.toolslock import LockError, fetch, read_lock, select  # noqa: I001
+from supplychain.toolslock import LockError, Opener, fetch, read_lock, select  # noqa: I001
 
 LOCK = ROOT / "deploy" / "tools.lock"
+TOOLS = ROOT / ".tools"
 
 
-def main() -> None:
+def main(argv: Sequence[str] | None = None, opener: Opener = urllib.request.urlopen) -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--arch", default=platform.machine())
     parser.add_argument("names", nargs="*")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     arch = {"amd64": "x86_64", "arm64": "aarch64"}.get(args.arch, args.arch)
     try:
         wanted = select(read_lock(LOCK), arch, args.names)
         if not wanted:
             sys.exit(f"no tools for arch {arch}")
         for pin in wanted:
-            path = fetch(pin, ROOT / ".tools" / pin.arch)
+            path = fetch(pin, TOOLS / pin.arch, opener)
             print(f"{pin.name:12} {pin.version:8} {pin.arch:8} -> {path.relative_to(ROOT)}")
     except LockError as error:
         sys.exit(str(error))

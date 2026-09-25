@@ -5,8 +5,9 @@
 #   PREFIX=$HOME/sentinel SYSTEMD=0 ./install.sh   # unprivileged install, no services
 #
 # Requirements on the host: Linux (glibc), python3.12, and systemd if SYSTEMD=1.
-# Nothing is downloaded. Every file is checked against SHA256SUMS first, and
-# every dependency is installed from wheels/ with --no-index --require-hashes.
+# Nothing is downloaded. Every file is checked against SHA256SUMS first, and a
+# file the list does not name is refused (verify_contents.sh). Every dependency
+# is installed from wheels/ with --no-index --require-hashes.
 set -euo pipefail
 
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -16,18 +17,10 @@ ROLE=${SENTINEL_ROLE:-standalone}
 cd "$HERE"
 
 echo "==> verifying bundle integrity (SHA256SUMS)"
-sha256sum --quiet --strict -c SHA256SUMS
-# sha256sum checks only the files the list names. Everything below is
-# installed by directory or by glob, so a file added after signing would
-# ride along unverified: refuse anything in those paths the list does not name.
-unlisted=$(LC_ALL=C comm -23 \
-  <(find web fixtures bin wheels systemd ! -type d 2>/dev/null | LC_ALL=C sort) \
-  <(sed -E 's/^[0-9a-f]{64}  //' SHA256SUMS | LC_ALL=C sort))
-if [[ -n "$unlisted" ]]; then
-  echo "install: refusing files that SHA256SUMS does not list:" >&2
-  echo "$unlisted" >&2
-  exit 1
-fi
+# Every listed file matches, and nothing the list does not name is present:
+# everything below is installed by directory or by glob. The release image
+# runs the same check (deploy/containers/Dockerfile).
+bash "$HERE/verify_contents.sh"
 
 PY=${PYTHON:-$(command -v python3.12 || true)}
 if [[ -z "$PY" ]]; then

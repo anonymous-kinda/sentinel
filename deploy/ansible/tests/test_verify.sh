@@ -6,7 +6,8 @@
 #   tampered bundle          -> refused (even with a regenerated .sha256)
 #   no signature policy      -> refused before anything is copied
 #
-#   deploy/ansible/tests/test_verify.sh      (needs uvx; ansible-core is fetched by uvx)
+#   deploy/ansible/tests/test_verify.sh      (needs uvx; it fetches ansible-core at the
+#                                            version ci.yml's syntax check pins)
 set -euo pipefail
 
 REPO=$(cd "$(dirname "$0")/../../.." && pwd)
@@ -25,7 +26,7 @@ COSIGN=$COSIGN bash "$REPO/deploy/bundle/sign_local.sh" --pubkey-out "$WORK/site
 
 playbook() {  # playbook <extra -e args...>
   (cd "$WORK" && ANSIBLE_ROLES_PATH="$REPO/deploy/ansible/roles" ANSIBLE_NOCOLOR=1 \
-    uvx --quiet --from ansible-core ansible-playbook -i localhost, "$REPO/deploy/ansible/tests/verify.yml" \
+    uvx --quiet --from ansible-core==2.21.4 ansible-playbook -i localhost, "$REPO/deploy/ansible/tests/verify.yml" \
       -e ansible_python_interpreter="$(command -v python3)" \
       -e sentinel_repo_root="$REPO" -e sentinel_bundle_dir="$WORK/dist" \
       -e sentinel_stage_dir="$WORK/stage" -e sentinel_arch="$ARCH" -e sentinel_version=0.0.0 \

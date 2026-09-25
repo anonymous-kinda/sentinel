@@ -1,13 +1,20 @@
 """The one place Sentinel asks what time it is.
 
 Every countdown, deadline and priority depends on "now". Reading the wall
-clock directly would make those untestable and would make the DDIL harness
-unable to compress a six-hour denial into a minute. So everything takes a
-Clock, and the process picks one from SENTINEL_CLOCK:
+clock directly would make those untestable, and would tie a run's answers
+to the day it runs on. So everything takes a Clock, and the process picks
+one from SENTINEL_CLOCK:
 
     real                         wall clock (default)
     sim:<ISO-8601 epoch>,<scale> starts at epoch, runs <scale>x wall speed
     fixed:<ISO-8601 instant>     frozen (tests)
+
+The DDIL harness runs its element-set scenarios on a simulated clock at
+scale 1 (harness/scenarios.py, SNAPSHOT_CLOCK): real speed, starting on
+the day of the vendored element-set snapshot, so the sets are fresh and a
+run is reproducible whatever day it runs. A scale other than 1 works (the
+sync agent converts wall-time link estimates by `scale`), but no scenario
+uses one.
 
 A simulated clock is always labelled as such wherever its time is shown.
 """

@@ -22,6 +22,18 @@
     dest: "{{ sentinel_stage_dir }}"
     remote_src: true
 
+# The node settings go in before install.sh runs, so its first start already
+# uses them (install.sh keeps a sentinel.env it finds). The template module
+# does not create parent directories: on a fresh host the prefix must be made
+# here, as install.sh would make it (root, 0755; the service owns only var/).
+- name: Install prefix
+  ansible.builtin.file:
+    path: "{{ sentinel_prefix }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Node settings
   ansible.builtin.template:
     src: sentinel.env.j2

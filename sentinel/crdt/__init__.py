@@ -1,8 +1,10 @@
 """State-based CRDTs for operator-authored data (ADR-005).
 
-Decisions, notes, triage status and thresholds are written concurrently at
-nodes that may be out of contact for hours. They must merge without losing
-anyone's work, whatever order - or how many times - updates arrive.
+Decisions, notes and conflict resolutions (signed log entries), and each
+event's annotations (triage_status, assignee and note; sentinel.ops.service
+defines both), are written concurrently at nodes that may be out of
+contact for hours. They must merge without losing anyone's work, whatever
+order - or how many times - updates arrive.
 
     DotContext   causal history: which writes a replica has seen
     SignedLog    grow-only log of immutable, Ed25519-signed decision entries

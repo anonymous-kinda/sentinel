@@ -26,7 +26,7 @@ These files cross the gap together, through your site's software approval proces
 Check the verifier first. These digests are the pins in `deploy/tools.lock` (cosign 3.1.3 for x86_64; use the aarch64 row on an aarch64 host).
 
 ```bash
-VER=0.2.0; ARCH=x86_64
+VER=0.3.0; ARCH=x86_64
 ID="https://github.com/OWNER/sentinel/.github/workflows/release.yml@refs/tags/v$VER"
 echo "4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71  cosign" | sha256sum --strict -c -
 echo "6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66  trusted_root.json" | sha256sum --strict -c -
@@ -58,7 +58,7 @@ cd sentinel-$VER-$ARCH
 sudo ./install.sh
 ```
 
-`install.sh` checks every file against the bundle's `SHA256SUMS`, installs dependencies from the bundle only (`--no-index --require-hashes`), and installs to `/opt/sentinel`. It then creates a `sentinel` system user and starts `sentinel.service`. On first install it writes `/opt/sentinel/sentinel.env` with exercise defaults. It never overwrites that file, so you can write it before installing.
+`install.sh` checks every file against the bundle's `SHA256SUMS` and refuses any file the list does not name. It installs dependencies from the bundle only (`--no-index --require-hashes`) and installs to `/opt/sentinel`. It then creates a `sentinel` system user and starts `sentinel.service`. On first install it writes `/opt/sentinel/sentinel.env` with exercise defaults. It never overwrites that file, so you can write it before installing.
 
 Without root: `PREFIX=$HOME/sentinel SYSTEMD=0 ./install.sh`, then start the node by hand (step 5).
 
@@ -124,5 +124,6 @@ Stop. Do not unpack, install, or try another policy until you know why. Keep the
 | `trusted root digest ... does not match the pinned ...` | The trust root is not the pinned one. Do not substitute another; see "Trust root" in [supply-chain.md](supply-chain.md). |
 | `verify_signature: FAIL: signature does not verify for ...` | The bundle was altered, or it was signed by a different identity or key than the one you trust. Treat it as tampered. |
 | `sha256sum: WARNING` from `install.sh` | A file inside the bundle does not match its signed manifest. The installer stops before installing anything. |
+| `verify_contents: refusing files that SHA256SUMS does not list:` | A file was added to the unpacked bundle after signing; the lines after it name each one. The installer stops before installing anything. Unpack the verified tarball again into an empty directory. |
 
 The same refusals are exercised on every change: `make airgap-selftest` shows tampered, unsigned, wrong-key and wrong-identity bundles being refused, all with no network.

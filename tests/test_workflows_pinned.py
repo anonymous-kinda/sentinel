@@ -7,10 +7,13 @@ cannot (NIST SR-3, SR-11). Local actions (`./...`) are part of this repo.
 import pathlib
 import re
 
-WORKFLOWS = sorted((pathlib.Path(__file__).resolve().parent.parent / ".github" / "workflows").glob("*.yml"))
-MAKEFILE = pathlib.Path(__file__).resolve().parent.parent / "Makefile"
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+WORKFLOWS = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
+MAKEFILE = ROOT / "Makefile"
 USES = re.compile(r"^\s*-?\s*uses:\s*([^\s#]+)")
 PINNED = re.compile(r"@[0-9a-f]{40}$")
+EXACT = re.compile(r"(==|@)\d")  # PKG==1.2 or, for a bare uvx tool, tool@1.2
+UVX_VALUE_OPTIONS = ("--from", "--with", "--python", "-p")
 
 
 def unpinned(paths=WORKFLOWS) -> list[str]:
@@ -92,16 +95,100 @@ def test_the_job_check_catches_an_unlocked_job(tmp_path):
     assert unlocked_uv_jobs([workflow]) == ["x.yml#build"]
 
 
-def unpinned_tools(paths=(*WORKFLOWS, MAKEFILE)) -> list[str]:
-    """`uvx --from PKG` without an exact version runs whatever is newest."""
+# A repo script a workflow, the Makefile or another such script names by path.
+SCRIPT = re.compile(r"(?:scripts|deploy)/[\w./*-]+\.(?:sh|py)\b")
+
+
+def ci_scripts(sources=(*WORKFLOWS, MAKEFILE)) -> list[pathlib.Path]:
+    """Every repo script CI runs: named by path in a workflow or the Makefile,
+    or in a script those run (globs expanded), followed to the end."""
+    found: set[pathlib.Path] = set()
+    queue = list(sources)
+    while queue:
+        for pattern in SCRIPT.findall(queue.pop().read_text()):
+            for path in ROOT.glob(pattern):
+                if path.is_file() and path not in found:
+                    found.add(path)
+                    queue.append(path)
+    return sorted(found)
+
+
+def test_the_scripts_ci_runs_are_found_through_the_scripts_that_run_them():
+    found = {path.relative_to(ROOT).as_posix() for path in ci_scripts()}
+    assert "deploy/ansible/tests/test_verify.sh" in found, "ci.yml supply-chain runs it"
+    assert "deploy/bundle/sign_local.sh" in found, "test_verify.sh runs it"
+
+
+def uvx_packages(line: str) -> list[str]:
+    """The packages a `uvx` call on this line installs: each --from and --with
+    value and, with no --from, the tool itself (`uvx pip download`). Options
+    may come first (`uvx --quiet --from PKG cmd`), in a shell line or a
+    Python argv (`"uvx", "pip", ...`)."""
+    specs = []
+    for call in re.finditer(r"\buvx\b", line):
+        tokens = iter(re.findall(r"[^\s'\",]+", line[call.end():]))
+        values: dict[str, list[str]] = {}
+        tool = None
+        for token in tokens:
+            if token in UVX_VALUE_OPTIONS:
+                values.setdefault(token, []).append(next(tokens, ""))
+            elif not token.startswith("-"):
+                tool = token
+                break
+        specs += values.get("--from", []) + values.get("--with", [])
+        if tool and "--from" not in values:
+            specs.append(tool)
+    return specs
+
+
+def unpinned_tools(paths=None) -> list[str]:
+    """A `uvx` package without an exact version runs whatever is newest."""
     found = []
-    for path in paths:
+    for path in paths if paths is not None else (*WORKFLOWS, MAKEFILE, *ci_scripts()):
         for number, line in enumerate(path.read_text().splitlines(), start=1):
-            for spec in re.findall(r"uvx\s+--from\s+'?([^\s']+)", line):
-                if "==" not in spec:
-                    found.append(f"{path.name}:{number} {spec}")
+            if line.lstrip().startswith("#"):
+                continue
+            found += [f"{path.name}:{number} {spec}" for spec in uvx_packages(line) if not EXACT.search(spec)]
     return found
 
 
-def test_every_uvx_tool_is_pinned_to_a_version():
+def test_every_uvx_tool_ci_runs_is_pinned_to_a_version():
     assert unpinned_tools() == []
+
+
+def test_each_uvx_package_ci_runs_is_pinned_to_one_version():
+    """CI's Ansible syntax check and its signature-gate test run one ansible-core."""
+    versions: dict[str, set[str]] = {}
+    for path in (*WORKFLOWS, MAKEFILE, *ci_scripts()):
+        for line in path.read_text().splitlines():
+            for spec in uvx_packages(line):
+                name, *version = re.split(r"==|@", spec, maxsplit=1)
+                versions.setdefault(name, set()).add("".join(version))
+    assert "ansible-core" in versions
+    assert {name: found for name, found in versions.items() if len(found) > 1} == {}
+
+
+def test_the_tool_check_catches_an_unpinned_package_after_other_options(tmp_path):
+    script = tmp_path / "x.sh"
+    script.write_text(
+        "# needs uvx; the comment is not a call\n"
+        "uvx --quiet --from ansible-core ansible-playbook site.yml\n"
+        "uvx --from ansible-core==2.21.4 ansible-playbook site.yml\n"
+    )
+    assert unpinned_tools([script]) == ["x.sh:2 ansible-core"]
+
+
+def test_the_tool_check_catches_a_bare_tool_in_a_shell_line_or_a_python_argv(tmp_path):
+    """Without --from, the tool is the package: `uvx pip download` runs the newest pip."""
+    script = tmp_path / "build.py"
+    script.write_text(
+        'run("uvx", "pip", "download", "--quiet", "-r", "requirements.txt")\n'
+        "uvx --quiet pip download -r requirements.txt\n"
+        'run("uvx", "--from", "pip==26.2.1", "pip", "download")\n'
+        "uvx ruff@0.15.0 check .\n"
+    )
+    assert unpinned_tools([script]) == ["build.py:1 pip", "build.py:2 pip"]
+
+
+def test_the_release_bundle_build_is_among_the_scripts_ci_runs():
+    assert ROOT / "scripts" / "build_bundle.py" in ci_scripts(), "release.yml builds the bundles with it"

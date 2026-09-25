@@ -59,7 +59,7 @@
   "info": {
     "description": "The HTTP interface of one Sentinel node: hub, edge or standalone. Every node serves its own console from its own data (ADR-009), so nothing here depends on the link to another node. Times are ISO 8601 UTC and units are field-name suffixes (`_m`, `_m_s`, `_km`, `_s`). A read-only node answers every write with 403. The acting operator is named by the `X-Sentinel-Operator` header, set by the front proxy. Interface control documents: docs/icd/README.md.",
     "title": "Sentinel",
-    "version": "0.2.0"
+    "version": "0.3.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -536,7 +536,7 @@
     },
     "/api/events/{event_id}/dilution-curve": {
       "get": {
-        "description": "Pc as the covariance is scaled by k (log10 grid), with the maximizing scale k*.\n`diluted` is true when k* < 1: the Pc would rise if the data were better.\n`available: false` when the curve cannot be computed.",
+        "description": "Pc as the covariance is scaled by k (log10 grid), with the maximizing scale k*.\n`diluted` is true when k* < 1: the Pc would rise if the data were better.\n`available: false` when the curve cannot be computed; 404 when the event is unknown.",
         "operationId": "dilution_curve_api_events__event_id__dilution_curve_get",
         "parameters": [
           {
@@ -581,7 +581,7 @@
     },
     "/api/events/{event_id}/encounter": {
       "get": {
-        "description": "Miss vector, projected covariance ellipse and hard-body radius in the encounter\nplane, for display. `available: false` with a reason when there is no covariance or\nno hard-body radius.",
+        "description": "Miss vector, projected covariance ellipse and hard-body radius in the encounter\nplane, for display. `available: false` with a reason when there is no covariance or\nno hard-body radius, or the event's CDM has not arrived yet; 404 when the event is\nunknown.",
         "operationId": "encounter_api_events__event_id__encounter_get",
         "parameters": [
           {
@@ -732,7 +732,7 @@
     },
     "/api/events/{event_id}/trajectory": {
       "get": {
-        "description": "Earth-fixed arcs of both objects around TCA. Visualization only; 404 when the\nevent is unknown, 422 when two-body arcs cannot be drawn for its states (a state\nbelow the Earth's surface or beyond its Hill sphere, a propagation that fails, or\nan arc past the last representable date).",
+        "description": "Earth-fixed arcs of both objects around TCA. Visualization only; 404 when the\nevent is unknown, 422 when two-body arcs cannot be drawn for its states (a state\nbelow the Earth's surface or beyond the admitted 3 million km, a propagation that fails, or\nan arc past the last representable date).",
         "operationId": "trajectory_api_events__event_id__trajectory_get",
         "parameters": [
           {
@@ -1432,7 +1432,7 @@
     },
     "/api/validation": {
       "get": {
-        "description": "The deployed engine re-run against NASA CARA's published cases at startup, so a\nnode built with a different engine shows it.",
+        "description": "The deployed engine re-run against NASA CARA's published cases on the first request, then cached, so a\nnode built with a different engine shows it.",
         "operationId": "validation_api_validation_get",
         "responses": {
           "200": {

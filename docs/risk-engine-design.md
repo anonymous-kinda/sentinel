@@ -120,7 +120,7 @@ C₂d  = P · C · Pᵀ            # 2×2 projected covariance
 μ    = P · dr                # projected miss vector; μ = (|r_perp|, 0) by construction
 ```
 
-`μ`'s second component being ~0 is a free internal consistency check. Assert it.
+`μ`'s second component being ~0 is a free internal consistency check. The tier-1 tests assert it (rung 5, `tests/test_tier1_geometry.py`); the engine does not check it at run time.
 
 ### Step 5 — Integrate
 
@@ -196,7 +196,7 @@ Run **before** returning any Pc. If any condition trips, return `method = REFUSE
 | Condition | Reason |
 |---|---|
 | Relative speed below threshold | `LOW_RELATIVE_VELOCITY` |
-| A supplied covariance, or `C₂d`, is not positive definite, or cannot be decomposed at all | `INVALID_COVARIANCE` |
+| A supplied covariance, or `C₂d`, is not positive definite, or cannot be decomposed at all; or a state has no RTN frame to hold its covariance (`r × v = 0`) | `INVALID_COVARIANCE` |
 | `C₂d` condition number above threshold | `ILL_CONDITIONED_COVARIANCE` |
 | Covariance absent from CDM | `NO_COVARIANCE` |
 | TCA refinement shift `abs(dt)` above `max_tca_adjustment_s` | `TCA_INCONSISTENT` |
@@ -206,7 +206,7 @@ Run **before** returning any Pc. If any condition trips, return `method = REFUSE
 
 Thresholds are configuration, not constants, and every refusal records the value that tripped it.
 
-`INVALID_COVARIANCE` is checked twice, on each supplied covariance (`stage: input_covariance`, with `object_id`) and on `C₂d` (`stage: projected_covariance`). It fails closed. "Cannot be decomposed" means the symmetrised matrix, or its eigenvalues, are not finite: entries near the float64 limit, where numpy's eigensolver raises or returns NaN. Before commit 6a872d5, such a covariance made `assess()` raise, and a NaN eigenvalue passed the `≤ 0` test. Now `finite_eigenvalues()` returns None, and the gate refuses with `min_eigenvalue: None`. When an overflow while forming `C₂d` leaves it non-finite, that is expected. `build_encounter_plane` contains the warning with `np.errstate`, and this gate refuses.
+`INVALID_COVARIANCE` is checked three times: on each supplied covariance (`stage: input_covariance`, with `object_id`), on building the encounter plane (`stage: rtn_frame`: a state with zero velocity, or velocity along its position, has no RTN frame, so the covariance given in RTN cannot be rotated; ingest quarantines such a state first), and on `C₂d` (`stage: projected_covariance`). It fails closed. "Cannot be decomposed" means the symmetrised matrix, or its eigenvalues, are not finite: entries near the float64 limit, where numpy's eigensolver raises or returns NaN. Before commit 6a872d5, such a covariance made `assess()` raise, and a NaN eigenvalue passed the `≤ 0` test. Now `finite_eigenvalues()` returns None, and the gate refuses with `min_eigenvalue: None`. When an overflow while forming `C₂d` leaves it non-finite, that is expected. `build_encounter_plane` contains the warning with `np.errstate`, and this gate refuses.
 
 `UNRESOLVED_INTEGRAL` records `stage` (`pc` or `max_pc_search`) and `sigma_min_m`, the smallest principal sigma of the covariance being integrated when the check failed. The search refuses the whole result, not only `pc_max`: without `k*` there is no dilution answer, and a Pc without one is the half-truth Step 7 exists to prevent. No input in the CARA set comes near it. At `k = 1` it needs `σ` below about `10⁻¹³ R`. In the search, which scales `σ` down by up to `10⁶`, it needs `σ` below about `10⁻⁷ R`: a micrometre against a 10 m hard body.
 
@@ -244,11 +244,12 @@ function assess(cdm, config) -> AssessedConjunction:
 
     # --- step 3: refine TCA, then the encounter plane ----------------
     dt = -dot(dr, dv) / rel_speed**2
+    tca_residual = dot(dr, dv) / rel_speed   # along-track miss as supplied, before refinement
     if abs(dt) > config.max_tca_adjustment_s:
-        return refused(TCA_INCONSISTENT)
+        return refused(TCA_INCONSISTENT)  # records dt and tca_residual
     dr     = dr + dv * dt                 # both states moved to the linear closest approach
     z_hat  = dv / rel_speed
-    along  = dot(dr, z_hat)               # ~0 after refinement
+    along  = dot(dr, z_hat)               # ~0 after refinement; not recorded
     r_perp = dr - along * z_hat
     x_hat  = r_perp / norm(r_perp)
     y_hat  = cross(z_hat, x_hat)
@@ -256,8 +257,8 @@ function assess(cdm, config) -> AssessedConjunction:
     # --- step 4: project --------------------------------------------
     P    = matrix_from_rows(x_hat, y_hat)
     C2d  = P @ C @ transpose(P)
-    mu   = P @ dr
-    assert abs(mu[1]) < tolerance          # internal consistency
+    mu   = P @ dr                         # mu[1] is 0 by construction (x_hat lies along the miss);
+                                          # the tier-1 tests prove it, the engine does not check it
 
     if not is_positive_definite(C2d):
         return refused(INVALID_COVARIANCE)
@@ -290,7 +291,7 @@ function assess(cdm, config) -> AssessedConjunction:
         method          = FOSTER_ESTES_2D,
         inputs_hash     = hash_of(cdm_relevant_fields),
         diagnostics     = { k_star, eigenvalues(C2d), condition_number(C2d),
-                            tca_residual: along, independence_assumed: true }
+                            tca_residual, independence_assumed: true }
     )
 ```
 

@@ -15,9 +15,11 @@
 #     installed exactly as the release does (--require-hashes, binary only);
 #   - a runtime stage identical line for line (non-root 65532, no shell,
 #     fine with a read-only root filesystem).
-# It differs in what it adds: the OMM element-set snapshot a hub serves
-# (fixtures/omm), and an empty /var/lib/sentinel/trust owned by 65532, so the
+# It adds one thing: an empty /var/lib/sentinel/trust owned by 65532, so the
 # stack's trust volume mounted there is writable by the enrolment containers.
+# The reference data is the release image's: NASA CARA and the OMM
+# element-set snapshot a hub serves (fixtures/omm), copied here from the
+# checkout where the release image takes them from the bundle.
 #
 # The wheel is built against the setuptools the pinned build image ships
 # (--no-build-isolation), so nothing unpinned is fetched to build it.

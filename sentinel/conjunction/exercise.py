@@ -14,8 +14,11 @@ Scripted events and what each demonstrates:
 
   EX-DIL   covariance inflates as tracking degrades; Pc rises, peaks and
            falls while the dilution flag lights - the headline pathology
-  EX-RED   covariance tightens on a close approach; Pc climbs into RED
-           with the maneuver commit point inside the planning window
+  EX-RED   RED from its first CDM: over four updates the covariance
+           tightens and the miss closes from 260 m to 200 m; Pc rises while
+           the event is diluted, and eases on the last update, the first
+           that is not; TCA 19 h after the epoch, so its maneuver commit
+           point is 11 h after it (tests/conjunction/test_exercise_scenario.py)
   EX-AMB   steady AMBER, not diluted
   EX-GRN   routine GREEN
   EX-GEO   geostationary co-location at 0.3 m/s - refused, low velocity
@@ -235,7 +238,18 @@ def _object(index: int, spec: ObjectSpec, r_km, v_km_s, sigma, non_pd) -> CdmSec
     return CdmSection(tuple(entries))
 
 
+def _in_utc(when: dt.datetime) -> dt.datetime:
+    """The same instant in UTC. A naive time is refused: astimezone() would
+    read it as the host's local time."""
+    if when.tzinfo is None:
+        raise ValueError("refusing a naive epoch; exercise times are UTC")
+    return when.astimezone(dt.UTC)
+
+
 def build_message(script: EventScript, index: int, update: Update, epoch: dt.datetime) -> CdmMessage:
+    """One CDM of an event's sequence. Every time it carries is UTC, the
+    MESSAGE_ID's included, whatever timezone `epoch` is written in."""
+    epoch = _in_utc(epoch)
     tca = epoch + dt.timedelta(hours=script.tca_offset_h)
     tca = tca.replace(microsecond=(tca.microsecond // 1000) * 1000)
     created = epoch + dt.timedelta(hours=update.offset_h)

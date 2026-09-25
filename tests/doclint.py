@@ -6,7 +6,8 @@ Detection is deliberately conservative, so a failure is always worth reading:
   whose first segment is a top-level directory of the repository, and that
   carries no placeholder (`<ver>`, `$VAR`, `{a,b}`). It is resolved from the
   repository root. Relative Markdown links and images are resolved from the
-  document's own directory.
+  document's own directory. In Python source, every word of a docstring or
+  comment is a candidate (`python_prose`).
 - A *command* is `make ...` or `sentinel ...` at the start of a code span or
   a line of a fenced block (after `$`, environment assignments or `uv run`).
 - A *claim* is a quoted headline number and the generated report it comes
@@ -22,7 +23,9 @@ import argparse
 import ast
 import dataclasses
 import glob
+import io
 import re
+import tokenize
 import tomllib
 from collections.abc import Iterable, Iterator
 from pathlib import Path
@@ -97,6 +100,20 @@ def parse_markdown(text: str) -> Markdown:
     code.extend(m.group(2) for m in _CODE_SPAN.finditer(body))
     links = [m.group(1) for m in _LINK.finditer(_CODE_SPAN.sub(" ", body))]
     return Markdown(tuple(code), tuple(links))
+
+
+def python_prose(source: str) -> Markdown:
+    """A Python module's docstrings and comments, every word a candidate
+    path. String literals the code uses are not prose, so they are left out."""
+    docstrings = [
+        doc
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+        and (doc := ast.get_docstring(node))
+    ]
+    tokens = tokenize.generate_tokens(io.StringIO(source).readline)
+    comments = [token.string.lstrip("#") for token in tokens if token.type == tokenize.COMMENT]
+    return Markdown(tuple(docstrings + comments), ())
 
 
 def load_claims(path: Path) -> list[Claim]:

@@ -32,7 +32,18 @@ node. `422` on a unit the node cannot compute for. Its `detail` names the
 
 ## Windows and gaps
 
-`GET /api/passes?hours=24` (1 to 72) → `409` when no unit is set, else:
+`GET /api/passes?hours=24` (1 to 72) →
+
+- `409` when no unit is set;
+- `422` when `hours` is not a number from 1 to 72 (FastAPI's validation
+  error);
+- `503` when an element set for a catalogued imager cannot be used: its
+  mean motion is not positive, or its period is over 128 minutes, outside
+  low Earth orbit. The `detail` is "an element set for a catalogued imager
+  cannot be used", and the node logs the reason (`Pass computation
+  refused`). The node refuses the whole answer rather than leave that
+  imager out, which would make every gap look longer;
+- else `200`:
 
 ```json
 {
@@ -80,6 +91,7 @@ node. `422` on a unit the node cannot compute for. Its `detail` names the
 
 `GET /api/passes/tracks?norad_id=40115&start=...&end=...` (at most 30 min) →
 `{"norad_id": 40115, "positions_ecef_m": [[x, y, z], ...], "step_s": 20, "note": "visualization only"}`.
+`404` when this node holds no element set for `norad_id`.
 
 A track is drawn only within 3 days of the element set's epoch, on either
 side, the age at which a set is STALE. An interval beyond that answers 422:

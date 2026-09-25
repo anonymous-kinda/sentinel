@@ -39,14 +39,15 @@ def _exercise_generate(args: argparse.Namespace) -> int:
 
     out = pathlib.Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    epoch = dt.datetime.now(dt.UTC) if args.epoch == "now" else dt.datetime.fromisoformat(args.epoch)
-    for item in generate(epoch):
+    schedule = generate(_utc(args.epoch))
+    for item in schedule:
         (out / item.filename).write_text(item.kvn)
-    print(f"wrote {len(generate(epoch))} exercise CDMs to {out}")
+    print(f"wrote {len(schedule)} exercise CDMs to {out}")
     return 0
 
 
 def _utc(text: str) -> dt.datetime:
+    """An ISO-8601 time from the command line, or 'now'. Without a timezone it is UTC."""
     when = dt.datetime.now(dt.UTC) if text == "now" else dt.datetime.fromisoformat(text)
     return when if when.tzinfo else when.replace(tzinfo=dt.UTC)
 
@@ -93,7 +94,7 @@ def register(sub) -> None:
     ex_sub = ex.add_subparsers(dest="exercise_command", required=True)
     g = ex_sub.add_parser("generate", help="write the scripted scenario as KVN files")
     g.add_argument("--out", required=True)
-    g.add_argument("--epoch", default="now", help="ISO-8601 scenario start, or 'now'")
+    g.add_argument("--epoch", default="now", help="ISO-8601 scenario start, UTC, or 'now'")
     g.set_defaults(func=_exercise_generate)
 
     s = sub.add_parser(

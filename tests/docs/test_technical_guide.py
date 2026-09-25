@@ -124,6 +124,34 @@ def test_every_variable_the_code_reads_is_in_the_configuration_reference():
     assert sorted(code_reads() - documented_variables(stale)) == ["SENTINEL_CLOCK"]
 
 
+UNIT = "deploy/systemd/sentinel.service"
+
+
+def unit_log_level_problems(guide: str, unit: str) -> list[str]:
+    """The guide's SENTINEL_LOG_LEVEL row against the systemd unit: the
+    default the unit sets must be stated as the unit sets it, and a flag the
+    row says the unit passes must be on its ExecStart line."""
+    row = next(line for line in guide.splitlines() if line.startswith("| `SENTINEL_LOG_LEVEL`"))
+    exec_start = next(line for line in unit.splitlines() if line.startswith("ExecStart="))
+    setting = re.search(r"^Environment=SENTINEL_LOG_LEVEL=\S+$", unit, re.M)
+    problems = [] if setting and setting.group(0) in row else [f"the row does not state {UNIT}'s log level setting"]
+    passed = re.findall(rf"`{re.escape(UNIT)}` passes `(--[\w-]+)", row)
+    return problems + [f"{UNIT} does not pass {flag}" for flag in passed if flag not in exec_start.split()]
+
+
+def test_the_guide_states_how_the_unit_sets_its_log_level():
+    assert unit_log_level_problems(read(GUIDE), read(UNIT)) == []
+
+    stale = (
+        "| `SENTINEL_LOG_LEVEL` | `INFO` | Root log level. The flag wins over the variable; "
+        "`deploy/systemd/sentinel.service` passes `--log-level warning`. |"
+    )
+    assert unit_log_level_problems(stale, read(UNIT)) == [
+        f"the row does not state {UNIT}'s log level setting",
+        f"{UNIT} does not pass --log-level",
+    ]
+
+
 @pytest.mark.parametrize("doc", DOCS)
 def test_every_variable_the_docs_name_is_read_by_the_code(doc):
     text = read(doc)

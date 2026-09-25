@@ -5,7 +5,7 @@ Holds the geometry fixed - same miss distance, same hard-body radius, same
 relative velocity - and varies only the quality of the orbit determination.
 Then prints what an operator would see.
 
-Run:  python3 scripts/dilution_demo.py
+Run:  uv run python scripts/dilution_demo.py
 """
 
 import pathlib
