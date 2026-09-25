@@ -14,9 +14,9 @@ from sentinel.cdm.validate import (
     _SUMMARY_UNITS,
     _VELOCITY_UNIT,
     EARLIEST_TCA,
-    EARTH_HILL_SPHERE_KM,
     INERTIAL_FRAMES,
     MAX_POSITION_VARIANCE_M2,
+    MAX_RADIUS_KM,
     MAX_SPEED_KM_S,
     WGS84_POLAR_RADIUS_KM,
 )
@@ -60,7 +60,7 @@ def documented_unit_rules(doc: str) -> set[tuple[str, str, str]]:
 def physical_bounds() -> set[str]:
     """What the "Admitted" column must say, formatted from the constants."""
     return {
-        f"{WGS84_POLAR_RADIUS_KM:,.3f} km to {EARTH_HILL_SPHERE_KM:,.0f} km",
+        f"{WGS84_POLAR_RADIUS_KM:,.3f} km to {MAX_RADIUS_KM:,.0f} km",
         f"at most {MAX_SPEED_KM_S:,.0f} km/s",
         f"magnitude at most `{MAX_POSITION_VARIANCE_M2:.3g}` m**2",
     }

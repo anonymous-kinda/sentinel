@@ -196,7 +196,7 @@ Run **before** returning any Pc. If any condition trips, return `method = REFUSE
 | Condition | Reason |
 |---|---|
 | Relative speed below threshold | `LOW_RELATIVE_VELOCITY` |
-| A supplied covariance, or `C₂d`, is not positive definite, or cannot be decomposed at all | `INVALID_COVARIANCE` |
+| A supplied covariance, or `C₂d`, is not positive definite, or cannot be decomposed at all; or a state has no RTN frame to hold its covariance (`r × v = 0`) | `INVALID_COVARIANCE` |
 | `C₂d` condition number above threshold | `ILL_CONDITIONED_COVARIANCE` |
 | Covariance absent from CDM | `NO_COVARIANCE` |
 | TCA refinement shift `abs(dt)` above `max_tca_adjustment_s` | `TCA_INCONSISTENT` |
@@ -206,7 +206,7 @@ Run **before** returning any Pc. If any condition trips, return `method = REFUSE
 
 Thresholds are configuration, not constants, and every refusal records the value that tripped it.
 
-`INVALID_COVARIANCE` is checked twice, on each supplied covariance (`stage: input_covariance`, with `object_id`) and on `C₂d` (`stage: projected_covariance`). It fails closed. "Cannot be decomposed" means the symmetrised matrix, or its eigenvalues, are not finite: entries near the float64 limit, where numpy's eigensolver raises or returns NaN. Before commit 6a872d5, such a covariance made `assess()` raise, and a NaN eigenvalue passed the `≤ 0` test. Now `finite_eigenvalues()` returns None, and the gate refuses with `min_eigenvalue: None`. When an overflow while forming `C₂d` leaves it non-finite, that is expected. `build_encounter_plane` contains the warning with `np.errstate`, and this gate refuses.
+`INVALID_COVARIANCE` is checked three times: on each supplied covariance (`stage: input_covariance`, with `object_id`), on building the encounter plane (`stage: rtn_frame`: a state with zero velocity, or velocity along its position, has no RTN frame, so the covariance given in RTN cannot be rotated; ingest quarantines such a state first), and on `C₂d` (`stage: projected_covariance`). It fails closed. "Cannot be decomposed" means the symmetrised matrix, or its eigenvalues, are not finite: entries near the float64 limit, where numpy's eigensolver raises or returns NaN. Before commit 6a872d5, such a covariance made `assess()` raise, and a NaN eigenvalue passed the `≤ 0` test. Now `finite_eigenvalues()` returns None, and the gate refuses with `min_eigenvalue: None`. When an overflow while forming `C₂d` leaves it non-finite, that is expected. `build_encounter_plane` contains the warning with `np.errstate`, and this gate refuses.
 
 `UNRESOLVED_INTEGRAL` records `stage` (`pc` or `max_pc_search`) and `sigma_min_m`, the smallest principal sigma of the covariance being integrated when the check failed. The search refuses the whole result, not only `pc_max`: without `k*` there is no dilution answer, and a Pc without one is the half-truth Step 7 exists to prevent. No input in the CARA set comes near it. At `k = 1` it needs `σ` below about `10⁻¹³ R`. In the search, which scales `σ` down by up to `10⁶`, it needs `σ` below about `10⁻⁷ R`: a micrometre against a 10 m hard body.
 

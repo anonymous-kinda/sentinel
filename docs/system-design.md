@@ -127,7 +127,7 @@ CARA publishes expected values for real conjunctions, including its own judgemen
 
 ### ADR-004 — Modular monolith with an internal event bus
 
-**Buys.** A node deploys to an air-gapped edge as one signed bundle, and it needs nothing beyond its own host to serve its operator. The DENIED scenario measures this: 3.2 ms p95 console latency while the link is cut. Module boundaries are enforced in CI by import-linter, not left to convention.
+**Buys.** A node deploys to an air-gapped edge as one signed bundle, and it needs nothing beyond its own host to serve its operator. The DENIED scenario measures this: 18.9 ms p95 console latency while the link is cut. Module boundaries are enforced in CI by import-linter, not left to convention.
 
 **Costs.** It is less "cloud-native" on paper: the modules of a node scale and deploy together, not one by one.
 
@@ -157,7 +157,7 @@ JetStream is **not** used for replication. Priority is a mission concept that a 
 
 ### ADR-005 — State-based CRDTs for operator-generated data
 
-**Buys.** Decisions made offline merge without loss, and concurrent edits show as a CONFLICT instead of one silently winning. Measured on real processes: operator data converged in 1.37 s after reconnect, and over a link that dropped 8 times, 24 notes were written and 24 arrived on each node.
+**Buys.** Decisions made offline merge without loss, and concurrent edits show as a CONFLICT instead of one silently winning. Measured on real processes: operator data converged in 2.65 s after reconnect, and over a link that dropped 8 times, 24 notes were written and 24 arrived on each node.
 
 **Costs.** Complexity: dots, causal contexts, signatures and anti-entropy to maintain. The trust model is also only half applied: the decision log is signed, the annotation registers are not (see "Gap, stated" below).
 
@@ -194,7 +194,7 @@ State-based rather than operation-based CRDTs, because state-based merge tolerat
 
 ### ADR-006 — Bandwidth triage by decision urgency
 
-**Buys.** On a thin link, the event due soonest crosses first. Its full CDM arrived 15.0× sooner than in arrival order, while the whole backlog took about the same time either way (150.9 s against 149.0 s, medians of 5 runs per mode). The ordering costs almost nothing.
+**Buys.** On a thin link, the event due soonest crosses first. Its full CDM arrived 14.8× sooner than in arrival order, while the whole backlog took about the same time either way (151.0 s against 149.3 s, medians of 5 runs per mode). The ordering costs almost nothing.
 
 **Costs.** Summaries spend link time before any full record, and an event whose CDM cannot arrive before its deadline at the measured rate is held SUMMARY-ONLY. The order is only as good as the deadline and consequence the mission module assigns, and the commit point is an operator assumption.
 
@@ -207,11 +207,11 @@ State-based rather than operation-based CRDTs, because state-based merge tolerat
 
 **Rationale.** Every system claims to prioritise; the question is by what. Ordering by how soon someone has to act, and how badly, is an answer that encodes the mission. Earliest-deadline-first is optimal on a single resource when a feasible schedule exists (Liu & Layland, 1973).
 
-**Answer to the open question.** Summaries measure **≤ 256 bytes** each, asserted in `tests/sync`. At about 8 kbit/s, every event was visible as a summary within 6.5 s, the median of 5 runs (`docs/ddil-results.md`), with the imaging catalog's element-set summaries sharing the manifest.
+**Answer to the open question.** Summaries measure **≤ 256 bytes** each, asserted in `tests/sync`. At about 8 kbit/s, every event was visible as a summary within 6.2 s, the median of 5 runs (`docs/ddil-results.md`), with the imaging catalog's element-set summaries sharing the manifest.
 
 Admission control handles the case where the full record can't make it in time. If the link rate measured by the agent cannot deliver a full CDM before its deadline, the event is marked SUMMARY-ONLY rather than spending the link on it. At the bottom of the ladder a summary renders as one voice-readable line.
 
-**Measured.** Same link, same bytes, the same 51 records (13 CDMs and 38 element sets): the most urgent event's full CDM arrives in **9.1 s with EDF vs 136.9 s with FIFO**, medians of 5 runs per mode (`docs/ddil-results.md`, generated, with every run and its range). Over one link, the same bytes take the same time in any order: the order decides which record lands first, not when the last one does.
+**Measured.** Same link, same bytes, the same 51 records (13 CDMs and 38 element sets): the most urgent event's full CDM arrives in **9.3 s with EDF vs 137.4 s with FIFO**, medians of 5 runs per mode (`docs/ddil-results.md`, generated, with every run and its range). Over one link, the same bytes take the same time in any order: the order decides which record lands first, not when the last one does.
 
 **How the comparison is kept fair.** An earlier single run reported FIFO verifying every event sooner than EDF, with a link-rate reading many times higher under FIFO. The two modes had not run on equal links. In some runs the element sets crossed before the harness shaped the link. NATS also picked the hub's compression from a round trip measured before shaping, so in some runs every CDM crossed uncompressed and took far longer. Now every run starts with the backlog waiting at the hub and the link down, and the leaf connects over the shaped link. Before comparing medians, the scenario checks each run's toxics, the compression on both sides, and the records it moved.
 
@@ -267,7 +267,7 @@ Its documented weaknesses are arithmetic, dates and prompt injection, and each i
 
 ### ADR-008 — Reference data: application-level priority pull, not transport replication
 
-**Buys.** The urgent record first, and numbers the edge has checked rather than trusted. A stream mirror delivers in FIFO order, which the LIMITED scenario measures at 15.0× slower for the record that matters, as a ratio of medians over 5 runs per mode. And an event is VERIFIED only when the edge's own engine has reproduced the hub's result, field by field.
+**Buys.** The urgent record first, and numbers the edge has checked rather than trusted. A stream mirror delivers in FIFO order, which the LIMITED scenario measures at 14.8× slower for the record that matters, as a ratio of medians over 5 runs per mode. And an event is VERIFIED only when the edge's own engine has reproduced the hub's result, field by field.
 
 **Costs.** A sync protocol of our own where JetStream is off the shelf, so it needs its own hostile-input tests. A review found real bugs there, now fixed: the edge admitted fetched bytes without checking them against what the manifest announced, and one unreadable record blocked every record behind it (`tests/sync/test_hostile_hub.py`). Each record also costs a round trip, so reference data competes with urgent CDMs on a thin link (below).
 
@@ -291,7 +291,7 @@ An event stays HUB-ASSERTED until that comparison passes (VERIFIED), and any dis
 
 A hub therefore offers edges only what their missions use: the 38-set imaging catalog (`SENTINEL_SYNC_ELEMENTS=catalog`; `all` to widen). It still holds everything for its own screening.
 
-Even that costs something. Every event summary arrived at 6.5 s (the median of 5 runs), not sooner, because 38 more summaries ride in the manifest, and the urgent record followed. In FIFO order the cost is larger: the element sets are older than the new CDMs, so they queue ahead of the urgent record along with the superseded CDMs. Two sync changes would remove the cost: batched fetch, and a reference-data class below routine CDMs. They are open question 6, not done, so the generated DDIL numbers describe the code as it is.
+Even that costs something. Every event summary arrived at 6.2 s (the median of 5 runs), not sooner, because 38 more summaries ride in the manifest, and the urgent record followed. In FIFO order the cost is larger: the element sets are older than the new CDMs, so they queue ahead of the urgent record along with the superseded CDMs. Two sync changes would remove the cost: batched fetch, and a reference-data class below routine CDMs. They are open question 6, not done, so the generated DDIL numbers describe the code as it is.
 
 ---
 
@@ -324,13 +324,13 @@ The real-process harness surfaced four defaults that would have failed a satelli
 | Leaf authentication timeout 2 s | The handshake could not complete over the thin link. | `authorization { timeout: 30 }` |
 | Ping interval 2 min | A black-holed link took minutes to detect. | `ping_interval: 5s`, `ping_max: 3` |
 
-The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and third fixes were in. It now re-establishes the leaf in 10.5 s.
+The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and third fixes were in. It now re-establishes the leaf in 5.5 s.
 
 ---
 
 ### ADR-010 — OPSEC as architecture: a unit's position never leaves its edge node
 
-**Buys.** A ground unit learns when catalogued public imagers can see it, and its position cannot leak through the sync path, because it never enters it. On a real hub and edge, none of the 179 messages the hub's server carried held the unit, and all 10 OPSEC checks passed.
+**Buys.** A ground unit learns when catalogued public imagers can see it, and its position cannot leak through the sync path, because it never enters it. On a real hub and edge, none of the 147 messages the hub's server carried held the unit, and all 10 OPSEC checks passed.
 
 **Costs.** Pass planning lives only at the edge, so the hub has no picture of any unit. An aggregate view would need a reviewed release path, and sharing a unit between edges would need its own decision and a cross-domain guard.
 

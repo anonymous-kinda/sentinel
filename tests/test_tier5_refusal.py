@@ -299,3 +299,21 @@ def test_an_unresolvable_max_pc_search_is_refused_even_when_pc_resolved(monkeypa
     assert result.pc is None and result.pc_max is None
     assert result.diagnostics["stage"] == "max_pc_search"
     assert result.diagnostics["sigma_min_m"] == 1e-19
+
+
+def test_a_state_with_no_rtn_frame_is_refused_never_raised():
+    """RTN needs r x v != 0. A primary with zero velocity, in a geometry
+    consistent at TCA, reaches the frame step: refuse, never raise."""
+    import dataclasses
+
+    base = make_conjunction(miss_m=200.0, sigma_m=100.0)
+    v2 = np.asarray(base.secondary.velocity_km_s)
+    miss_km = np.cross(v2, [0.0, 0.0, 1.0])
+    miss_km = 0.2 * miss_km / np.linalg.norm(miss_km)  # 200 m, perpendicular to the relative velocity
+    primary = dataclasses.replace(base.primary, velocity_km_s=np.zeros(3))
+    secondary = dataclasses.replace(base.secondary, position_km=np.asarray(base.primary.position_km) + miss_km)
+    result = assess(dataclasses.replace(base, primary=primary, secondary=secondary))
+    assert result.method is Method.REFUSED
+    assert result.refusal_reason is RefusalReason.INVALID_COVARIANCE
+    assert result.diagnostics["stage"] == "rtn_frame"
+    json.dumps(result.to_dict())
