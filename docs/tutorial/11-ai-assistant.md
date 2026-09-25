@@ -33,7 +33,7 @@ Treat it as a safety pattern, not a headline capability. The floor is weak on na
       v
  ROUTER  (Jev, or the deterministic floor) ---> Route: tool, arguments, confidence
       |
- GATE    confidence < 0.5, or an event tool with no event ---> ask back, do nothing
+ GATE    tool or event confidence < 0.5, or an event tool with no event ---> ask back, do nothing
       |
  TOOL    Sentinel's own code ------------------> facts: every number comes from here
       |
@@ -55,7 +55,7 @@ Every request becomes at most one call from a fixed catalog of six tools, with a
 
 ### Confidence and calibration
 
-A router states a **confidence** in its choice. The gate acts only at 0.5 or above; below that the assistant asks back with the top alternatives. A threshold only means something if the confidence is **calibrated**: a router that says 0.8 should be right about 80% of the time. Two scores measure that over labelled requests:
+A router states a **confidence** in each choice: the tool and, for a tool that needs one, the event. The gate acts only when both are 0.5 or above; below that the assistant asks back with the top alternatives. A threshold only means something if the confidence is **calibrated**: a router that says 0.8 should be right about 80% of the time. Two scores measure that over labelled requests:
 
 - **Brier score**: the mean of (confidence − outcome)², with the outcome 1 for right and 0 for wrong. 0 is perfect.
 - **Expected calibration error (ECE)**: group answers into confidence bins; in each bin take |observed accuracy − mean confidence|; weight by the bin's share of answers.
@@ -64,15 +64,17 @@ A worked example. Two routers each answer ten requests and get six right. Router
 
 ### Grounding: every number has a source
 
-The **grounding guard** reads every number in an AI-written answer and looks for it among the numbers in the tool's facts and in the operator's question. It matches at the precision the answer states: "6×10⁻³" is supported by a fact of 6.3e-3, but "6.4×10⁻³" is not. One unsupported number and the whole AI answer is withheld. The operator sees the template answer instead, with the unsupported numbers named.
+The **grounding guard** reads every number in an AI-written answer and looks for it among the numbers in the tool's facts and in the operator's question. It matches at the precision the answer states: "6×10⁻³" is supported by a fact of 6.3e-3, but "6.4×10⁻³" is not. One unsupported number and the whole AI answer is withheld. The operator sees the template answer instead, with the unsupported numbers named. Identifiers are not quantities: a number inside an event id, a message id or a hash grounds nothing, and an identifier grounds only a whole mention of itself.
 
 ### Tiers: what may run, decided from measured state
 
 ```
- marking starts with UNCLASSIFIED?  -- no --> local only (deterministic router, templates)
+ marking exactly UNCLASSIFIED or UNCLASSIFIED // EXERCISE?  -- no --> local only (deterministic router, templates)
             | yes
  operator opted in (SENTINEL_AI_CLOUD)? -- no --> local only
             | yes
+ the question holds a position (ADR-010)? -- yes --> local only, for this question
+            | no
  measured link:  CONNECTED, DEGRADED -> Jev routes (if keyed), Claude phrases (if keyed)
                  LIMITED             -> Jev routes (a few probabilities), templates phrase
                  DENIED, UNKNOWN     -> local only
@@ -108,13 +110,13 @@ Read the parts in the order an answer passes through them, then the audit, the H
 
 A bad call raises `ToolError` with a stable code (`missing_event`, `unknown_event`, `invalid_band`, ...), which the orchestrator turns into a question back.
 
-*Easy to get wrong:* the facts are also the grounding guard's evidence. Every field you add to a tool's facts widens what an AI answer may state. That includes identifiers and hashes, whose digit runs count as numbers.
+*Easy to get wrong:* the facts are also the grounding guard's evidence. Every field you add to a tool's facts widens what an AI answer may state. Name an identifier as one (`*_id`, `*_ids`, `*_by`, `sha*`, `*hash`, `digest`): its digit runs then ground nothing, and it grounds only a whole mention of itself. A hash under any other name would lend the guard its digits.
 
 ### 3. `sentinel/ai/router.py`: the protocol and the deterministic floor
 
 `RoutingContext` is what a router may choose between: this node's active events, each with a label from `event_label`. `Route` is its answer: tool, args, confidence, provider, per-option probabilities and a `detail` dict. `Router` is the protocol, and `RouterUnavailable(reason)` is how a hosted router says it could not answer.
 
-`DeterministicRouter` has no model and no network. A slash command (`/events`, `/assess`, `/explain`, `/link`, `/queue`, `/draft`) routes at confidence 1.0. Otherwise keyword rules route at 0.6 (`KEYWORD_CONFIDENCE`), or give up at 0.0. The helpers `window_hours`, `band_in`, `decision_in` and `resolve_event` parse arguments with code. The Jev router reuses `window_hours`, so a time window is never a model's number.
+`DeterministicRouter` has no model and no network. A slash command (`/events`, `/assess`, `/explain`, `/link`, `/queue`, `/draft`) routes at confidence 1.0. Otherwise keyword rules route at 0.6 (`KEYWORD_CONFIDENCE`), or give up at 0.0. The helpers `window_hours`, `band_in`, `decision_in` and `resolve_event` parse arguments with code. An event it resolves is an exact match, stated as `{event_id: 1.0}` in `event_probabilities`, so it clears the event gate. The Jev router reuses `window_hours`, so a time window is never a model's number.
 
 *Easy to get wrong:* in a slash command, a number of one or two digits is a console position (`/assess 2` is the second event), and three or more digits match the end of a catalog number (`/assess 118`). In free text only catalog numbers count.
 
@@ -127,13 +129,15 @@ A bad call raises `ToolError` with a stable code (`missing_event`, `unknown_even
 
 `_chosen` checks that each answer is one of the options asked; anything else is `malformed`. SDK errors map to stable reasons (`authentication`, `rate_limited`, `server_error`, `unreachable`) and become `RouterUnavailable`. The model is pinned (`JEV_MODEL = "jev-1.13.0"`), and `NO_RETRY` sets one attempt. Its comment records that the SDK's `retry=None` means *default* retries, which a test caught.
 
-*Easy to get wrong:* `Route.confidence` is the **tool** question's confidence. The event probabilities are kept for asking back but are not gated on, and the `consequential` answer is recorded in `detail` without steering anything. A time window is still parsed by `window_hours`, because Jev is never asked for a number.
+*Easy to get wrong:* `Route.confidence` is the **tool** question's confidence. The event choice's probability is in `event_probabilities`, and the gate holds it to the same 0.5. The `consequential` answer is recorded in `detail` without steering anything. A time window is still parsed by `window_hours`, because Jev is never asked for a number.
 
 ### 5. `sentinel/ai/policy.py`: the tier as a pure function
 
-`decide(TierInputs)` returns a `TierDecision(router, narrator, reason)`. `_hosted_allowed` returns why hosted AI is barred, if it is: a marking that does not start with `UNCLASSIFIED`, or no opt-in. Then `ROUTABLE_LINKS` and `PROSE_LINKS` decide per link state. The reason string is what the console shows.
+`decide(TierInputs)` returns a `TierDecision(router, narrator, reason)`. `_hosted_allowed` returns why hosted AI is barred, if it is: a marking not in `HOSTED_MARKINGS` (exactly `UNCLASSIFIED` or `UNCLASSIFIED // EXERCISE`), no opt-in, or a question that holds a position (`question_holds_position`). Then `ROUTABLE_LINKS` and `PROSE_LINKS` decide per link state. The reason string is what the console shows.
 
-*Easy to get wrong:* the marking check is a prefix test. A marking typed wrong, or `SECRET`, keeps hosted AI off, which is the safe way to fail. But any marking that begins `UNCLASSIFIED` passes, including one with caveats after it. Also, a hub or standalone node has no upstream link to measure. `sentinel/api/ai_routes.py` treats it as CONNECTED and labels that as assumed.
+`sentinel/ai/opsec.py` decides whether a question holds a position, for ADR-010: the question's text is what a hosted service would receive. `holds_position(text, unit)` is true for a decimal number that states the held unit's latitude or longitude at the precision typed, or for position notation of any unit: MGRS, a degree sign, a pair with hemisphere letters, or a pair of decimal degrees to three places. The unit comes from the pass module, read at each question through `node.extensions`, and nothing logs what matched.
+
+*Easy to get wrong:* the marking check is an allow-list, not a prefix test. `canonical_marking` ignores case and the spacing around `//`, and nothing else, so `UNCLASSIFIED//CUI`, `UNCLASSIFIED//FOUO` or a typo keeps hosted AI off, which is the safe way to fail. A caveat limits who may receive the text, and a hosted service is a recipient no caveat names. Also, a hub or standalone node has no upstream link to measure. `sentinel/api/ai_routes.py` treats it as CONNECTED and labels that as assumed.
 
 ### 6. `sentinel/ai/narrate.py` and `sentinel/ai/narrate_claude.py`: phrasing
 
@@ -154,9 +158,11 @@ A refusal, a truncated answer or an empty one raises `NarratorUnavailable`, like
 `check_grounding(text, evidence, question)` builds a pool of numbers:
 
 - every number in the facts, as a magnitude, since a sign is said in words ("passed 3.2 h ago");
-- every number inside the facts' strings;
-- the length of every list;
+- every number inside the facts' strings, except in identifier fields (`*_id`, `*_ids`, `*_by`, `sha*`, `*hash`, `digest`);
+- the length of every list, a list of identifiers included;
 - every number in the question.
+
+`_without_mentions` then blanks every whole mention of an identifier out of the answer, so "Event 99001-99118-20260924T205723" reads as no numbers at all, while the "41" inside a hash grounds no "41 m".
 
 It then reads the answer with `_NUMBER`, which knows plain, comma-grouped, `e`-notation and `×10⁻³` forms, and deliberately catches numbers glued to units ("10.9h", "240700Z"). `_parse` counts the significant figures stated. A token is supported when some pool value rounds to the same figure at that precision. `_unread_digits` catches digits the pattern did not consume, such as ".9", so nothing slips past as unparsed text.
 
@@ -164,18 +170,18 @@ It then reads the answer with `_NUMBER`, which knows plain, comma-grouped, `e`-n
 
 ### 8. `sentinel/ai/assistant.py`: the orchestrator
 
-`gate(route)` returns `"unsure"` when the tool is not in the catalog or the confidence is not within [0.5, 1.0]. That includes NaN, so it fails closed. It returns `"which_event"` when an event tool has no event, and `None` to act.
+`gate(route)` returns `"unsure"` when the tool is not in the catalog or the confidence is not within [0.5, 1.0]. That includes NaN, so it fails closed. It returns `"which_event"` when an event tool has no event, or when the chosen event's probability is missing or not within [0.5, 1.0], and `None` to act.
 
 `Assistant.ask(text, author)`:
 
-1. `tier()` asks the policy, with the link state read at that moment.
-2. `_answer` builds the routing context from `list_events`. It routes, and falls back to the deterministic router on `RouterUnavailable`. Then the checks run in this order: the gate's "unsure"; a write asked of a read-only node; a missing event. Next the tool executes, a `ToolError` becoming a question back. The narrator phrases the facts; if the AI prose fails grounding, the template is used and `withheld` names the unsupported numbers.
+1. `tier(text)` asks the policy, with the link state read at that moment and whether this question holds a position.
+2. `_answer` builds the routing context from `list_events`. It routes, and falls back to the deterministic router on `RouterUnavailable`. Then the checks run in this order: the gate's "unsure"; a write asked of a read-only node; a missing or unsure event. Next the tool executes, a `ToolError` becoming a question back. The narrator phrases the facts; if the AI prose fails grounding, the template is used and `withheld` names the unsupported numbers.
 3. One audit line is appended: question, tier, route, narrator, grounding, withheld, fallbacks, answer text, and the sha256 of the facts (not the facts themselves).
 4. A draft is held under a random `draft_id`, capped at `MAX_DRAFTS` (100), oldest evicted with the log line `Assistant draft evicted`.
 
-`Assistant.confirm(draft_id, author, rationale)` pops the draft. It builds the provenance (router, confidence, model, ask sequence) and calls `record_decision`, which may refuse `stale_draft`. Then it appends a `confirm` audit line carrying the DECISION's digest.
+`Assistant.confirm(draft_id, author, rationale)` pops the draft. It builds the provenance (router, confidence, model, ask sequence) and calls `record_decision`, which may refuse `stale_draft`. Every attempt appends one `confirm` audit line: `status` `confirmed` with the DECISION's digest, `refused` with the reason code, or `failed` with the error type. A refusal also logs `AI draft confirm refused`, with the reason and the ask's sequence but never the draft id.
 
-*Easy to get wrong:* the draft is popped *before* `record_decision` runs, so a refused confirmation consumes the draft. The operator must ask again, which drafts against the current CDM. That is intended: a draft is good once, on the CDM it was made against.
+*Easy to get wrong:* the draft is popped *before* `record_decision` runs, so a refused confirmation consumes the draft. The operator must ask again, which drafts against the current CDM. That is intended: a draft is good once, on the CDM it was made against, and a stale one can never become current again. The refusal is in the audit, so the spent draft still leaves a trace.
 
 ### 9. `sentinel/audit/chain.py`: the record
 
@@ -187,7 +193,7 @@ A torn write, from a power cut mid-line, leaves bytes with no final newline. `_e
 
 ### 10. `sentinel/api/ai_routes.py`: the HTTP surface
 
-`register` builds the `ToolRegistry` over the node's services. It calls `_load_provider` for Jev and Claude: a provider loads only when its key variable is set, and its SDK is imported only then. With no key, no SDK is ever imported, which is how an air-gapped bundle without the `ai` extra runs. With a key but no SDK, the node logs `Hosted AI SDK not installed` and serves the local tier. `_link_state` returns the measured hub link on an edge and an assumed CONNECTED elsewhere. The audit lives at `<SENTINEL_VAR>/ai-audit.jsonl`. The routes:
+`register` builds the `ToolRegistry` over the node's services. It calls `_load_provider` for Jev and Claude: a provider loads only when its key variable is set, and its SDK is imported only then. With no key, no SDK is ever imported, which is how an air-gapped bundle without the `ai` extra runs. With a key but no SDK, the node logs `Hosted AI SDK not installed` and serves the local tier. `_link_state` returns the measured hub link on an edge and an assumed CONNECTED elsewhere. `_unit_position` reads the pass module's unit through `node.extensions`, read-only, at each question. The audit lives at `<SENTINEL_VAR>/ai-audit.jsonl`. The routes:
 
 - `GET /api/ai/status`: the tier in force and why;
 - `POST /api/ai/ask`: allowed on a read-only node, where it answers but drafts nothing;
@@ -211,7 +217,7 @@ A torn write, from a power cut mid-line, leaves bytes with no final newline. `_e
 Two contracts carry this chapter:
 
 - `ai-does-no-math` forbids `sentinel.ai` from importing `sentinel.risk`, `sentinel.cdm`, numpy and scipy. Import-linter checks indirect imports too. `sentinel.ai` therefore cannot import `sentinel.conjunction` either, which imports all of them. The tools get the conjunction service by injection, in `ToolRegistry.__init__`, not by import.
-- `hosted-ai-at-the-edges` forbids the Jev and Anthropic SDKs in the seven modules it lists: the orchestrator, catalog, grounding guard, templates, policy, router protocol and tools. That leaves the SDKs in `router_jev.py` and `narrate_claude.py`. `live_check.py` also keeps to protocols, with the script injecting the adapters, but by convention: it is not on the contract's list.
+- `hosted-ai-at-the-edges` forbids the Jev and Anthropic SDKs in every `sentinel.ai` module except `router_jev.py` and `narrate_claude.py`, the package's `__init__` included. It lists them as modules (`as_packages = false`), because as a package `sentinel.ai` would take in the two adapters. `tests/ai/test_contracts.py` fails when a new module is left off, so `live_check.py`, the eval and the position guard keep to protocols by contract, not by convention.
 
 ## Try it
 
@@ -229,14 +235,14 @@ The tier policy is a pure function, so you can see what it would do with keys yo
 ```bash
 uv run python - <<'EOF'
 from sentinel.ai.policy import TierInputs, decide
-for marking in ("UNCLASSIFIED // EXERCISE", "SECRET // EXERCISE"):
+for marking in ("UNCLASSIFIED // EXERCISE", "UNCLASSIFIED//CUI", "SECRET // EXERCISE"):
     for link in ("CONNECTED", "DEGRADED", "LIMITED", "DENIED", "UNKNOWN"):
         d = decide(TierInputs(link, marking, jev_configured=True, claude_configured=True, cloud_opt_in=True))
-        print(f"{marking[:12]:<12} {link:<9} {d.router:<13} {d.narrator:<8} {d.reason}")
+        print(f"{marking:<24} {link:<9} {d.router:<13} {d.narrator:<8} {d.reason}")
 EOF
 ```
 
-Jev and Claude both appear only for UNCLASSIFIED on CONNECTED or DEGRADED. On LIMITED, Jev routes and templates phrase. Every SECRET row is local, whatever the link.
+Jev and Claude both appear only for `UNCLASSIFIED // EXERCISE` on CONNECTED or DEGRADED. On LIMITED, Jev routes and templates phrase. Every `UNCLASSIFIED//CUI` and SECRET row is local, whatever the link: only an allow-listed marking lets text leave the node, and a caveat is not on the list.
 
 Probe the grounding guard directly:
 
@@ -245,13 +251,13 @@ uv run python - <<'EOF'
 from sentinel.ai.grounding import check_grounding
 facts = {"miss_distance_m": 210.4, "pc": 6.3e-3, "time_to_mcp_h": 11.0, "cdm_sha256": "41ad6862baba2840"}
 for text in ("Miss 210 m, Pc 6.3×10⁻³.", "Pc about 6×10⁻³.", "Pc 6.4×10⁻³.", "Miss 200 m.", "MCP in 11.0h.",
-             "MCP in 12h.", "Miss 41 m."):
+             "MCP in 12h.", "Miss 41 m.", "Against 41ad6862baba2840."):
     result = check_grounding(text, facts)
     print(f"{text:28} ok={result.ok!s:5} unsupported={result.unsupported}")
 EOF
 ```
 
-The first two pass. "6.4×10⁻³", "200" (three significant figures as written) and "12" fail. The last line passes, which should bother you: "41" is not a distance anywhere in the facts, but it is a digit run inside the hash. How it fails, below, comes back to this.
+The first two pass. "6.4×10⁻³", "200" (three significant figures as written) and "12" fail. So does the last line, and it is worth seeing why: "41" is a digit run inside the hash, but `cdm_sha256` is an identifier field, and a number inside an identifier grounds no quantity. The hash grounds only a whole mention of itself, so "Against 41ad6862baba2840." passes.
 
 Now a node of your own. A live demo runs on ports 8000 and 8001: never post to it. This uses port 8124 and a standalone node, which runs the exercise scenario. `sentinel serve` does not read `.env`, so it sees a key only if your shell exports one:
 
@@ -354,20 +360,22 @@ All of these are in [ADR-007](../system-design.md#adr-007--ai-that-cannot-corrup
 
 - **A hosted service fails** (authentication, rate limit, server error, unreachable, timeout, refusal, truncation, empty answer): the local tier answers in the same request. `fallbacks` lists `{from, to, reason}`, and the log says `AI router unavailable` or `AI narrator unavailable` with the reason.
 - **Jev answers outside the options it was given**: `Jev answer malformed`, treated like an outage.
-- **A confidence that is not a probability** (NaN, above 1) fails the gate and asks back (`tests/ai/test_review_edges.py`).
+- **A confidence that is not a probability** (NaN, above 1), for the tool or for the event, fails the gate and asks back (`tests/ai/test_review_edges.py`).
+- **An unsure event choice** (Jev sure of the tool, below 0.5 on the event): the assistant asks which event, with the ranked alternatives, and drafts nothing.
+- **A question holds a position** while hosted AI is on: that question is routed and phrased on the node, and the tier's reason cites ADR-010.
 - **An AI answer states an unsupported number**: `AI answer withheld` is logged, the template answer is shown, and `withheld.unsupported` names the numbers.
 - **A mis-route** reaches a tool that only reads, or a draft that does nothing until confirmed. The worst a wrong route can do alone is show the wrong facts, and the answer says which event and tool it used.
 - **A tool cannot serve the call** (no event, unknown event, invalid band or decision): a question back, never an exception.
-- **A stale, unknown or evicted draft**: 409 or 404 on confirm. Eviction is logged. A refused confirmation is not written to the audit; only asks and successful confirms are.
+- **A stale, unknown or evicted draft**: 409 or 404 on confirm. Eviction is logged. The refusal is an audit line (`status` `refused`, with the reason code) and a log line, `AI draft confirm refused`. A confirm that fails for another reason is audited as `failed` before the error goes on.
 - **A read-only node** is asked to draft: it answers that it records nothing, so it drafts nothing.
 - **An SDK is missing** although its key is set: `Hosted AI SDK not installed`, and the local tier serves.
 - **The audit file** is edited, cut short while running, or torn: `verify` names the first bad line, `Audit chain broken` is logged once per new break, and appends continue.
 
 Three limits are worth knowing precisely, because they are not bugs the code hides:
 
-- **The guard checks presence, not meaning.** A number is supported if it appears anywhere in the facts at the stated precision, including digit runs inside identifiers and hashes. An answer that swaps two numbers of similar size, or borrows one from a hash (the "41" above), passes. The guard bounds invention; the operator, the template beside it and the audit still matter.
-- **Only the tool choice is gated.** Jev's event choice is taken as given, even if its probability is low. For a read the answer names the event; for a write a person confirms it.
-- **The question text leaves the node** when hosted AI is on, and it is always written to the audit file. Nothing stops an operator from typing something sensitive, such as a unit's position (chapter 10). The pass module keeps that position out of the assistant entirely; the operator should too.
+- **The guard checks presence, not meaning.** A number is supported if it appears anywhere in the facts at the stated precision. An answer that swaps two numbers of similar size passes. Identifiers no longer lend their digits (the "41" above fails), but an id that is itself a number, such as the catalog number `99118`, can still be cited as exactly that number. The guard bounds invention; the operator, the template beside it and the audit still matter.
+- **The position guard matches patterns, not meaning.** It catches the held unit's coordinates as decimals, and MGRS, degree and hemisphere notation for any unit. A position written in words ("thirty-four north") or in a form it does not know still leaves the node when hosted AI is on. The rules lean wide, so its usual error is a local answer to an innocent question; none of the 60 eval requests is one.
+- **The question is always written to the audit file**, positions included. That file stays on the node, and `GET /api/ai/audit` serves it only to the node's own console, but whoever can read the node's API or its `SENTINEL_VAR` can read what was asked.
 
 ## Check yourself
 

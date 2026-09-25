@@ -441,7 +441,7 @@ Every node setting is an environment variable read at start-up; `sentinel/api/se
 | `SENTINEL_ELEMENTS` | unset | Path of a CelesTrak OMM JSON snapshot to load at start-up. Unset: a hub or standalone node loads the vendored snapshot under `SENTINEL_FIXTURES`, and an edge loads none and receives element sets from its hub. A missing file is logged (`Element snapshot missing`) and the node starts with no element sets. |
 | `SENTINEL_SYNC_ELEMENTS` | `catalog` | Which element sets this node offers edges over sync: `catalog` (only the imagers in `sentinel/passes/imaging.toml`) or `all` (every set it holds). Any other value stops the node at start-up with `ValueError`. |
 | `SENTINEL_AI` | on | Register the assistant's routes. Off: `/api/ai/status` returns `{"enabled": false}`. |
-| `SENTINEL_AI_CLOUD` | off | Operator opt-in to hosted AI (Jev routing, Claude phrasing). The tier policy still requires an UNCLASSIFIED marking and a usable measured link. |
+| `SENTINEL_AI_CLOUD` | off | Operator opt-in to hosted AI (Jev routing, Claude phrasing). The tier policy still requires an allow-listed marking (`SENTINEL_MARKING`, above), a usable measured link and a question that holds no position. |
 | `SENTINEL_DEMO_CONTROLS` | off | Enable `POST /api/demo/link`, accepted from localhost only, which applies Toxiproxy link presets. For demonstrations and the harness. |
 | `SENTINEL_TOXIPROXY_API` | unset (the control then uses `http://127.0.0.1:8474`) | Toxiproxy's API, for link emulation |
 | `SENTINEL_CLOCK` | `real` | `real`; `sim:<ISO-8601 epoch>,<scale>` (starts at the epoch and runs `<scale>` times wall speed); `fixed:<ISO-8601 instant>`. The epoch or instant may be `now`. The console labels a non-real clock. |
