@@ -347,16 +347,15 @@ class SyncAgent:
         budget_s = budget_s if budget_s is not None else max(self.interval_s * 5, 10.0)
         started = time.monotonic()
         fetched = 0
-        bytes_ahead = 0
-        now = self.clock.now()
         self._pulls += 1
         for item in self.queue:
             if item.status in ("ARRIVED",) or not self._backoff.due(item.sha16, self._pulls):
                 continue
-            eta_wall = self.link.eta_s(bytes_ahead + item.size)
+            eta_wall = self.link.eta_s(item.size)
             item.eta_s = None if eta_wall is None else round(eta_wall, 1)
             if self.mode == "edf" and item.latest and eta_wall is not None and item.key.deadline is not None:
-                seconds_left = (item.key.deadline - now).total_seconds()
+                # Read the clock per record: the fetches ahead of it spent node time.
+                seconds_left = (item.key.deadline - self.clock.now()).total_seconds()
                 if eta_wall * self.clock.scale > seconds_left:
                     item.status = "SUMMARY_ONLY"
                     self.summary_only.add(item.event_id)
@@ -366,7 +365,6 @@ class SyncAgent:
             item.status = "FETCHING"
             await self._fetch(item)
             fetched += 1
-            bytes_ahead = 0
         self.queue = [i for i in self.queue if i.status != "ARRIVED"]
         return fetched
 

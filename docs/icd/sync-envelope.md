@@ -155,7 +155,9 @@ It orders by record creation time and turns admission control off.
 In EDF mode, when the link rate has been measured, the latest record of an
 item that cannot arrive before its deadline at that rate is not fetched: the
 item is held `SUMMARY_ONLY`, and the console shows the hub's summary. The
-link is spent on records that can still arrive in time.
+link is spent on records that can still arrive in time. The node clock is
+read as each record comes up, so the time spent fetching the records ahead
+of it in the same pull counts against its deadline.
 
 ### Queue states
 

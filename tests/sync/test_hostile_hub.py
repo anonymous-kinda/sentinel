@@ -6,8 +6,9 @@ are the hub's claims about the bytes; the bytes themselves can be hashed.
 These tests hold the agent to what it can check, and hold the protocol to
 the DDIL link it runs on.
 
-Bugs in the closed core (sentinel/sync) are strict xfails: the suite stays
-green, the bug stays recorded, and the xfail turns red the day it is fixed.
+A bug found here in the closed core (sentinel/sync) is recorded as a strict
+xfail until it is fixed: the suite stays green, the bug stays recorded, and
+the xfail turns red the day the fix lands. None is open.
 """
 
 from __future__ import annotations
@@ -39,7 +40,6 @@ from sentinel.sync.agent import LINK_ERRORS
 from .conftest import EPOCH, KEYS, TRUST, Node
 
 SNAPSHOT = pathlib.Path(__file__).resolve().parents[2] / "fixtures" / "omm" / "celestrak-resource-20260924.json"
-CORE = "core bug in sentinel/sync (closed; fix belongs to its owner): "
 
 Tamper = Callable[[bytes, dict[str, str]], tuple[bytes, dict[str, str]]]
 
@@ -356,7 +356,8 @@ class SmallRecords:
         raw = self.records.get(sha16)
         if raw is None:
             return None
-        return raw, {"Sentinel-Sha256": hashlib.sha256(raw).hexdigest(), "Sentinel-Event-Id": "x",
+        item_id = next(s["e"] for s in self.summaries if any(sha == sha16 for sha, *_ in s["c"]))
+        return raw, {"Sentinel-Sha256": hashlib.sha256(raw).hexdigest(), "Sentinel-Event-Id": item_id,
                      "Sentinel-Data-Class": "REAL"}
 
     def has(self, sha16):
@@ -376,10 +377,6 @@ def _record(tag: str, size: int) -> tuple[str, bytes]:
     return hashlib.sha256(raw).hexdigest()[:16], raw
 
 
-@pytest.mark.xfail(strict=True, reason=CORE + (
-    "pull() reads the clock once before the loop (and bytes_ahead is reset but never "
-    "added to), so a record is admitted against a deadline measured before the records "
-    "ahead of it spent the link"))
 def test_admission_control_counts_the_time_spent_on_records_ahead():
     now = dt.datetime(2026, 9, 24, 12, 0, tzinfo=dt.UTC)
     clock = FixedClock(now)
