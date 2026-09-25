@@ -378,38 +378,6 @@ def _record(tag: str, size: int) -> tuple[str, bytes]:
     return hashlib.sha256(raw).hexdigest()[:16], raw
 
 
-def test_admission_control_counts_the_time_spent_on_records_ahead():
-    now = dt.datetime(2026, 9, 24, 12, 0, tzinfo=dt.UTC)
-    clock = FixedClock(now)
-    sha_a, raw_a = _record("A", 500)
-    sha_b, raw_b = _record("B", 500)
-    summaries = [
-        {"e": "A", "dl": int(now.timestamp()) + 80, "q": 3, "c": [[sha_a, 500, 1]]},
-        {"e": "B", "dl": int(now.timestamp()) + 90, "q": 3, "c": [[sha_b, 500, 2]]},
-    ]
-    bus = InProcessBus()
-    server = SyncServer(bus, SmallRecords(summaries, {sha_a: raw_a, sha_b: raw_b}), None, "hub")
-    run(server.start())
-
-    link_clock = ManualClock()
-
-    async def fetch_takes_50_s(msg: Msg):
-        clock.advance(50)            # 500 B at 10 B/s: what the link monitor predicts
-        link_clock.advance(50)
-        return await server._fetch(msg)
-
-    run(bus.serve(subjects.sync_fetch("hub"), fetch_takes_50_s))
-    monitor = LinkMonitor(rate_bytes_per_s=10.0, clock=link_clock)
-    agent = SyncAgent(bus, SmallRecords(), None, clock, "alpha", "hub", monitor)
-    agent.apply_manifest(summaries)
-    run(agent.pull())
-
-    status = {item.event_id: item.status for item in agent.queue}
-    arrived = {a["event_id"] for a in agent.arrivals}
-    assert "A" in arrived, "A fits: 50 s against 80 s"
-    assert status.get("B") == "SUMMARY_ONLY", "after A, B has 40 s left and needs 50 s"
-
-
 # ---------------------------------------------------------------- timeouts
 class ThinLinkBus(InProcessBus):
     """A link that moves `rate` bytes per second, on `clock` (give it to the

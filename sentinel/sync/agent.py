@@ -14,9 +14,10 @@ One cycle:
   3. Full CDMs. The want-list is a set difference - the hub's CDMs minus
      this node's - ordered by the mission-agnostic triage key: class, then
      earliest deadline (the maneuver commit point), then consequence.
-     Admission control: if the measured link cannot deliver a record before
-     its deadline, the event is marked SUMMARY-ONLY instead of spending the
-     link on it. Each CDM is re-assessed here, and the result is compared
+     Admission control: a record the measured link cannot deliver before
+     its deadline is held SUMMARY-ONLY while the records that still can get
+     the link, then fetched once none of them is waiting: deferred, never
+     withheld. Each CDM is re-assessed here, and the result is compared
      with what the hub asserted (VERIFIED / MISMATCH). A reply whose bytes
      are not the record asked for, or that its module cannot ingest, is
      refused and retried with back-off; the records behind it still come.
@@ -366,32 +367,51 @@ class SyncAgent:
 
     # --------------------------------------------------------------- full CDMs
     async def pull(self, budget_s: float | None = None) -> int:
-        """Fetch queued CDMs in order. Returns how many arrived."""
+        """Fetch queued records in triage order, within `budget_s` of wall
+        time. Returns how many were fetched.
+
+        Admission control (EDF): a latest record that cannot arrive before
+        its deadline at the measured rate is held SUMMARY_ONLY while the
+        records that still can get the link. It is deferred, not withheld:
+        once none of those is waiting, it is fetched too, because a stale
+        input is shown, not hidden."""
         budget_s = budget_s if budget_s is not None else max(self.interval_s * 5, 10.0)
-        started = time.monotonic()
+        ends = time.monotonic() + budget_s
         fetched = 0
         self._pulls += 1
-        for item in self.queue:
-            if item.status in ("ARRIVED",) or not self._backoff.due(item.sha16, self._pulls):
+        late: list[WantItem] = []
+        for item in [i for i in self.queue if i.status != "ARRIVED" and self._backoff.due(i.sha16, self._pulls)]:
+            if self._too_late(item):
+                item.status = "SUMMARY_ONLY"
+                self.summary_only.add(item.event_id)
+                late.append(item)
                 continue
-            eta_wall = self.link.eta_s(item.size)
-            item.eta_s = None if eta_wall is None else round(eta_wall, 1)
-            if self.mode == "edf" and item.latest and eta_wall is not None and item.key.deadline is not None:
-                # Read the clock per record: the fetches ahead of it spent node time.
-                seconds_left = (item.key.deadline - self.clock.now()).total_seconds()
-                if eta_wall * self.clock.scale > seconds_left:
-                    item.status = "SUMMARY_ONLY"
-                    self.summary_only.add(item.event_id)
-                    continue
-            if time.monotonic() - started > budget_s:
+            if time.monotonic() > ends:
                 break
-            item.status = "FETCHING"
             await self._fetch(item)
             fetched += 1
+        else:                                   # every record in time was fetched: the late ones follow
+            for item in late:
+                if time.monotonic() > ends:
+                    break
+                await self._fetch(item)
+                fetched += 1
         self.queue = [i for i in self.queue if i.status != "ARRIVED"]
         return fetched
 
+    def _too_late(self, item: WantItem) -> bool:
+        """Whether a record cannot arrive before its deadline at the measured
+        rate (EDF only). Reads the clock per record: the fetches ahead of it
+        in this pull spent node time."""
+        eta_wall = self.link.eta_s(item.size)
+        item.eta_s = None if eta_wall is None else round(eta_wall, 1)
+        if self.mode != "edf" or not item.latest or eta_wall is None or item.key.deadline is None:
+            return False
+        seconds_left = (item.key.deadline - self.clock.now()).total_seconds()
+        return eta_wall * self.clock.scale > seconds_left
+
     async def _fetch(self, item: WantItem) -> None:
+        item.status = "FETCHING"
         reply = await self._request_record(item)
         if reply.headers.get("Sentinel-Error"):
             item.status = "QUEUED"

@@ -165,11 +165,16 @@ It orders by record creation time and turns admission control off.
 ## Admission control and queue states
 
 In EDF mode, when the link rate has been measured, the latest record of an
-item that cannot arrive before its deadline at that rate is not fetched: the
-item is held `SUMMARY_ONLY`, and the console shows the hub's summary. The
-link is spent on records that can still arrive in time. The node clock is
-read as each record comes up, so the time spent fetching the records ahead
-of it in the same pull counts against its deadline.
+item that cannot arrive before its deadline at that rate is held
+`SUMMARY_ONLY`, and the console shows the hub's summary, while the records
+that can still arrive in time get the link. The node clock is read as each
+record comes up, so the time spent fetching the records ahead of it in the
+same pull counts against its deadline.
+
+A held record is deferred, not withheld. Once no record that can still
+arrive in time is waiting in the pull, the held ones are fetched in triage
+order, within the same budget. An element set past its stale time, or a
+CDM past its commit point, is an input the operator still sees.
 
 ### Queue states
 
@@ -178,7 +183,7 @@ of it in the same pull counts against its deadline.
 | `QUEUED` | Waiting, or put back after the hub answered with `Sentinel-Error` or with a reply the edge refused (Headers, below). |
 | `FETCHING` | Request in flight. |
 | `ARRIVED` | Fetched and admitted; dropped from the queue at the end of the pull. |
-| `SUMMARY_ONLY` | Admission control: it cannot arrive before its deadline at the measured rate. |
+| `SUMMARY_ONLY` | Admission control: it cannot arrive before its deadline at the measured rate. It is fetched once nothing that can still arrive in time is waiting. |
 
 `GET /api/sync` on an edge shows the queue, recent arrivals and the items
 held summary-only.
