@@ -29,8 +29,11 @@ The edge's `SyncAgent` runs a cycle every 2 s by default
 1. **Operator data (P0).** `ops.<hub_id>.exchange` sends this node's CRDT
    contexts and what the hub was last known to lack. The reply carries what
    this node lacks. Each way is held to a budget, what the measured link
-   moves in 10 s (at most 256000 bytes): the oldest part that fits, always
-   at least one item. A backlog after a long denial drains over several
+   moves in 10 s (at most 256000 bytes): the leading part that fits, always
+   at least one item, taken in turns: one log entry from each author
+   (oldest first), then one register, and round again. A peer never counts
+   an entry it rejects as seen, so it is offered on every exchange; in
+   turns, no author, trusted or not, keeps the others out of the budget. A backlog after a long denial drains over several
    cycles, and the manifest and records still get the link in each. It is
    state-based, so a lost reply only means the next cycle sends a little
    more, and an item's dots enter the peer's context only when that item

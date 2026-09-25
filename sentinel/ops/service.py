@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import dataclasses
 import datetime as dt
+import itertools
 import json
 import pathlib
 import sqlite3
@@ -198,17 +199,24 @@ class OpsService:
     def payload_for(self, log_ctx: dict, mv_ctx: dict, budget_bytes: int | None = None) -> dict:
         """What this replica holds that a peer with these contexts lacks.
 
-        Oldest first: log entries in display order, then registers by key.
+        Taken in turns: one log entry from each author, each author's
+        oldest first (display order), then one register (by key), and round
+        again. A peer never counts an entry it rejects as seen, so that
+        entry is offered on every exchange (sentinel/crdt/log.py); in turns,
+        no author, trusted or not, can keep the others out of the budget.
         With a budget, only the leading items whose encodings fit in it, and
         always at least one, so every exchange makes progress over a thin
         link. The rest goes in a later exchange and nothing is lost: an
         entry's dot, or a register's writes, enter the peer's context only
         when that item itself is merged there.
         """
-        entries = sorted(self.log.missing_for(DotContext.from_wire(log_ctx)), key=_display_order)
+        by_author: dict[str, list[tuple[str, Any]]] = {}
+        for entry in sorted(self.log.missing_for(DotContext.from_wire(log_ctx)), key=_display_order):
+            by_author.setdefault(entry.dot.node, []).append(("log", entry.to_wire()))
         registers = sorted(self.mv.missing_for(DotContext.from_wire(mv_ctx)).items())
-        items = [("log", e.to_wire()) for e in entries] + [("reg", [k, r.to_wire()]) for k, r in registers]
-        chosen = _leading_within(items, budget_bytes)
+        turns = [by_author[author] for author in sorted(by_author)]
+        turns.append([("reg", [k, r.to_wire()]) for k, r in registers])
+        chosen = _leading_within(_in_turns(turns), budget_bytes)
         return {
             "log": [wire for kind, wire in chosen if kind == "log"],
             "reg": {wire[0]: wire[1] for kind, wire in chosen if kind == "reg"},
@@ -255,6 +263,11 @@ class OpsService:
 
 def _display_order(entry: Entry) -> tuple[int, str, int]:
     return entry.lamport, entry.dot.node, entry.dot.seq
+
+
+def _in_turns(queues: list[list[tuple[str, Any]]]) -> list[tuple[str, Any]]:
+    """One item from each queue in turn, until every queue is empty."""
+    return [item for turn in itertools.zip_longest(*queues) for item in turn if item is not None]
 
 
 def _leading_within(items: list[tuple[str, Any]], budget_bytes: int | None) -> list[tuple[str, Any]]:
