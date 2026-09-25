@@ -13,7 +13,8 @@ import pytest
 from sgp4 import omm
 from sgp4.api import Satrec, jday
 
-from sentinel.passes.tracks import MAX_TRACK, STEP_S, ecef_track_m
+from sentinel.passes.geometry import STALE_AFTER_DAYS
+from sentinel.passes.tracks import MAX_ELEMENT_AGE, MAX_TRACK, STEP_S, ecef_track_m
 
 from .exercise import START
 
@@ -71,3 +72,54 @@ def test_wrong_intervals_are_refused(snapshot, start, end):
 def test_a_short_interval_still_has_both_ends(snapshot):
     track = ecef_track_m(snapshot[WV3], START, START + dt.timedelta(seconds=30))
     assert len(track) == 3, "start, one step, and the end"
+
+
+# ------------------------------------------------ how far from the epoch
+def epoch_of(element_set) -> dt.datetime:
+    return dt.datetime.fromisoformat(element_set["EPOCH"]).replace(tzinfo=dt.UTC)
+
+
+@pytest.mark.parametrize(
+    "start_from_epoch",
+    [
+        dt.timedelta(0),
+        MAX_ELEMENT_AGE - dt.timedelta(minutes=5),
+        -MAX_ELEMENT_AGE,
+    ],
+    ids=["at-the-epoch", "ends-at-the-stale-line", "starts-at-the-line-before-the-epoch"],
+)
+def test_a_track_inside_the_usable_span_is_drawn(snapshot, start_from_epoch):
+    start = epoch_of(snapshot[WV3]) + start_from_epoch
+    assert len(ecef_track_m(snapshot[WV3], start, start + dt.timedelta(minutes=5))) == 16
+
+
+@pytest.mark.parametrize(
+    "start_from_epoch",
+    [
+        MAX_ELEMENT_AGE - dt.timedelta(minutes=4),
+        -MAX_ELEMENT_AGE - dt.timedelta(minutes=1),
+        dt.timedelta(days=30),
+    ],
+    ids=["ends-past-the-stale-line", "starts-before-the-line-before-the-epoch", "a-month-on"],
+)
+def test_a_track_beyond_the_usable_span_is_refused_with_the_reason(snapshot, start_from_epoch):
+    """Past STALE_AFTER_DAYS the pass list flags a set stale; a track has no
+    flag to carry, so it is not drawn: a precise-looking line from a set the
+    module itself calls stale would claim more than the data can support."""
+    start = epoch_of(snapshot[WV3]) + start_from_epoch
+    with pytest.raises(ValueError, match=f"within {STALE_AFTER_DAYS:g} days of its epoch"):
+        ecef_track_m(snapshot[WV3], start, start + dt.timedelta(minutes=5))
+
+
+def test_the_usable_span_is_where_element_sets_are_not_yet_stale():
+    assert dt.timedelta(days=STALE_AFTER_DAYS) == MAX_ELEMENT_AGE
+
+
+def test_a_far_interval_is_refused_before_any_propagation(snapshot):
+    """Year 9999 once came back as finite nonsense positions. Nor does an
+    element set with a year-1 epoch overflow the check."""
+    far = dt.datetime(9999, 12, 31, 23, 0, tzinfo=dt.UTC)
+    ancient = {**snapshot[WV3], "EPOCH": "0001-01-01T00:00:00"}
+    for element_set in (snapshot[WV3], ancient):
+        with pytest.raises(ValueError, match="stale"):
+            ecef_track_m(element_set, far, far + dt.timedelta(minutes=5))

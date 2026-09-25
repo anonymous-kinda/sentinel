@@ -44,7 +44,7 @@ Only `main` is supported. Releases are built from `vX.Y.Z` tags
 - The DDIL test harness in `harness/`, and the link-emulation controls a node
   exposes to localhost only when `SENTINEL_DEMO_CONTROLS` is set.
 - The hosted AI services themselves.
-- The three open gaps below, which are already tracked.
+- The four open gaps below, which are already tracked.
 
 ## Security posture
 
@@ -80,10 +80,26 @@ These come from the POA&M. Each is a real weakness in the current code.
    security group keeps port 7422 closed unless edge networks are
    allow-listed. Decision-log entries are signed, so an altered entry is
    rejected, but nothing on the link is confidential.
-3. **Truncating the newest AI-audit lines is undetectable (AU-9).** The AI
-   audit log is hash-chained (`sentinel/audit/chain.py`): an edited or
-   deleted line is found at that line. Removing lines from the end leaves a
-   shorter chain that still verifies. The plan is to anchor the chain's head
-   outside the file.
+3. **Truncating the newest AI-audit lines while the node is down is
+   undetectable (AU-9).** The AI audit log is hash-chained
+   (`sentinel/audit/chain.py`): an edited or deleted line is found at that
+   line, and so is a truncation made while the node runs, because
+   verification holds the file against the hashes the process has seen.
+   Removing lines from the end while the node is stopped leaves a shorter
+   chain that still verifies after a restart. The plan is to anchor the
+   chain's head outside the file.
+
+4. **Annotations are not signed (SC-8).** ADR-005 signs the decision log
+   (decisions, notes and RESOLUTION entries), not the annotation registers
+   (triage status, assignee, note). A register carries its causal context
+   and no signature, so anyone who can reach `ops.<hub_id>.exchange` can
+   erase or overwrite an annotation at the hub by sending a register that
+   claims to have seen the write
+   (`tests/test_ops_hostile_peer.py::test_an_untrusted_peer_cannot_erase_an_annotation`,
+   a strict xfail). The hub then passes the change to every edge as an
+   ordinary overwrite. Decision-log entries are not affected. Until
+   registers are signed or the leaf link authenticates its peers (gap 2),
+   treat annotations as advisory and read the decision log for what was
+   decided.
 
 `docs/compliance.md` ("The largest gaps") and the POA&M list the rest.

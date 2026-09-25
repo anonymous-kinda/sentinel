@@ -31,7 +31,10 @@ info:
       `cdm.accepted` would see the hub's events before they had been fetched
       and verified. Each carries `Sentinel-Kind` equal to its kind, and the
       console's server-sent event stream (`GET /api/stream`) re-emits it under
-      that name.
+      that name. A stream subscriber that falls 256 events behind is never
+      dropped from silently: the node logs "Stream subscriber overflowed" and
+      closes that stream, and the console reconnects and re-reads everything
+      when its stream opens.
     - **Cross-node request/reply**, served by the hub: the priority pull of
       reference data and the operator-data exchange (docs/icd/sync-envelope.md).
       A request goes edge to hub; its reply comes back on the requester's NATS

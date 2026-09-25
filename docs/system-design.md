@@ -160,7 +160,7 @@ State-based rather than operation-based CRDTs, because state-based merge tolerat
   - convergence;
   - no lost or duplicated entries;
   - every write is either visible or was overwritten by someone who had seen it.
-- *Integrity:* a tampered entry is rejected, and a reused dot with different content raises.
+- *Integrity:* a tampered entry is rejected, including one that reuses a held dot; a validly signed entry that reuses a dot with different content raises. Each distinct rejection is recorded once (the newest 1,000 are kept).
 - *DENIED and INTERMITTENT scenarios:* both confirm the same properties across real processes.
 
 **Rejected.**
@@ -243,7 +243,7 @@ Its documented weaknesses are arithmetic, dates and prompt injection, and each i
 1. fetch the manifest, skipped if its digest is unchanged;
 2. take the set difference against local records;
 3. fetch in triage order;
-4. re-assess each CDM locally and compare its inputs hash with what the hub asserted.
+4. re-assess each CDM locally and compare the result with what the hub asserted: the inputs hash and every result the summary carries (method, band, worst-case band, Pc, max Pc, dilution flag, miss distance, relative speed).
 
 An event stays HUB-ASSERTED until that comparison passes (VERIFIED), and any disagreement is flagged MISMATCH.
 

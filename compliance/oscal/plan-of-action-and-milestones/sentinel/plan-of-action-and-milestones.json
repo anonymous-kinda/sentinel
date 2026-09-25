@@ -1,9 +1,9 @@
 {
   "plan-of-action-and-milestones": {
-    "uuid": "4a79b747-c9dc-59c3-91ec-231a53ee48e6",
+    "uuid": "1bea4d35-2e87-5a6f-b206-91ca75558fae",
     "metadata": {
       "title": "Sentinel plan of action and milestones",
-      "last-modified": "2026-09-24T22:45:06Z",
+      "last-modified": "2026-09-25T03:54:22Z",
       "version": "0.3.0",
       "oscal-version": "1.2.1"
     },
@@ -199,7 +199,7 @@
         "uuid": "c79ae38c-690a-5e04-9b96-4af83522d0b7",
         "title": "AU-9 (Sentinel node software): partial",
         "description": "Anchor the AI audit chain's head outside the file (in the signed decision log, or at the hub on reconnect) so truncation is detectable, and alert on a failed verification.",
-        "statement": "Stated in the SSP as partial: The AI audit log is hash-chained: editing or deleting a line is detected at that line. Decision-log entries are Ed25519-signed and hash-chained per node; a tampered entry is rejected before merge, and a replica that sees one dot with two different contents stops rather than choose. A decision made offline at an edge arrives at the hub with a valid signature. Truncating the newest lines of the AI audit log leaves a shorter chain that still verifies.",
+        "statement": "Stated in the SSP as partial: The AI audit log is hash-chained: editing or deleting a line is detected at that line, and verification re-reads the file against the hashes the process has seen, so an edit, deletion or truncation made while the node runs is found. A line torn by a power cut breaks the chain there without stopping the node. Decision-log entries are Ed25519-signed and hash-chained per node; a tampered entry is rejected before merge, including an unsigned forgery that reuses a dot, and a replica that sees one dot with two different, validly signed contents stops rather than choose. A decision made offline at an edge arrives at the hub with a valid signature. Truncating the newest lines of the AI audit log while the node is down leaves a shorter chain that still verifies.",
         "status": "open",
         "remediations": [
           {
@@ -499,7 +499,7 @@
         "uuid": "89aa9f52-f5b9-5943-beda-033581400574",
         "title": "SC-8 (Node message bus (nats-server)): planned",
         "description": "Configure leafnode mTLS with per-node certificates, and measure the handshake on the LIMITED link profile before relying on it (the harness has already shown the default leaf timeouts are too short for a thin link).",
-        "statement": "Stated in the SSP as planned: The leafnode link between an edge and its hub is not encrypted: the configuration templates leave a place for TLS (LEAF_TLS, REMOTE_TLS) but none is configured, and the harness runs the link in the clear over loopback.",
+        "statement": "Stated in the SSP as planned: The leafnode link between an edge and its hub is not encrypted: the configuration templates leave a place for TLS (LEAF_TLS, REMOTE_TLS) but none is configured, and the harness runs the link in the clear over loopback. An unauthenticated peer on that link can also push annotation registers, which are unsigned (ADR-005 signs only the decision log), and erase or overwrite a triage status, assignee or note.",
         "status": "open",
         "remediations": [
           {

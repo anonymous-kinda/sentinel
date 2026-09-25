@@ -124,13 +124,18 @@ def build_encounter_plane(
     dt_s = linear_tca_adjustment_s(rel0) if refine_tca else 0.0
     rel = refine_to_tca(rel0, dt_s)
 
-    cov_eci = combined_covariance_eci_m2(conjunction)
     x_hat, y_hat, z_hat = encounter_plane_basis(rel.position_m, rel.velocity_m_s)
     basis = np.vstack([x_hat, y_hat, z_hat])
     projection = basis[:2]
 
-    cov_2d = projection @ cov_eci @ projection.T
-    cov_2d = 0.5 * (cov_2d + cov_2d.T)
+    # A variance near the float64 limit overflows here (and inf * 0 in the
+    # projection makes NaN). That is data, not a fault: the matrix comes out
+    # non-finite, finite_eigenvalues rejects it, and every caller refuses.
+    # Silence the warning, keep the value.
+    with np.errstate(over="ignore", invalid="ignore"):
+        cov_eci = combined_covariance_eci_m2(conjunction)
+        cov_2d = projection @ cov_eci @ projection.T
+        cov_2d = 0.5 * (cov_2d + cov_2d.T)
     mu = projection @ rel.position_m
 
     return EncounterPlane(

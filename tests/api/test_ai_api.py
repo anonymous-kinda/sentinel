@@ -80,6 +80,30 @@ def test_the_audit_chain_is_served_persisted_and_verifies(client, tmp_path):
     assert (tmp_path / "ai-audit.jsonl").read_text().count("\n") == len(audit)
 
 
+def test_a_torn_audit_line_breaks_the_chain_not_the_node(tmp_path, caplog):
+    """A power cut mid-write leaves a line with no end. The node still starts,
+    the assistant still answers and records, and the chain reports the break."""
+    (tmp_path / "ai-audit.jsonl").write_bytes(b'{"at":"2026-09-23T12:00:00+00:00","author":"op1","kind":"a')
+    c = node(tmp_path)
+    try:
+        assert c.get("/api/health").status_code == 200
+        assert c.get("/api/ai/audit/verify").json() == {"ok": False, "count": 1, "first_bad": 0}
+        assert c.post("/api/ai/ask", json={"text": "/link"}, headers=OP1).json()["status"] == "answered"
+        assert [e["question"] for e in c.get("/api/ai/audit").json()] == ["/link"]
+        assert c.get("/api/ai/audit/verify").json() == {"ok": False, "count": 2, "first_bad": 0}
+    finally:
+        c.__exit__(None, None, None)
+    assert any(r.getMessage() == "Audit chain broken" for r in caplog.records)
+
+
+def test_an_audit_line_edited_while_the_node_runs_is_found(client, tmp_path):
+    for text in ("/link", "/events", "/queue"):
+        client.post("/api/ai/ask", json={"text": text}, headers=OP1)
+    path = tmp_path / "ai-audit.jsonl"
+    path.write_text(path.read_text().replace('"/events"', '"/events red"'))
+    assert client.get("/api/ai/audit/verify").json() == {"ok": False, "count": 3, "first_bad": 1}
+
+
 @pytest.mark.parametrize("body", [{"text": ""}, {"text": "x" * 2001}, {}])
 def test_empty_or_oversized_questions_are_rejected(client, body):
     assert client.post("/api/ai/ask", json=body).status_code == 422
@@ -97,6 +121,21 @@ def test_a_read_only_node_answers_but_never_records(tmp_path):
     a = c.post("/api/ai/ask", json={"text": "/events"}).json()
     assert a["status"] == "answered"
     assert c.post("/api/ai/confirm", json={"draft_id": "anything"}).status_code == 403
+
+
+def test_a_read_only_node_offers_no_draft_it_could_never_confirm(tmp_path):
+    c = node(tmp_path, read_only=True)
+    a = c.post("/api/ai/ask", json={"text": "/draft 118 monitor"}).json()
+    assert a["status"] == "clarify" and a["draft_id"] is None
+    assert "read-only" in a["text"]
+
+
+def test_confirming_an_evicted_draft_is_404_unknown_draft(client):
+    client.app.state.node.extensions["ai"].max_drafts = 1
+    first, second = (client.post("/api/ai/ask", json={"text": "/draft 118 monitor"}, headers=OP1).json() for _ in range(2))
+    r = client.post("/api/ai/confirm", json={"draft_id": first["draft_id"]}, headers=OP2)
+    assert r.status_code == 404 and r.json()["detail"] == "unknown_draft"
+    assert client.post("/api/ai/confirm", json={"draft_id": second["draft_id"]}, headers=OP2).status_code == 201
 
 
 def test_hosted_providers_are_used_only_with_opt_in(tmp_path, monkeypatch):

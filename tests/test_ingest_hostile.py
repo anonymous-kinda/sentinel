@@ -62,7 +62,25 @@ def _state(position_km: tuple[float, float, float], velocity_km_s: tuple[float, 
     return text
 
 
+POSITION_COVARIANCE = ("CR_R", "CT_R", "CT_T", "CN_R", "CN_T", "CN_N")
+
+
+def _scaled_covariance(factor: float, text: str = BASE) -> str:
+    """Both objects' position covariances times `factor`, units kept."""
+    lines = []
+    for line in text.splitlines():
+        key, _, rest = line.partition("=")
+        if key.strip() in POSITION_COVARIANCE:
+            value, _, unit = rest.strip().partition(" ")
+            line = f"{key.strip()} = {float(value) * factor!r} {unit}".rstrip()
+        lines.append(line)
+    return "\n".join(lines) + "\n"
+
+
 HOSTILE = {
+    # Admitted, and refused by the engine (UNRESOLVED_INTEGRAL): a sigma so
+    # far below the hard-body radius that the integral cannot be resolved.
+    "covariance-too-small-to-integrate": _scaled_covariance(1e-36),
     "originator-pc-not-a-number": _mutate("COLLISION_PROBABILITY", "abc"),
     "originator-pc-nan": _mutate("COLLISION_PROBABILITY", "NaN"),
     "originator-pc-infinite": _mutate("COLLISION_PROBABILITY", "inf"),
@@ -226,3 +244,11 @@ def test_an_event_whose_arcs_cannot_be_drawn_answers_422_not_500(tmp_path):
         r = client.get(f"/api/events/{accepted.json()['event_id']}/trajectory")
     assert r.status_code == 422
     assert r.json()["detail"] == "the two-body arcs cannot be drawn for this event"
+
+
+def test_a_covariance_too_small_to_integrate_is_refused_by_name_and_draws_no_curve():
+    service = _service()
+    _ingest(service, HOSTILE["covariance-too-small-to-integrate"])
+    [event] = service.list_events("all")
+    assert event["assessment"]["refusal_reason"] == "UNRESOLVED_INTEGRAL"
+    assert service.dilution_curve(event["event_id"]) is None
