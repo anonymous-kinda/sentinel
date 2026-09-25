@@ -1,7 +1,7 @@
 # Sentinel node. Installed by install.sh with @PREFIX@ substituted.
 [Unit]
 Description=Sentinel conjunction assessment node
-Documentation=https://github.com/
+Documentation=https://github.com/OWNER/sentinel/blob/main/docs/install-guide.md
 After=network-online.target
 Wants=network-online.target
 

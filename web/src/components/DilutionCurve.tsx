@@ -17,11 +17,21 @@ export function interpolatePc(curve: Curve, log10k: number): number | null {
   return Math.pow(10, Math.log10(a) + t * (Math.log10(b) - Math.log10(a)));
 }
 
+/** The curve's samples are a Pc only when the node says the 2D model
+ *  applies. For an event the engine refused on a gate the geometry passed
+ *  (curvilinear uncertainty, low relative velocity), the node still serves
+ *  the curve, and its numbers are not a result. A reply without the flag
+ *  states no Pc either. */
+const modelApplies = (curve: Curve): boolean => curve.model_applies === true;
+
 /**
  * Pc as a function of covariance scale k (log-log), from the same
  * integrator the engine uses. The operating point is k = 1. Right of the
  * peak k* lies the dilution region: there, more uncertainty lowers Pc, so
  * a low number may reflect ignorance rather than safety.
+ *
+ * When the model does not apply, the curve is drawn as shape alone: no Pc
+ * axis, no Pc in the caption, and a label saying the Pc is refused.
  */
 export function DilutionCurve({
   curve,
@@ -35,9 +45,11 @@ export function DilutionCurve({
   if (!curve.log10_k || !curve.pc || curve.k_star === undefined || curve.pc_max === undefined) {
     return <div className="plot-empty">No Pc curve: the engine refused this event, or there is no covariance.</div>;
   }
+  const applies = modelApplies(curve);
   const W = 320;
   const H = 200;
-  const pad = { l: 44, r: 10, t: 14, b: 30 };
+  // A shape-only plot keeps a top margin for its label, clear of the peak.
+  const pad = { l: 44, r: 10, t: applies ? 14 : 28, b: 30 };
   const xs = curve.log10_k;
   const floor = Math.max(curve.pc_max * 1e-10, 1e-300);
   const ys = curve.pc.map((p) => Math.log10(Math.max(p, floor)));
@@ -50,22 +62,36 @@ export function DilutionCurve({
 
   const path = xs.map((x, i) => `${i ? "L" : "M"}${X(x).toFixed(1)},${Y(ys[i]).toFixed(1)}`).join("");
   const lkStar = Math.log10(curve.k_star);
-  const pcAtSlider = interpolatePc(curve, log10k);
   const operatingY = Math.log10(Math.max(curve.pc_at_k1 ?? floor, floor));
 
   const ticksX = [];
   for (let t = Math.ceil(x0); t <= Math.floor(x1); t++) ticksX.push(t);
   const ticksY = [];
-  for (let t = Math.ceil(yMin); t <= Math.floor(yMax); t += Math.max(1, Math.round((yMax - yMin) / 4))) ticksY.push(t);
+  if (applies) {
+    for (let t = Math.ceil(yMin); t <= Math.floor(yMax); t += Math.max(1, Math.round((yMax - yMin) / 4))) ticksY.push(t);
+  }
 
   return (
     <figure className="plot">
-      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Collision probability versus covariance scale factor">
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        role="img"
+        aria-label={
+          applies
+            ? "Collision probability versus covariance scale factor"
+            : "Shape of the collision-probability integral versus covariance scale factor; the model does not apply, so no Pc is stated"
+        }
+      >
         <rect x="0" y="0" width={W} height={H} className="plot-bg" />
         <rect x={X(lkStar)} y={pad.t} width={X(x1) - X(lkStar)} height={H - pad.t - pad.b} className="dilution-region" />
         <text x={X(x1) - 4} y={H - pad.b - 6} className="plot-label plot-label-dil" textAnchor="end">
           dilution region →
         </text>
+        {!applies && (
+          <text x={pad.l} y={pad.t - 10} className="plot-label">
+            shape only · Pc refused
+          </text>
+        )}
         {ticksX.map((t) => (
           <g key={`x${t}`}>
             <line x1={X(t)} y1={H - pad.b} x2={X(t)} y2={H - pad.b + 3} className="axis" />
@@ -102,15 +128,48 @@ export function DilutionCurve({
         onChange={(e) => onChange(Number(e.target.value))}
         aria-label="Covariance scale factor, log10"
       />
-      <figcaption>
-        <span className="legend-op">●</span> k=1 Pc {curve.pc_at_k1 !== undefined ? sci(curve.pc_at_k1) : "-"} ·{" "}
-        <span className="legend-peak">●</span> peak k*={curve.k_star.toPrecision(3)} Pc {sci(curve.pc_max)}
-        {pcAtSlider !== null && (
-          <>
-            {" "}· slider Pc≈{sciPlain(pcAtSlider)} <span className="muted">(interpolated)</span>
-          </>
-        )}
-      </figcaption>
+      {applies ? (
+        <PcCaption pcAtK1={curve.pc_at_k1} kStar={curve.k_star} pcMax={curve.pc_max} pcAtSlider={interpolatePc(curve, log10k)} />
+      ) : (
+        <ShapeOnlyCaption kStar={curve.k_star} />
+      )}
     </figure>
+  );
+}
+
+/** The engine's Pc at the operating point, at the peak and at the slider. */
+function PcCaption({
+  pcAtK1,
+  kStar,
+  pcMax,
+  pcAtSlider,
+}: {
+  pcAtK1: number | undefined;
+  kStar: number;
+  pcMax: number;
+  pcAtSlider: number | null;
+}) {
+  return (
+    <figcaption>
+      <span className="legend-op">●</span> k=1 Pc {pcAtK1 !== undefined ? sci(pcAtK1) : "-"} ·{" "}
+      <span className="legend-peak">●</span> peak k*={kStar.toPrecision(3)} Pc {sci(pcMax)}
+      {pcAtSlider !== null && (
+        <>
+          {" "}· slider Pc≈{sciPlain(pcAtSlider)} <span className="muted">(interpolated)</span>
+        </>
+      )}
+    </figcaption>
+  );
+}
+
+/** A refused event's curve: where the operating point sits against the
+ *  peak, and no number that reads as a Pc. */
+function ShapeOnlyCaption({ kStar }: { kStar: number }) {
+  return (
+    <figcaption>
+      <b>Pc refused: the 2D model does not apply to this encounter.</b> The curve shows only the shape of the integral
+      against covariance scale (<span className="legend-op">●</span> k=1, <span className="legend-peak">●</span> peak
+      k*={kStar.toPrecision(3)}), not a probability.
+    </figcaption>
   );
 }

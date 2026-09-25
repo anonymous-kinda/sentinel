@@ -16,6 +16,7 @@ import dataclasses
 import importlib
 import os
 import pathlib
+from collections.abc import Callable
 
 from fastapi import FastAPI, HTTPException, Request
 
@@ -58,6 +59,18 @@ def _link_state(node) -> tuple:
     return (lambda: "CONNECTED"), f"assumed: no upstream link on a {node.settings.role} node"
 
 
+def _unit_position(node) -> Callable[[], tuple[float, float] | None]:
+    """Read-only: the (lat, lon) of the unit the pass module holds, if any.
+    Looked up per question, because the pass module registers after this one
+    and its unit changes while the node runs. Nothing here stores or logs it."""
+
+    def position() -> tuple[float, float] | None:
+        unit = getattr(node.extensions.get("passes"), "unit", None)
+        return None if unit is None else (unit.lat_deg, unit.lon_deg)
+
+    return position
+
+
 def _question(body) -> str:
     text = str(body.get("text") or "").strip() if isinstance(body, dict) else ""
     if not 0 < len(text) <= MAX_QUESTION_CHARS:
@@ -95,6 +108,7 @@ def register(app: FastAPI, node) -> None:
         jev=jev,
         llm=llm,
         read_only=settings.read_only,
+        unit_position=_unit_position(node),
     )
     node.extensions["ai"] = assistant
     node.extensions.setdefault("modules", []).append("ai")
@@ -145,8 +159,10 @@ def register(app: FastAPI, node) -> None:
     async def ai_confirm(request: Request) -> dict:
         """The operator confirms a draft once; it becomes a signed DECISION. The node holds
         the 100 newest unconfirmed drafts. 404 `unknown_draft` for a draft it does not hold
-        (never made, already confirmed, or forgotten after 100 newer ones), 409 when the
-        event's CDM changed since the draft (stale), 403 on a read-only node."""
+        (never made, already confirmed or refused, or forgotten after 100 newer ones), 409 when
+        the event's CDM changed since the draft (stale: the draft is spent, so redraft), 403 on
+        a read-only node. Every attempt the assistant receives, refused or failed, is a line in
+        the audit record."""
         body = await json_object(request)
         try:
             return await assistant.confirm(

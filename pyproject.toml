@@ -68,7 +68,6 @@ markers = [
     "tier4: max Pc and dilution",
     "tier5: refusal gates",
     "tier6: output contract",
-    "req(id): links a test to a requirement in mbse/requirements.sysml",
 ]
 
 [tool.ruff]

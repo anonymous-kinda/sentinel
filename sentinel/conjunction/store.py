@@ -1,10 +1,11 @@
 """SQLite projection of received CDMs and their assessments.
 
 The raw CDM bytes are the source of truth. Everything else in this store -
-event grouping, assessments - is derived from them and can be rebuilt by
-replaying the raw messages (`rebuild`). An assessment is cached per engine
-version, so upgrading the engine re-assesses rather than trusting numbers
-an older engine produced.
+event grouping, assessments - is derived from them, so it could be rebuilt
+by replaying the raw messages. No rebuild is implemented: `clear_derived`
+drops the derived tables, and nothing calls it. An assessment is cached
+per engine version, so upgrading the engine re-assesses rather than
+trusting numbers an older engine produced.
 """
 
 from __future__ import annotations
@@ -254,7 +255,8 @@ class ConjunctionStore:
         return None if r is None else self._cdm(r)
 
     def clear_derived(self) -> None:
-        """Drop everything derivable from raw messages (for rebuild)."""
+        """Drop everything derivable from raw messages. Unused: no code
+        replays the raw messages afterwards (see the module docstring)."""
         with self._lock:
             self._db.executescript("DELETE FROM events; DELETE FROM assessments;")
             self.version += 1

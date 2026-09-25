@@ -127,7 +127,7 @@ CARA publishes expected values for real conjunctions, including its own judgemen
 
 ### ADR-004 — Modular monolith with an internal event bus
 
-**Buys.** A node deploys to an air-gapped edge as one signed bundle, and it needs nothing beyond its own host to serve its operator. The DENIED scenario measures this: 3.2 ms p95 console latency while the link is cut. Module boundaries are enforced in CI by import-linter, not left to convention.
+**Buys.** A node deploys to an air-gapped edge as one signed bundle, and it needs nothing beyond its own host to serve its operator. The DENIED scenario measures this: 18.9 ms p95 console latency while the link is cut. Module boundaries are enforced in CI by import-linter, not left to convention.
 
 **Costs.** It is less "cloud-native" on paper: the modules of a node scale and deploy together, not one by one.
 
@@ -157,7 +157,7 @@ JetStream is **not** used for replication. Priority is a mission concept that a 
 
 ### ADR-005 — State-based CRDTs for operator-generated data
 
-**Buys.** Decisions made offline merge without loss, and concurrent edits show as a CONFLICT instead of one silently winning. Measured on real processes: operator data converged in 1.37 s after reconnect, and over a link that dropped 8 times, 24 notes were written and 24 arrived on each node.
+**Buys.** Decisions made offline merge without loss, and concurrent edits show as a CONFLICT instead of one silently winning. Measured on real processes: operator data converged in 2.65 s after reconnect, and over a link that dropped 8 times, 24 notes were written and 24 arrived on each node.
 
 **Costs.** Complexity: dots, causal contexts, signatures and anti-entropy to maintain. The trust model is also only half applied: the decision log is signed, the annotation registers are not (see "Gap, stated" below).
 
@@ -183,7 +183,7 @@ State-based rather than operation-based CRDTs, because state-based merge tolerat
 - *Integrity:* a tampered entry is rejected, including one that reuses a held dot; a validly signed entry that reuses a dot with different content raises. Each distinct rejection is recorded once (the newest 1,000 are kept).
 - *DENIED and INTERMITTENT scenarios:* both confirm the same properties across real processes.
 
-**Gap, stated: annotations are not signed.** Signatures cover the decision log (decisions, notes and RESOLUTION entries), not the registers (triage status, assignee, note). A register carries its causal context and no signature. So a peer that can reach `ops.<hub_id>.exchange` can erase or overwrite an annotation at the hub by claiming to have seen the write, and the hub passes the change to every edge as an ordinary overwrite. `tests/test_ops_hostile_peer.py::test_an_untrusted_peer_cannot_erase_an_annotation` records this as a strict xfail, and `SECURITY.md` lists it as gap 4. Closing it is a design change to record here: sign the registers, or authenticate peers on the leaf link (`SECURITY.md` gap 2). Until then, the decision log is the record of what was decided.
+**Gap, stated: annotations are not signed.** Signatures cover the decision log (decisions, notes and RESOLUTION entries), not the registers (triage status, assignee, note). A register carries its causal context and no signature. So a peer that can reach `ops.<hub_id>.exchange` can erase or overwrite an annotation at the hub by claiming to have seen the write, and the hub passes the change to every edge as an ordinary overwrite. `tests/test_ops_hostile_peer.py::test_an_untrusted_peer_cannot_erase_an_annotation` records this as a strict xfail, and `SECURITY.md` lists it as gap 4. Closing it takes two design changes, in this order, each to be recorded here: mutual TLS on the leaf link (`SECURITY.md` gap 2) keeps unenrolled peers off the exchange; signed registers then stop an enrolled but compromised edge from overwriting a register it did not write. Until then, the decision log is the record of what was decided.
 
 **Rejected.**
 - *Last-write-wins on a timestamp:* silently destroys an operator's work.
@@ -194,7 +194,7 @@ State-based rather than operation-based CRDTs, because state-based merge tolerat
 
 ### ADR-006 — Bandwidth triage by decision urgency
 
-**Buys.** On a thin link, the event due soonest crosses first. Its full CDM arrived 15.0× sooner than in arrival order, while the whole backlog took about the same time either way (150.9 s against 149.0 s, medians of 5 runs per mode). The ordering costs almost nothing.
+**Buys.** On a thin link, the event due soonest crosses first. Its full CDM arrived 14.8× sooner than in arrival order, while the whole backlog took about the same time either way (151.0 s against 149.3 s, medians of 5 runs per mode). The ordering costs almost nothing.
 
 **Costs.** Summaries spend link time before any full record, and an event whose CDM cannot arrive before its deadline at the measured rate is held SUMMARY-ONLY. The order is only as good as the deadline and consequence the mission module assigns, and the commit point is an operator assumption.
 
@@ -207,11 +207,11 @@ State-based rather than operation-based CRDTs, because state-based merge tolerat
 
 **Rationale.** Every system claims to prioritise; the question is by what. Ordering by how soon someone has to act, and how badly, is an answer that encodes the mission. Earliest-deadline-first is optimal on a single resource when a feasible schedule exists (Liu & Layland, 1973).
 
-**Answer to the open question.** Summaries measure **≤ 256 bytes** each, asserted in `tests/sync`. At about 8 kbit/s, every event was visible as a summary within 6.5 s, the median of 5 runs (`docs/ddil-results.md`), with the imaging catalog's element-set summaries sharing the manifest.
+**Answer to the open question.** Summaries measure **≤ 256 bytes** each, asserted in `tests/sync`. At about 8 kbit/s, every event was visible as a summary within 6.2 s, the median of 5 runs (`docs/ddil-results.md`), with the imaging catalog's element-set summaries sharing the manifest.
 
 Admission control handles the case where the full record can't make it in time. If the link rate measured by the agent cannot deliver a full CDM before its deadline, the event is marked SUMMARY-ONLY rather than spending the link on it. At the bottom of the ladder a summary renders as one voice-readable line.
 
-**Measured.** Same link, same bytes, the same 51 records (13 CDMs and 38 element sets): the most urgent event's full CDM arrives in **9.1 s with EDF vs 136.9 s with FIFO**, medians of 5 runs per mode (`docs/ddil-results.md`, generated, with every run and its range). Over one link, the same bytes take the same time in any order: the order decides which record lands first, not when the last one does.
+**Measured.** Same link, same bytes, the same 51 records (13 CDMs and 38 element sets): the most urgent event's full CDM arrives in **9.3 s with EDF vs 137.4 s with FIFO**, medians of 5 runs per mode (`docs/ddil-results.md`, generated, with every run and its range). Over one link, the same bytes take the same time in any order: the order decides which record lands first, not when the last one does.
 
 **How the comparison is kept fair.** An earlier single run reported FIFO verifying every event sooner than EDF, with a link-rate reading many times higher under FIFO. The two modes had not run on equal links. In some runs the element sets crossed before the harness shaped the link. NATS also picked the hub's compression from a round trip measured before shaping, so in some runs every CDM crossed uncompressed and took far longer. Now every run starts with the backlog waiting at the hub and the link down, and the leaf connects over the shaped link. Before comparing medians, the scenario checks each run's toxics, the compression on both sides, and the records it moved.
 
@@ -235,12 +235,12 @@ Admission control handles the case where the full record can't make it in time. 
 
 The guards, each enforced in code and tested:
 
-1. **Tier policy** (`sentinel/ai/policy.py`) is a pure function of the *measured* link state, the classification marking and operator opt-in (`SENTINEL_AI_CLOUD`). Hosted AI needs an UNCLASSIFIED marking and opt-in. Jev may run on CONNECTED, DEGRADED and LIMITED links, because its answer is a few probabilities. Claude runs only on CONNECTED and DEGRADED links, because prose is kilobytes. DENIED means local only. A hosted call gets one attempt with no retries, and any failure (authentication, rate limit, server error, unreachable, timeout, refusal) falls back to the local tier within the same answer. The answer says that it fell back.
-2. **Confidence gate.** Below 0.5, or when an event tool has no event, the assistant asks back with the top alternatives instead of acting.
-3. **Number-grounding guard.** Every number in an AI-written answer must match, at the precision it is stated, a number in the tool results or in the operator's question. Otherwise the answer is withheld, the template answer is shown instead, and the unsupported numbers are named. Numbers attached to units ("10.9h", "240700Z") are checked too.
+1. **Tier policy** (`sentinel/ai/policy.py`) is a pure function of the *measured* link state, the classification marking and operator opt-in (`SENTINEL_AI_CLOUD`). Hosted AI needs exactly an allow-listed marking, `UNCLASSIFIED` or `UNCLASSIFIED // EXERCISE` (case and the spacing around `//` aside), and opt-in. A caveat such as `UNCLASSIFIED//CUI` limits who may receive the text, and a hosted service is a recipient no caveat names, so it keeps the assistant local. A question that holds a position (the held unit's coordinates, or MGRS, degree or hemisphere notation) is routed and phrased on the node (ADR-010, `sentinel/ai/opsec.py`). Jev may run on CONNECTED, DEGRADED and LIMITED links, because its answer is a few probabilities. Claude runs only on CONNECTED and DEGRADED links, because prose is kilobytes. DENIED means local only. A hosted call gets one attempt with no retries, and any failure (authentication, rate limit, server error, unreachable, timeout, refusal) falls back to the local tier within the same answer. The answer says that it fell back.
+2. **Confidence gate.** When the tool choice, or for an event tool the event choice, is below 0.5 confident, or an event tool has no event, the assistant asks back with the top alternatives instead of acting.
+3. **Number-grounding guard.** Every number in an AI-written answer must match, at the precision it is stated, a number in the tool results or in the operator's question. Otherwise the answer is withheld, the template answer is shown instead, and the unsupported numbers are named. Numbers attached to units ("10.9h", "240700Z") are checked too. A number inside an identifier (an event, object or message id, or a hash) grounds nothing; an identifier grounds only a whole mention of itself.
 4. **Writes are drafts.** A person confirms a draft, and it becomes a signed DECISION carrying its provenance: router, confidence, model and audit sequence. Confirmation is refused if the CDM the draft was made against has been superseded since.
-5. **Audit.** Every ask and every confirm is one line of a hash-chained log (`GET /api/ai/audit/verify`).
-6. **Enforced in CI, not asserted.** `.importlinter` forbids `sentinel.ai` from importing `risk`, `cdm`, numpy or scipy, so the model has no path to the maths. It also confines the hosted SDKs to their two adapter modules. An air-gapped bundle without the `ai` extra serves the local tier.
+5. **Audit.** Every ask and every confirm, refused and failed ones included, is one line of a hash-chained log (`GET /api/ai/audit/verify`); a refused confirm is also logged as `AI draft confirm refused`.
+6. **Enforced in CI, not asserted.** `.importlinter` forbids `sentinel.ai` from importing `risk`, `cdm`, numpy or scipy, so the model has no path to the maths. It also confines the hosted SDKs to their two adapter modules; the contract lists every other `sentinel.ai` module, and `tests/ai/test_contracts.py` fails when one is left off. An air-gapped bundle without the `ai` extra serves the local tier.
 
 **Why Jev as System One.** Routing is classification over a closed set, and Jev's interface is exactly that. It answers declared questions with a probability for every option, and it cannot answer outside them. That gives three properties the assistant needs:
 - a calibrated confidence, which makes the ask-back gate principled;
@@ -267,7 +267,7 @@ Its documented weaknesses are arithmetic, dates and prompt injection, and each i
 
 ### ADR-008 — Reference data: application-level priority pull, not transport replication
 
-**Buys.** The urgent record first, and numbers the edge has checked rather than trusted. A stream mirror delivers in FIFO order, which the LIMITED scenario measures at 15.0× slower for the record that matters, as a ratio of medians over 5 runs per mode. And an event is VERIFIED only when the edge's own engine has reproduced the hub's result, field by field.
+**Buys.** The urgent record first, and numbers the edge has checked rather than trusted. A stream mirror delivers in FIFO order, which the LIMITED scenario measures at 14.8× slower for the record that matters, as a ratio of medians over 5 runs per mode. And an event is VERIFIED only when the edge's own engine has reproduced the hub's result, field by field.
 
 **Costs.** A sync protocol of our own where JetStream is off the shelf, so it needs its own hostile-input tests. A review found real bugs there, now fixed: the edge admitted fetched bytes without checking them against what the manifest announced, and one unreadable record blocked every record behind it (`tests/sync/test_hostile_hub.py`). Each record also costs a round trip, so reference data competes with urgent CDMs on a thin link (below).
 
@@ -291,7 +291,7 @@ An event stays HUB-ASSERTED until that comparison passes (VERIFIED), and any dis
 
 A hub therefore offers edges only what their missions use: the 38-set imaging catalog (`SENTINEL_SYNC_ELEMENTS=catalog`; `all` to widen). It still holds everything for its own screening.
 
-Even that costs something. Every event summary arrived at 6.5 s (the median of 5 runs), not sooner, because 38 more summaries ride in the manifest, and the urgent record followed. In FIFO order the cost is larger: the element sets are older than the new CDMs, so they queue ahead of the urgent record along with the superseded CDMs. Two sync changes would remove the cost: batched fetch, and a reference-data class below routine CDMs. They are open question 6, not done, so the generated DDIL numbers describe the code as it is.
+Even that costs something. Every event summary arrived at 6.2 s (the median of 5 runs), not sooner, because 38 more summaries ride in the manifest, and the urgent record followed. In FIFO order the cost is larger: the element sets are older than the new CDMs, so they queue ahead of the urgent record along with the superseded CDMs. Two sync changes would remove the cost: batched fetch, and a reference-data class below routine CDMs. They are open question 6, not done, so the generated DDIL numbers describe the code as it is.
 
 ---
 
@@ -324,13 +324,13 @@ The real-process harness surfaced four defaults that would have failed a satelli
 | Leaf authentication timeout 2 s | The handshake could not complete over the thin link. | `authorization { timeout: 30 }` |
 | Ping interval 2 min | A black-holed link took minutes to detect. | `ping_interval: 5s`, `ping_max: 3` |
 
-The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and third fixes were in. It now re-establishes the leaf in 10.5 s.
+The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and third fixes were in. It now re-establishes the leaf in 5.5 s.
 
 ---
 
 ### ADR-010 — OPSEC as architecture: a unit's position never leaves its edge node
 
-**Buys.** A ground unit learns when catalogued public imagers can see it, and its position cannot leak through the sync path, because it never enters it. On a real hub and edge, none of the 179 messages the hub's server carried held the unit, and all 10 OPSEC checks passed.
+**Buys.** A ground unit learns when catalogued public imagers can see it, and its position cannot leak through the sync path, because it never enters it. On a real hub and edge, none of the 147 messages the hub's server carried held the unit, and all 10 OPSEC checks passed.
 
 **Costs.** Pass planning lives only at the edge, so the hub has no picture of any unit. An aggregate view would need a reviewed release path, and sharing a unit between edges would need its own decision and a cross-domain guard.
 
@@ -341,7 +341,7 @@ The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and t
    - Public element sets flow hub to edge through the unchanged priority agent (ADR-008).
    - Nothing implements the record interface for the unit or its passes.
 2. **Application.** The only message is the node-scoped `node.<id>.passes.updated`, with no id and no coordinates. The unit is never logged, and error messages never echo a submitted value.
-3. **Storage.** One file, `<var>/unit.json`: mode 0600, replaced atomically, never written to SQLite or the audit log.
+3. **Storage.** One file, `<var>/unit.json`: mode 0600, replaced atomically, never written by Sentinel to SQLite or the audit log. A position an operator types into the assistant is recorded with the question in the node-local AI audit file, and is never sent to hosted AI (`sentinel/ai/opsec.py`).
 4. **Transport.** The edge's leafnode denies exporting `unit.>`, `passes.>` and `node.>`. So even an application bug stops at the edge's own nats-server.
 
 **Rationale.** The unit's location is the most sensitive fact in the system, and the hub never needs it: pass prediction runs on public element sets the edge already holds. Computing at the edge removes the flow rather than protecting it. The transport permissions make that enforceable as NIST SP 800-53 AC-4 (information flow enforcement).
@@ -381,7 +381,7 @@ The RECOVERY scenario (DENIED straight to LIMITED) failed until the second and t
 
 `tests/conformance/` holds both to the same contract:
 - the overlap convention;
-- sorted, signed windows;
+- windows sorted by rise, each naming the provider that computed it (its `provider` field);
 - a brute-force Skyfield oracle: rise and set within 2 s, maximum elevation within 0.1°.
 
 Adding a provider is one factory and one line.

@@ -78,12 +78,18 @@ EARLIEST_TCA = dt.datetime(1957, 10, 4, tzinfo=dt.UTC)
 # ("Physical bounds") gives the reasoning.
 # The closest the surface comes to the centre: inside it is underground.
 WGS84_POLAR_RADIUS_KM = 6356.752314245
-# The Earth's Hill sphere: beyond it the Sun's pull wins.
-EARTH_HILL_SPHERE_KM = 1.5e6
+# Twice the distance to the Sun-Earth L1 and L2 points (1.5 million km):
+# spacecraft on halo and Lissajous orbits there, up to about 1.8 million km
+# out, are admitted, while a low-orbit position written in metres (6.4
+# million 'km' and up) is still caught.
+MAX_RADIUS_KM = 3.0e6
 # Above anything bound to the Sun passing the Earth (~73 km/s), far below c.
 MAX_SPEED_KM_S = 100.0
 # A coordinate confined to +/-R has a variance of at most R**2 (Popoviciu).
-MAX_POSITION_VARIANCE_M2 = (EARTH_HILL_SPHERE_KM * 1000.0) ** 2
+MAX_POSITION_VARIANCE_M2 = (MAX_RADIUS_KM * 1000.0) ** 2
+# Below this sine of the angle between r and v, the orbital plane is undefined
+# to double precision.
+MIN_SINE_R_V = 1e-12
 
 
 class CdmRejected(ValueError):
@@ -139,26 +145,39 @@ def _check_plausible_state(position_km: np.ndarray, velocity_km_s: np.ndarray, i
     before it squares, so even a state near the float limit is judged
     without overflowing; past it, the magnitude is inf and fails the bound."""
     radius_km = math.hypot(*position_km)
-    if not WGS84_POLAR_RADIUS_KM <= radius_km <= EARTH_HILL_SPHERE_KM:
+    if not WGS84_POLAR_RADIUS_KM <= radius_km <= MAX_RADIUS_KM:
         raise CdmRejected(
             "IMPLAUSIBLE_STATE",
             f"|r| = {radius_km:.6g} km is not between the Earth's surface "
-            f"({WGS84_POLAR_RADIUS_KM:g} km) and its Hill sphere ({EARTH_HILL_SPHERE_KM:g} km)",
+            f"({WGS84_POLAR_RADIUS_KM:g} km) and the admitted radius ({MAX_RADIUS_KM:g} km)",
             index,
         )
     speed_km_s = math.hypot(*velocity_km_s)
     if speed_km_s > MAX_SPEED_KM_S:
         raise CdmRejected("IMPLAUSIBLE_STATE", f"|v| = {speed_km_s:.6g} km/s exceeds {MAX_SPEED_KM_S:g} km/s", index)
+    # An orbit has angular momentum. With r x v = 0 (no velocity, or velocity
+    # along the position) the RTN frame the covariance is written in does not
+    # exist. The magnitudes are bounded above, so the cross product is finite.
+    if speed_km_s == 0.0 or _sine_of_angle(position_km, velocity_km_s) < MIN_SINE_R_V:
+        raise CdmRejected(
+            "IMPLAUSIBLE_STATE",
+            "position and velocity are parallel or the velocity is zero: no orbital plane, so no RTN frame",
+            index,
+        )
+
+
+def _sine_of_angle(a: np.ndarray, b: np.ndarray) -> float:
+    return float(np.linalg.norm(np.cross(a, b)) / (np.linalg.norm(a) * np.linalg.norm(b)))
 
 
 def _check_plausible_covariance(section: CdmSection, index: int) -> None:
-    """Raise for a position covariance no object inside the Hill sphere can have."""
+    """Raise for a position covariance no object inside the admitted radius can have."""
     for key in POSITION_COVARIANCE_KEYS:
         value = _number(section, key, index)
         if value is not None and abs(value) > MAX_POSITION_VARIANCE_M2:
             raise CdmRejected(
                 "IMPLAUSIBLE_STATE",
-                f"|{key}| = {abs(value):.6g} m**2 exceeds the Hill sphere squared, {MAX_POSITION_VARIANCE_M2:.3g} m**2",
+                f"|{key}| = {abs(value):.6g} m**2 exceeds the admitted radius squared, {MAX_POSITION_VARIANCE_M2:.3g} m**2",
                 index,
             )
 

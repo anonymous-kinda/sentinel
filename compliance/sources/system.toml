@@ -29,7 +29,7 @@ IAM role), and the build and release pipeline that produces the installable bund
 (.github/workflows, scripts/build_bundle.py). Outside the boundary: operators' browsers, GitHub, \
 AWS itself, Let's Encrypt, upstream data sources (Space-Track, CelesTrak, NASA CARA's published \
 files) and the hosted AI services (TypeSafe Jev, Anthropic Claude), which a node reaches only with \
-operator opt-in on an UNCLASSIFIED marking."""
+operator opt-in on an allow-listed UNCLASSIFIED marking with no caveat."""
 network_architecture = """Each node runs the sentinel service on 127.0.0.1:8000 and its own nats-server on \
 127.0.0.1. On the cloud hub, Caddy terminates TLS on 443 (certificates from Let's Encrypt over \
 HTTP-01 on 80) and proxies to the node; SSH (22) is open only to the admin network; the NATS \

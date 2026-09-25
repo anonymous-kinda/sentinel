@@ -88,7 +88,10 @@ def triage(result: AssessedConjunction, tca: dt.datetime, policy: ConjunctionPol
 def triage_key(
     event_id: str, t: Triage, now: dt.datetime, policy: ConjunctionPolicy, full_record: bool
 ) -> TriageKey:
-    """The only thing the sync layer learns about a conjunction."""
+    """Unused: nothing calls it. The sync agent assigns classes itself, from
+    the deadline and consequence a summary carries (SyncAgent._wanted in
+    sentinel/sync/agent.py), by a rule that differs from this one: no record
+    is P0_SUMMARY, and superseded records are P4_BULK."""
     if not full_record:
         klass = PriorityClass.P0_SUMMARY
     elif t.consequence >= Consequence.SERIOUS and (t.mcp - now).total_seconds() <= policy.urgent_window_s:

@@ -41,11 +41,11 @@ When a regenerated report moves a number the prose quotes, the doc guard fails u
 - **Generated files; regenerate them and never hand-edit:** `docs/validation-report.md`, `docs/ddil-results.md`, `docs/ai-eval.md` (with `docs/img/ai-reliability.svg`), `docs/traceability.md`, `deploy/vex/sentinel.openvex.json`, `docs/icd/openapi.json` (`make openapi`) and the OSCAL documents under `compliance/oscal/` (`make compliance`).
 - **Docs are value-first and written for their reader.** The README, `docs/white-paper.md` and `docs/quad-chart.*` speak to an operator or program office: what Sentinel gives them, the evidence, and the limits, stated as plainly as the value. The technical guide, ADRs, ICDs and `CONTRIBUTING.md` speak to engineers. Every ADR opens with what it buys (in operator terms, with its measured number) and what it costs. The AI assistant is presented as a safety pattern, not a headline capability. Sentinel is a demonstrator: claim an architecture proven with measured numbers, never an operational capability.
 - **Docs are checked against the repo** (`tests/test_docs.py`): every path, `make` target and `sentinel` subcommand they name must exist, and every headline number registered in `tests/doc_claims.toml` must match its generated source. When a regenerated report changes a number, update the prose and the registry together.
-- **AI never computes.** The assistant (`sentinel/ai/`) routes to tools and phrases their facts; `.importlinter` forbids it the maths. Hosted AI (Jev, Claude) needs an UNCLASSIFIED marking, operator opt-in and a usable measured link, and every AI answer passes the number-grounding guard. Never publish a Jev number that did not come from a real run.
+- **AI never computes.** The assistant (`sentinel/ai/`) routes to tools and phrases their facts; `.importlinter` forbids it the maths. Hosted AI (Jev, Claude) needs an allow-listed UNCLASSIFIED marking with no caveat (`sentinel/ai/policy.py`), a question that holds no position (`sentinel/ai/opsec.py`), operator opt-in and a usable measured link, and every AI answer passes the number-grounding guard. Never publish a Jev number that did not come from a real run.
 - **The core stays closed to modules.** Adding or changing a mission module never edits `sentinel/sync`, `bus`, `crdt` or `triage`. The proof for M3: the pass module, its service and its API landed with `git diff --stat dd69b7e ac317e6 -- sentinel/sync sentinel/bus sentinel/crdt sentinel/triage` empty. Documentation and checks read the core and its call sites; the core never lists mission names. The core changes only deliberately: a bug fix proven by a failing test, typing or documentation with no behaviour change, or a design change recorded in an ADR.
 - **Types are checked.** `make typecheck` runs mypy strict on `bus`, `crdt`, `sync`, `triage` and `risk`, and standard on the rest (`tests/test_typecheck.py` holds the strict list). Wire data enters as `Mapping[str, Any]`. A `cast` or `# type: ignore` needs an error code and a reason. Modules leave the TODO `ignore_errors` list in `pyproject.toml` when they are fixed; nothing new joins it.
 - **Interfaces are documented where they are checked.** `docs/icd/` holds the OpenAPI, AsyncAPI, CDM-profile and sync-envelope ICDs, each held to the code by `tests/docs/`. A new node-local event kind or bus header needs its channel or message in `docs/icd/asyncapi.yaml`; the test discovers kinds at the `subjects.local` call sites and fails on anything undocumented.
-- **The DDIL report comes from all six scenarios or none.** Regenerate `docs/ddil-results.md` only with `make ddil`; `harness.report` refuses a partial set. Harness counts come from a node's own record (`GET /api/sync`, read through `SyncLedger`). A NATS capture subscribes late, so it can show that nothing leaked but never what arrived.
+- **The DDIL report comes from all six scenarios of one run, or none.** Regenerate `docs/ddil-results.md` only with `make ddil`; `harness.report` refuses a partial set, and a mixed one (every result records the `run_id` of the `harness.run` invocation that wrote it). Harness counts come from a node's own record (`GET /api/sync`, read through `SyncLedger`). A NATS capture subscribes late, so it can show that nothing leaked but never what arrived.
 - **Every record a hub offers over sync costs a round trip on a thin link.** Read ADR-008, "Reference data on a thin link", before a hub offers edges anything more.
 - **Module boundaries are enforced by `.importlinter`**: `bus`, `triage`, `sync`, `crdt`, `ops` and `linkstate` may not import mission modules (`conjunction`, `risk`, `cdm`, `passes`) or the API.
 - **Data class on everything**: REAL, DERIVED or EXERCISE. Exercise data carries `ORIGINATOR=SENTINEL-EXERCISE`.
@@ -64,3 +64,17 @@ When a regenerated report moves a number the prose quotes, the doc guard fails u
 - **Logging: stable messages, structured fields.** Use `log = get_logger(__name__)` from `sentinel.obs`, then write `log.info("Sync cycle failed", error=..., hub_id=...)`. Never interpolate values into the message; the message is the low-cardinality key you search and alert on.
 - **Errors.** Handle them where they can be handled. Log them with context fields. Never swallow them silently.
 - **Performance** only where measured; readability first.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues on `anonymous-kinda/sentinel`, through the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default roles, each label named after its role: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context. The ADRs are in `docs/system-design.md`, and new ones go there too. See `docs/agents/domain.md`.

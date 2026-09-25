@@ -108,7 +108,10 @@ class DeterministicRouter:
         return self._keywords(text, context)
 
     def _route(self, tool: str | None, args: dict, confidence: float) -> Route:
-        return Route(tool, args, confidence, self.name, {tool: confidence} if tool else {})
+        """An event resolved by console position or catalog number is an
+        exact match, so its choice is stated with certainty."""
+        events = {args["event_id"]: 1.0} if "event_id" in args else {}
+        return Route(tool, args, confidence, self.name, {tool: confidence} if tool else {}, events)
 
     def _args(self, tool: str, text: str, context: RoutingContext, allow_index: bool) -> dict:
         args: dict = {}

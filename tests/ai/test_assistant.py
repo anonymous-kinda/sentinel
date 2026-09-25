@@ -7,16 +7,18 @@ withheld, and that nothing is written until a person confirms.
 """
 
 import asyncio
+import logging
 
 import pytest
 
-from sentinel.ai.assistant import MAX_DRAFTS, TOOL_QUESTIONS, Assistant
+from sentinel.ai.assistant import MAX_DRAFT_ID_CHARS, MAX_DRAFTS, TOOL_QUESTIONS, Assistant
 from sentinel.ai.narrate import NarratorUnavailable
 from sentinel.ai.router import Route, RouterUnavailable
 from sentinel.ai.tools import ToolError
 from sentinel.audit import AuditLog
 from sentinel.clock import FixedClock
 from sentinel.conjunction.exercise import generate
+from sentinel.obs import JsonFormatter
 
 from .conftest import EPOCH, NOW, build_registry
 
@@ -66,7 +68,10 @@ def ask(assistant, text):
 
 
 def jev_route(tool, args, confidence, tools=None, events=None):
-    return Route(tool, args, confidence, "jev", tools or {tool: confidence}, events or {}, {"model": "jev-1.13.0"})
+    """Jev scores every option it chooses from: by default its event choice
+    is as sure as its tool choice."""
+    chosen = {args["event_id"]: confidence} if "event_id" in args else {}
+    return Route(tool, args, confidence, "jev", tools or {tool: confidence}, events or chosen, {"model": "jev-1.13.0"})
 
 
 # ------------------------------------------------------------------ tiers
@@ -78,12 +83,36 @@ def test_connected_and_unclassified_routes_with_jev(registry, event_of):
     assert a.grounding["ok"]
 
 
-@pytest.mark.parametrize("link,marking", [("DENIED", "UNCLASSIFIED//EXERCISE"), ("CONNECTED", "SECRET//EXERCISE")])
+@pytest.mark.parametrize(
+    "link,marking",
+    [("DENIED", "UNCLASSIFIED//EXERCISE"), ("CONNECTED", "SECRET//EXERCISE"), ("CONNECTED", "UNCLASSIFIED//CUI")],
+)
 def test_denied_or_classified_never_calls_a_hosted_service(registry, link, marking):
     jev, llm = ScriptedRouter(jev_route("list_events", {}, 0.9)), ScriptedNarrator("8 events.")
     a = ask(make(registry, link=link, marking=marking, jev=jev, llm=llm), "/events red")
     assert jev.calls == 0 and llm.calls == 0
     assert a.status == "answered" and a.route["provider"] == "deterministic" and a.narrated_by == "template"
+
+
+def test_a_question_holding_the_units_position_never_leaves_the_node(registry, caplog):
+    """ADR-010. With hosted AI on, a question carrying the held unit's
+    coordinates reaches neither Jev nor Claude and no log line. The node-local
+    audit file, the record of what was asked, keeps it."""
+    caplog.set_level(logging.DEBUG)
+    jev, llm = ScriptedRouter(jev_route("list_events", {}, 0.9)), ScriptedNarrator("8 events.")
+    audit = AuditLog(None)
+    assistant = make(registry, jev=jev, llm=llm, audit=audit, unit_position=lambda: (34.0522, -118.2437))
+
+    a = ask(assistant, "which events matter to us at 34.05 north?")
+    assert jev.calls == 0 and llm.calls == 0
+    assert (a.tier["router"], a.tier["narrator"]) == ("deterministic", "template") and "position" in a.tier["reason"]
+    assert a.status == "answered" and a.fallbacks == []
+    assert "34.05" in audit.entries()[-1]["question"]
+    logged = "\n".join(JsonFormatter().format(record) for record in caplog.records)
+    assert "34.05" not in logged
+
+    ask(assistant, "which events matter to us?")
+    assert jev.calls == 1 and llm.calls == 1, "the same node sends a question with no position to hosted AI"
 
 
 def test_a_jev_outage_falls_back_to_the_local_router(registry):
@@ -110,6 +139,18 @@ def test_an_event_tool_without_an_event_asks_which(registry, event_of):
     jev = ScriptedRouter(jev_route("get_assessment", {}, 0.9, events=events))
     a = ask(make(registry, jev=jev), "how risky is it?")
     assert a.status == "clarify" and a.text.startswith("Which event?")
+    assert [alt["event_id"] for alt in a.alternatives] == [event_of("99118"), event_of("99412")]
+
+
+@pytest.mark.parametrize("tool,args", [("get_assessment", {}), ("draft_decision", {"decision": "MANEUVER"})])
+def test_an_unsure_event_choice_asks_which_instead_of_acting(registry, event_of, tool, args):
+    """Jev is sure of the tool (0.95) and unsure of the event (0.41): the
+    assistant asks which event, and drafts nothing."""
+    events = {event_of("99118"): 0.41, event_of("99412"): 0.39, "none": 0.20}
+    route = jev_route(tool, {**args, "event_id": event_of("99118")}, 0.95, events=events)
+    a = ask(make(registry, jev=ScriptedRouter(route)), "maneuver on the debris one")
+    assert a.status == "clarify" and a.text.startswith("Which event?")
+    assert a.facts is None and a.draft_id is None
     assert [alt["event_id"] for alt in a.alternatives] == [event_of("99118"), event_of("99412")]
 
 
@@ -175,6 +216,79 @@ def test_a_draft_against_a_superseded_cdm_cannot_be_confirmed():
     assert registry.ops.entries(a.facts["event_id"]) == []
 
 
+def _confirm_lines(audit):
+    keys = ("author", "draft_id", "ask_seq", "status", "reason", "entry")
+    return [{k: e.get(k) for k in keys} for e in audit.entries() if e["kind"] == "confirm"]
+
+
+def _refusals(caplog):
+    return [r.fields for r in caplog.records if r.getMessage() == "AI draft confirm refused"]
+
+
+def test_confirming_a_draft_the_node_does_not_hold_is_audited_and_logged(caplog):
+    """ADR-007: every confirm is audited, refused ones too."""
+    audit = AuditLog(None)
+    assistant = make(build_registry(), link="DENIED", audit=audit)
+    with pytest.raises(ToolError) as exc:
+        asyncio.run(assistant.confirm("0123456789abcdef", author="op2"))
+    assert exc.value.code == "unknown_draft"
+    assert _confirm_lines(audit) == [{"author": "op2", "draft_id": "0123456789abcdef", "ask_seq": None,
+                                      "status": "refused", "reason": "unknown_draft", "entry": None}]
+    assert _refusals(caplog) == [{"reason": "unknown_draft", "ask_seq": None}]
+    assert audit.verify().ok
+
+
+def test_a_stale_draft_is_refused_audited_and_spent(caplog):
+    """A draft on a superseded CDM can never be confirmed, so the refusal
+    spends it: a retry is `unknown_draft`, and both attempts are audited."""
+    import datetime as dt
+
+    at = EPOCH + dt.timedelta(minutes=2)
+    registry = build_registry(at)
+    audit = AuditLog(None)
+    assistant = make(registry, link="DENIED", audit=audit)
+    a = ask(assistant, "/draft 118 maneuver")
+    newer = next(i for i in generate(EPOCH) if i.release_at > at and i.filename.startswith("EX-RED"))
+    asyncio.run(registry.conjunctions.ingest(newer.kvn.encode(), "exercise", "EXERCISE"))
+
+    for expected in ("stale_draft", "unknown_draft"):
+        with pytest.raises(ToolError) as exc:
+            asyncio.run(assistant.confirm(a.draft_id, author="op2"))
+        assert exc.value.code == expected
+    assert [(line["reason"], line["ask_seq"]) for line in _confirm_lines(audit)] == [
+        ("stale_draft", a.audit_seq), ("unknown_draft", None)]
+    assert _refusals(caplog) == [{"reason": "stale_draft", "ask_seq": a.audit_seq},
+                                 {"reason": "unknown_draft", "ask_seq": None}]
+    assert registry.ops.entries(a.facts["event_id"]) == []
+
+
+def test_a_confirm_that_fails_is_audited_before_the_error_goes_on(monkeypatch, caplog):
+    registry = build_registry()
+    audit = AuditLog(None)
+    assistant = make(registry, link="DENIED", audit=audit)
+    a = ask(assistant, "/draft 118 monitor")
+
+    async def disk_full(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(registry.ops, "append", disk_full)
+    with pytest.raises(OSError):
+        asyncio.run(assistant.confirm(a.draft_id, author="op2"))
+    assert [(line["status"], line["reason"], line["ask_seq"]) for line in _confirm_lines(audit)] == [
+        ("failed", "OSError", a.audit_seq)]
+    assert [r.fields for r in caplog.records if r.getMessage() == "AI draft confirm failed"] == [
+        {"error": "OSError", "ask_seq": a.audit_seq}]
+
+
+def test_a_draft_id_is_audited_no_longer_than_one_the_node_would_issue():
+    """A refused confirm records what was sent; a client cannot grow the
+    audit file by a megabyte a request."""
+    audit = AuditLog(None)
+    with pytest.raises(ToolError):
+        asyncio.run(make(build_registry(), link="DENIED", audit=audit).confirm("f" * 100_000, author="op2"))
+    assert _confirm_lines(audit)[0]["draft_id"] == "f" * MAX_DRAFT_ID_CHARS
+
+
 def test_unconfirmed_drafts_are_capped_and_the_oldest_is_evicted(caplog):
     assistant = make(build_registry(), link="DENIED", max_drafts=2)
     oldest, middle, newest = (ask(assistant, "/draft 118 monitor") for _ in range(3))
@@ -226,4 +340,5 @@ def test_every_ask_and_confirm_is_audited_in_a_verifiable_chain():
     assert [e["status"] for e in entries[:3]] == ["answered", "clarify", "draft"]
     assert entries[0]["route"]["provider"] == "deterministic" and entries[0]["tier"]["link_state"] == "DENIED"
     assert entries[3]["ask_seq"] == answers[-1].audit_seq and entries[3]["author"] == "op2"
+    assert entries[3]["status"] == "confirmed" and entries[3]["reason"] is None
     assert audit.verify().ok

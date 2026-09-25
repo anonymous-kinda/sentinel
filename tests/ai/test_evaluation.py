@@ -18,7 +18,16 @@ SANDWICH = Case("x1", "make me a sandwich", None)
 
 
 def route(tool, args, confidence):
-    return Route(tool, args, confidence, "test")
+    """A router states how sure it is of each choice; here the event choice
+    is as sure as the tool choice."""
+    events = {args["event_id"]: confidence} if "event_id" in args else {}
+    return Route(tool, args, confidence, "test", {}, events)
+
+
+def test_an_unsure_event_choice_does_not_act():
+    unsure = Route("draft_decision", {"event_id": E118, "decision": "MANEUVER"}, 0.9, "test", {}, {E118: 0.4})
+    o = score(DRAFT, unsure, CONTEXT)
+    assert o.call_correct and not o.acted, "the right call, and still asked back about"
 
 
 def test_a_right_call_matches_tool_and_arguments():

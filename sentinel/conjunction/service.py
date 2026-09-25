@@ -3,8 +3,10 @@
 Ingest follows the admission policy end to end:
 
     raw bytes --sha256--> duplicate?         -> no-op (idempotent)
-              --parse---> not a CDM?         -> quarantine PARSE_ERROR
-              --validate> wrong?             -> quarantine with the reason
+              --admit---> not a CDM?         -> quarantine PARSE_ERROR
+                          unreadable?        -> quarantine UNREADABLE
+                          wrong?             -> quarantine with the reason
+                          (sentinel.cdm.admit, the path the CLI takes too)
               --group---> event id
               --assess--> AssessedConjunction (refusal is a result)
               --publish-> cdm.accepted.<event_id>
@@ -27,9 +29,10 @@ import numpy as np
 
 from .. import __version__
 from ..bus import Bus, subjects
-from ..cdm import CdmParseError, CdmRejected, parse_bytes, to_conjunction
+from ..cdm import Admitted, CdmRejected, admit
 from ..cdm.model import CdmMessage
 from ..clock import Clock
+from ..obs import get_logger
 from ..risk.encounter import build_encounter_plane, curvilinear_check, pc_curve
 from ..risk.engine import assess, finite_eigenvalues
 from ..risk.types import AssessedConjunction, AssessmentConfig, Method, RefusalReason
@@ -37,6 +40,8 @@ from .policy import ConjunctionPolicy, triage
 from .store import CdmRow, ConjunctionStore, EventRow
 from .summaries import compact_summary, disagreements, expand_summary, record_hashes
 from .trajectory import encounter_arcs_ecef
+
+log = get_logger(__name__)
 
 EVENT_TCA_WINDOW_S = 60.0
 EXERCISE_ORIGINATOR = "SENTINEL-EXERCISE"
@@ -101,14 +106,9 @@ class ConjunctionService:
             return IngestResult("duplicate", sha)
 
         try:
-            message = parse_bytes(raw)
-            conversion = to_conjunction(message)
-        except CdmParseError as exc:
-            return await self._reject(sha, raw, "PARSE_ERROR", str(exc), source)
+            message, conversion = admit(raw)
         except CdmRejected as exc:
             return await self._reject(sha, raw, exc.code, str(exc), source)
-        except (ValueError, KeyError) as exc:
-            return await self._reject(sha, raw, "UNREADABLE", str(exc), source)
 
         data_class = ORIGINATOR_DATA_CLASS.get((message.originator or "").upper(), data_class)
 
@@ -143,6 +143,8 @@ class ConjunctionService:
 
     async def _reject(self, sha: str, raw: bytes, code: str, detail: str, source: str) -> IngestResult:
         self.store.quarantine(sha, raw, code, detail, source)
+        # The code, hash and source identify it; the detail can quote the CDM, so it stays out of the log.
+        log.warning("CDM quarantined", code=code, sha256=sha, source=source)
         await self.bus.publish(
             subjects.cdm_rejected(self.node_id),
             json.dumps({"sha256": sha, "code": code, "detail": detail, "source": source}).encode(),
@@ -197,10 +199,8 @@ class ConjunctionService:
 
     # --------------------------------------------------------------- assessment
     @functools.lru_cache(maxsize=4096)  # noqa: B019 - bounded, keyed by content hash
-    def _parsed(self, sha: str):
-        row = self.store.cdm(sha)
-        message = parse_bytes(row.raw)
-        return message, to_conjunction(message)
+    def _parsed(self, sha: str) -> Admitted:
+        return admit(self.store.cdm(sha).raw)
 
     def _assess_sha(self, sha: str, message: CdmMessage | None = None) -> dict:
         cached = self.store.assessment(sha, self.engine_version)
@@ -347,6 +347,11 @@ class ConjunctionService:
                 offered.append((dt.datetime.fromisoformat(summary["tca"]), compact_summary(summary, records)))
         return offered
 
+    def knows(self, event_id: str) -> bool:
+        """Whether this node has heard of the event: from its own CDMs, or
+        from the hub's summary of one whose CDM has not arrived yet."""
+        return self._latest(event_id) is not None or event_id in self.store.remote_summaries()
+
     def event_detail(self, event_id: str) -> dict | None:
         if self.store.event(event_id) is None or not self.store.cdms_for_event(event_id):
             remote = self.store.remote_summaries().get(event_id)
@@ -445,11 +450,13 @@ class ConjunctionService:
             return None
         from ..risk.integrate import UnresolvedIntegral, maximize_pc_over_scale
 
+        # The engine's own panel cap, so the curve agrees with the assessment beside it.
+        cap = self.engine_config.quadrature_panels_cap
         try:
-            k_star, pc_max, _ = maximize_pc_over_scale(plane.cov_2d_m2, plane.mu_m, plane.hbr_m)
+            k_star, pc_max, _ = maximize_pc_over_scale(plane.cov_2d_m2, plane.mu_m, plane.hbr_m, panel_cap=cap)
             lk_star = math.log10(k_star)
             grid = np.linspace(min(0.0, lk_star) - 2.0, max(0.0, lk_star) + 2.0, samples)
-            curve, pc_at_k1 = pc_curve(plane, grid), plane.pc(1.0)
+            curve, pc_at_k1 = pc_curve(plane, grid, panel_cap=cap), plane.pc(1.0, panel_cap=cap)
         except UnresolvedIntegral:
             # The assessment already refuses (UNRESOLVED_INTEGRAL); there is no curve to draw.
             return None

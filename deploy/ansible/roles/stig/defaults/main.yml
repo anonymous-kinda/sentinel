@@ -68,7 +68,7 @@ stig_aide_exclude:
 # CLI. Pass the results to `scripts/oscal_evidence.py --xccdf` for the POA&M.
 stig_scan: false
 # Controller path of the DISA SCAP 1.3 benchmark XML, e.g. extracted from
-# U_CAN_Ubuntu_24-04_LTS_V1R5_STIG_SCAP_1-3_Benchmark.zip.
+# U_CAN_Ubuntu_24-04_LTS_V1R6_STIG_SCAP_1-3_Benchmark.zip (the V1R6 rules the role applies).
 stig_scap_content: ""
 stig_scap_profile: xccdf_mil.disa.stig_profile_MAC-2_Sensitive
 stig_results_dir: "{{ playbook_dir }}/../../build/stig"

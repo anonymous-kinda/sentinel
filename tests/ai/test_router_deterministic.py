@@ -59,6 +59,14 @@ def test_plain_language_keyword_rules(text, tool, args):
     assert r.confidence == 0.6
 
 
+@pytest.mark.parametrize("text", ["/assess 2", "/explain 99118", "what is the risk on EX-DEB 118"])
+def test_an_event_named_by_position_or_catalog_number_is_certain(text):
+    """The gate holds every router's event choice to the confidence floor; a
+    rule that matched the event exactly states it with certainty."""
+    r = route(text)
+    assert r.event_probabilities == {r.args["event_id"]: 1.0}
+
+
 def test_unrecognised_requests_are_not_guessed():
     r = route("tell me a joke about orbital mechanics")
     assert r.tool is None and r.confidence == 0.0

@@ -31,6 +31,7 @@ Only `main` is supported. Releases are built from `vX.Y.Z` tags
   statements in `deploy/vex/`.
 - The compliance generator in `compliance/`. A control reported as
   implemented when it is not is a security bug.
+- A question or tool fact that reaches a hosted AI service under a marking not on the allow-list, or while it holds a position.
 - Answers that are wrong rather than refused. A Pc returned where the
   applicability gate should refuse, a number in an AI-written answer that
   the tools did not produce, or an unsigned bundle that installs are all in
@@ -97,8 +98,12 @@ These come from the POA&M. Each is a real weakness in the current code.
    claims to have seen the write
    (`tests/test_ops_hostile_peer.py::test_an_untrusted_peer_cannot_erase_an_annotation`,
    a strict xfail). The hub then passes the change to every edge as an
-   ordinary overwrite. Decision-log entries are not affected. Until
-   registers are signed or the leaf link authenticates its peers (gap 2),
+   ordinary overwrite. Decision-log entries are not affected. The fix comes
+   in two steps. First, mutual TLS on the leaf link (gap 2) keeps any peer
+   without a node certificate off the exchange, which closes the test above.
+   Second, signed registers, if a compromised edge is in the threat model:
+   mutual TLS admits every enrolled node, and only a signature on each write
+   stops one of them overwriting a register it did not write. Until then,
    treat annotations as advisory and read the decision log for what was
    decided.
 

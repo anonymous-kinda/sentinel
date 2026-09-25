@@ -34,6 +34,19 @@ def test_a_confidence_that_is_not_a_probability_never_passes_the_gate(confidence
     assert gate(route) == "unsure"
 
 
+@pytest.mark.parametrize(
+    "events",
+    [{"E": 0.41, "F": 0.39, "none": 0.2}, {"E": math.nan}, {"E": 1.5}, {"F": 0.9}, {}],
+    ids=["below-the-gate", "nan", "not-a-probability", "chosen-event-unscored", "no-event-scores"],
+)
+def test_an_event_choice_is_held_to_the_same_gate_as_the_tool(events):
+    """A confident tool on an unsure event is still a guess about which
+    conjunction the operator means: ask which, never act on it."""
+    route = Route("draft_decision", {"event_id": "E", "decision": "MANEUVER"}, 0.95, "jev", {}, events)
+    assert gate(route) == "which_event"
+    assert gate(Route("draft_decision", {"event_id": "E", "decision": "MANEUVER"}, 0.95, "jev", {}, {"E": 0.5})) is None
+
+
 def test_a_nan_confidence_from_the_router_asks_back_instead_of_drafting(registry, event_of):
     route = jev_route("draft_decision", {"event_id": event_of("99118"), "decision": "MANEUVER"}, math.nan)
     a = ask(make(registry, jev=ScriptedRouter(route)), "maneuver on 118")

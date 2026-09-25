@@ -27,8 +27,12 @@ Audiences in the tables below: **operator** (uses the decision aid, or runs a no
 | [README](../README.md) | `README.md` | operator, program office; everyone starts here | authored: the value, the evidence and the limits | |
 | [Technical guide](technical-guide.md) | `docs/technical-guide.md` | new engineer | authored; its variables, `make` targets, CLI subcommands, import contracts and paths are checked by `tests/docs/test_technical_guide.py`, and its quoted numbers are registered in `tests/doc_claims.toml` | |
 | [Contributing](../CONTRIBUTING.md) | `CONTRIBUTING.md` | new engineer | authored; its paths, `make` targets and CLI subcommands are checked by `tests/docs/test_technical_guide.py` | |
+| [Changelog](../CHANGELOG.md) | `CHANGELOG.md` | everyone | authored: what each version contains, newest first | |
 | [Security policy](../SECURITY.md) | `SECURITY.md` | security, everyone | authored: how to report a vulnerability, and what is known to be missing | |
 | [Repository rules for coding agents](../CLAUDE.md) | `CLAUDE.md` | new engineer, coding agents | authored | |
+| [Agent skills: issue tracker](agents/issue-tracker.md) | `docs/agents/issue-tracker.md` | coding agents | authored: issues live on GitHub, and the `gh` commands the skills run | |
+| [Agent skills: triage labels](agents/triage-labels.md) | `docs/agents/triage-labels.md` | coding agents | authored: the label for each triage role | |
+| [Agent skills: domain docs](agents/domain.md) | `docs/agents/domain.md` | coding agents | authored: what to read before exploring, and where a new ADR goes | |
 | This index | `docs/index.md` | everyone | authored | |
 | [Licence](../LICENSE) | `LICENSE` | everyone | authored (Apache 2.0) | |
 

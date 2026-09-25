@@ -1,6 +1,6 @@
 {
   "component-definition": {
-    "uuid": "38ac44f5-3b70-590a-9efd-0523906a888c",
+    "uuid": "b9fab8d6-beac-5add-a02b-8c2776e20408",
     "metadata": {
       "title": "Sentinel component definition",
       "last-modified": "2026-09-24T22:00:00Z",
@@ -83,7 +83,7 @@
               {
                 "uuid": "626a37ee-f0a9-5b74-94b3-56f35e100663",
                 "control-id": "ac-4",
-                "description": "The assistant's tier policy is a pure function of the classification marking, operator opt-in (SENTINEL_AI_CLOUD) and the measured link state: hosted AI needs an UNCLASSIFIED marking and opt-in, and a DENIED link or any other marking means local only. With hosted AI not allowed, no request leaves the node.",
+                "description": "The assistant's tier policy is a pure function of the classification marking, operator opt-in (SENTINEL_AI_CLOUD) and the measured link state: hosted AI needs exactly UNCLASSIFIED or UNCLASSIFIED // EXERCISE and opt-in, and a DENIED link or any other marking, a caveated one included, means local only. A question that holds a position is answered on the node. With hosted AI not allowed, no request leaves the node.",
                 "props": [
                   {
                     "name": "implementation-status",
@@ -99,6 +99,16 @@
                     "name": "evidence-test",
                     "ns": "urn:sentinel:oscal",
                     "value": "tests/ai/test_assistant.py::test_denied_or_classified_never_calls_a_hosted_service"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/ai/test_policy.py::test_a_caveated_or_unknown_marking_keeps_ai_on_the_node"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/ai/test_assistant.py::test_a_question_holding_the_units_position_never_leaves_the_node"
                   },
                   {
                     "name": "evidence-test",
@@ -137,7 +147,7 @@
               {
                 "uuid": "b064d708-223b-5e19-b9b1-cc84be2089a0",
                 "control-id": "au-2",
-                "description": "The node logs: every assistant question and every confirmation, one line each in a hash-chained audit log; every decision, note, resolution and confirmed AI draft, as signed decision-log entries; every CDM admitted or quarantined, with the reason; and service events as structured JSON logs whose messages are constants, so they can be searched and alerted on.",
+                "description": "The node logs: every assistant question and every confirmation, refused and failed attempts included, one line each in a hash-chained audit log; every decision, note, resolution and confirmed AI draft, as signed decision-log entries; every CDM admitted or quarantined, with the reason; and service events as structured JSON logs whose messages are constants, so they can be searched and alerted on.",
                 "props": [
                   {
                     "name": "implementation-status",
@@ -148,6 +158,11 @@
                     "name": "evidence-test",
                     "ns": "urn:sentinel:oscal",
                     "value": "tests/ai/test_assistant.py::test_every_ask_and_confirm_is_audited_in_a_verifiable_chain"
+                  },
+                  {
+                    "name": "evidence-test",
+                    "ns": "urn:sentinel:oscal",
+                    "value": "tests/ai/test_assistant.py::test_a_stale_draft_is_refused_audited_and_spent"
                   },
                   {
                     "name": "evidence-test",

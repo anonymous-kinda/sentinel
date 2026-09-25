@@ -78,8 +78,9 @@ rationale = """A ground unit's position and its pass windows must never leave th
 and nothing leaves a node for a hosted AI service unless policy allows it."""
 params = { "ac-04_odp" = """Leafnode subject permissions: an edge never exports unit.>, passes.> or node.> \
 to its hub and never imports node.>; console events are published only on node-scoped subjects \
-(node.<id>.>); requests leave a node for a hosted AI service only with an UNCLASSIFIED marking, \
-operator opt-in and a usable measured link.""" }
+(node.<id>.>); requests leave a node for a hosted AI service only with an allow-listed \
+UNCLASSIFIED marking with no caveat, operator opt-in, a usable measured link and a question that \
+holds no position.""" }
 
 [[control.by]]
 component = "nats"
@@ -103,12 +104,15 @@ files = ["deploy/nats/edge.conf.tmpl", "sentinel/bus/subjects.py", "harness/opse
 component = "node"
 status = "implemented"
 statement = """The assistant's tier policy is a pure function of the classification marking, operator \
-opt-in (SENTINEL_AI_CLOUD) and the measured link state: hosted AI needs an UNCLASSIFIED marking and \
-opt-in, and a DENIED link or any other marking means local only. With hosted AI not allowed, no \
+opt-in (SENTINEL_AI_CLOUD) and the measured link state: hosted AI needs exactly UNCLASSIFIED or \
+UNCLASSIFIED // EXERCISE and opt-in, and a DENIED link or any other marking, a caveated one \
+included, means local only. A question that holds a position is answered on the node. With hosted AI not allowed, no \
 request leaves the node."""
 tests = [
     "tests/ai/test_policy.py::test_tier_table",
     "tests/ai/test_assistant.py::test_denied_or_classified_never_calls_a_hosted_service",
+    "tests/ai/test_policy.py::test_a_caveated_or_unknown_marking_keeps_ai_on_the_node",
+    "tests/ai/test_assistant.py::test_a_question_holding_the_units_position_never_leaves_the_node",
     "tests/api/test_ai_api.py::test_hosted_providers_are_used_only_with_opt_in",
 ]
 files = ["sentinel/ai/policy.py"]
@@ -183,12 +187,14 @@ rationale = "Decisions, AI interactions and rejected input must be reconstructab
 [[control.by]]
 component = "node"
 status = "implemented"
-statement = """The node logs: every assistant question and every confirmation, one line each in a \
+statement = """The node logs: every assistant question and every confirmation, refused and failed attempts \
+included, one line each in a \
 hash-chained audit log; every decision, note, resolution and confirmed AI draft, as signed \
 decision-log entries; every CDM admitted or quarantined, with the reason; and service events as \
 structured JSON logs whose messages are constants, so they can be searched and alerted on."""
 tests = [
     "tests/ai/test_assistant.py::test_every_ask_and_confirm_is_audited_in_a_verifiable_chain",
+    "tests/ai/test_assistant.py::test_a_stale_draft_is_refused_audited_and_spent",
     "tests/api/test_api.py::test_upload_is_idempotent_and_wrong_input_is_quarantined",
     "tests/test_logging_policy.py::test_log_messages_are_constants_with_values_as_fields",
     "tests/test_obs.py::test_json_formatter_emits_one_object_per_line",

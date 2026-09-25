@@ -26,8 +26,10 @@ FROM cgr.dev/chainguard/python:latest-dev@sha256:0b39915a883dc2dbbe6c43be2ef82a3
 USER 0:0
 WORKDIR /bundle
 COPY . .
-# The context must still match the signed bundle's per-file manifest.
-RUN sha256sum --quiet --strict -c SHA256SUMS
+# The context must still be exactly the signed bundle's per-file manifest:
+# every listed file matches, and nothing unlisted is present. The same check
+# install.sh runs, shipped in the bundle.
+RUN bash verify_contents.sh
 RUN python -m venv /opt/sentinel/venv \
  && /opt/sentinel/venv/bin/pip install --no-cache-dir --disable-pip-version-check \
       --require-hashes --only-binary=:all: -r requirements.txt \

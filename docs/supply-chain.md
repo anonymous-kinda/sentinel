@@ -8,7 +8,7 @@ This page lists what a Sentinel release contains, what signs each part, and what
 
 | Asset | What it is | Protected by |
 |---|---|---|
-| `sentinel-<ver>-<arch>.tar.gz` (x86_64, aarch64) | Air-gap bundle: wheels, hash-locked `requirements.txt`, pinned `uv` and `nats-server`, console, NASA fixtures, the public element-set snapshot (`fixtures/omm`, with its provenance), `install.sh`, `BUNDLE.json`, per-file `SHA256SUMS` | Keyless cosign signature (`.sigstore.json`), SLSA provenance, SBOM attestations, `.sha256` |
+| `sentinel-<ver>-<arch>.tar.gz` (x86_64, aarch64) | Air-gap bundle: wheels, hash-locked `requirements.txt`, pinned `uv` and `nats-server`, console, NASA fixtures, the public element-set snapshot (`fixtures/omm`, with its provenance), `install.sh` and its contents check `verify_contents.sh`, `BUNDLE.json`, per-file `SHA256SUMS` | Keyless cosign signature (`.sigstore.json`), SLSA provenance, SBOM attestations, `.sha256` |
 | `sentinel-<ver>-<arch>.container.tar` | Container image archive (`docker load` / `podman load`) built from that bundle | Keyless cosign signature, SLSA provenance, SBOM attestations |
 | `sentinel-python-runtime.{spdx,cdx}.json` | SBOM of the Python runtime | `SHA256SUMS` (signed), SBOM attestation (SPDX) |
 | `sentinel-web-console.{spdx,cdx}.json` | SBOM of the web console | `SHA256SUMS` (signed), SBOM attestation (SPDX) |
@@ -60,7 +60,7 @@ These measures narrow the gap without closing it:
 The commands below need the Sigstore and GitHub APIs. They run outside this repo's test suite.
 
 ```bash
-VER=0.2.0; REPO=OWNER/sentinel
+VER=0.3.0; REPO=OWNER/sentinel
 ID="https://github.com/$REPO/.github/workflows/release.yml@refs/tags/v$VER"
 
 # Signature; cosign fetches the trust root through TUF
@@ -85,7 +85,7 @@ gh attestation verify sentinel-$VER-x86_64.tar.gz --repo $REPO --predicate-type 
 On the enclave, nothing needs a network.
 
 ```bash
-VER=0.2.0; ARCH=x86_64
+VER=0.3.0; ARCH=x86_64
 ID="https://github.com/OWNER/sentinel/.github/workflows/release.yml@refs/tags/v$VER"
 
 # 0. The verifier. The cosign binary must match its pin in deploy/tools.lock
@@ -195,7 +195,7 @@ Telemetry and version checks are disabled (`--disable-telemetry --skip-version-c
 
 `deploy/containers/Dockerfile`:
 
-- **Build context.** An unpacked, signature-verified bundle. The builder re-checks its `SHA256SUMS`, then installs the same hash-locked dependency set (`--require-hashes`, binary wheels only) and the bundle's sentinel wheel.
+- **Build context.** An unpacked, signature-verified bundle. The builder runs the installer's own check, `verify_contents.sh`: every file matches the bundle's `SHA256SUMS`, and a file the list does not name is refused. Then it installs the same hash-locked dependency set (`--require-hashes`, binary wheels only) and the bundle's sentinel wheel.
 - **Runtime.** `cgr.dev/chainguard/python:latest` (no shell, no package manager), as UID 65532. `/var/lib/sentinel` is the only writable path, so the container runs with `--read-only`.
 - **Pins.** Both bases are pinned by digest, resolved from the registry with the pinned crane.
 - **Python version.** Chainguard's free tags track the newest CPython (3.14 at these digests), so the cp314 wheels come from PyPI at build time, checked against the same lock hashes.
@@ -219,7 +219,7 @@ sha256sum "$TUF_ROOT/tuf-repo-cdn.sigstore.dev/targets/trusted_root.json"
 
 | Control | What Sentinel does | Evidence |
 |---|---|---|
-| **SI-7** Software, Firmware, and Information Integrity | Every release artifact is signed. The signature is verified before unpacking on every install path (Make, air gap, Ansible). Per-file `SHA256SUMS` and hash-locked wheels are checked at install. Tampering, including a regenerated checksum, is rejected. | `deploy/bundle/verify_signature.sh`, `deploy/bundle/verify_offline.sh`, `deploy/bundle/install.sh`, `deploy/ansible/roles/sentinel/tasks/verify.yml`, `deploy/bundle/selftest_signature.sh`, `deploy/ansible/tests/test_verify.sh`, `.github/workflows/ci.yml` (`airgap-install`), `tests/supplychain/test_verify_signature.py`, `tests/supplychain/test_checksums.py` |
+| **SI-7** Software, Firmware, and Information Integrity | Every release artifact is signed. The signature is verified before unpacking on every install path (Make, air gap, Ansible). Per-file `SHA256SUMS` and hash-locked wheels are checked at install. Tampering, including a regenerated checksum, is rejected. | `deploy/bundle/verify_signature.sh`, `deploy/bundle/verify_offline.sh`, `deploy/bundle/install.sh`, `deploy/bundle/verify_contents.sh`, `deploy/ansible/roles/sentinel/tasks/verify.yml`, `deploy/bundle/selftest_signature.sh`, `deploy/ansible/tests/test_verify.sh`, `.github/workflows/ci.yml` (`airgap-install`), `tests/supplychain/test_verify_signature.py`, `tests/supplychain/test_checksums.py` |
 | **CM-8** System Component Inventory | SPDX and CycloneDX SBOMs for the Python runtime and web console, gated for completeness. `BUNDLE.json` lists the pinned binaries and every wheel digest. `deploy/tools.lock` pins every third-party binary. | `scripts/sbom.py`, `supplychain/sbom.py`, `supplychain/bundle.py`, `deploy/tools.lock`, release assets `*.spdx.json` / `*.cdx.json`, `tests/supplychain/test_sbom.py`, `tests/supplychain/test_bundle.py` |
 | **CM-14** Signed Components | Installation refuses a component without a signature from the approved identity or key. A missing, ambiguous or incomplete policy is refused before cosign runs. Releases are signed keyless in CI. | `deploy/bundle/verify_signature.sh`, `deploy/ansible/roles/sentinel/tasks/verify.yml`, `deploy/ansible/roles/sentinel/defaults/main.yml`, `.github/workflows/release.yml` (`sign` job), `.github/workflows/ci.yml` (`airgap-install`), `tests/supplychain/test_verify_signature.py` |
 | **RA-5** Vulnerability Monitoring and Scanning | Trivy scans the source lockfiles and the shipped binaries on every push to main, every pull request and every release. Any unaddressed finding fails. VEX statements are allowed only for real findings, with justification and re-checked evidence. SARIF goes to code scanning; container images are scanned and reported. | `scripts/scan.py`, `supplychain/trivy.py`, `supplychain/vex.py`, `supplychain/evidence.py`, `deploy/vex/statements.toml`, `deploy/vex/sentinel.openvex.json`, `.github/workflows/ci.yml` (`supply-chain`), `.github/workflows/release.yml` (`build`, `container`, `code-scanning`), `tests/supplychain/test_vex.py`, `tests/supplychain/test_evidence.py`, `tests/supplychain/test_trivy.py` |

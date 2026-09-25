@@ -1,4 +1,5 @@
-# Sentinel hub nats-server. Rendered by harness/run.py (or Ansible, M4).
+# Sentinel hub nats-server. Rendered by render_nats in harness/cluster.py:
+# for the DDIL harness, and through scripts/compose_config.py for Compose.
 server_name: "${NODE_ID}"
 listen: "127.0.0.1:${CLIENT_PORT}"
 http: "127.0.0.1:${MONITOR_PORT}"
