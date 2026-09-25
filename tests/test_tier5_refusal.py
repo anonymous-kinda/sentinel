@@ -225,15 +225,18 @@ def test_curvilinear_threshold_is_configurable():
 
 
 # --- rung 23b: a covariance beyond the arithmetic ---------------------------
+@pytest.mark.filterwarnings("error::RuntimeWarning")
 @pytest.mark.parametrize("scale", [1e305, 1e308])
 @pytest.mark.parametrize("where", ["whole", "radial", "along_track"])
 def test_a_covariance_too_large_to_decompose_is_refused_never_raised(scale, where):
     """assess() never raises on bad data, and what it records serialises as
-    JSON: a NaN or an infinity in a diagnostic takes the API down."""
+    JSON: a NaN or an infinity in a diagnostic takes the API down. Nor does
+    it print a RuntimeWarning on the way; the filter makes one a failure."""
     conj = make_conjunction(miss_m=100.0, sigma_m=50.0)
     cov = conj.secondary.covariance_rtn_m2.copy()
     if where == "whole":
-        cov = cov * scale
+        with np.errstate(over="ignore"):  # 2500 * 1e308 is meant to overflow
+            cov = cov * scale
     else:
         index = {"radial": 0, "along_track": 1}[where]
         cov[index, index] = scale
