@@ -65,3 +65,8 @@ def test_the_section_check_catches_a_missing_and_a_misordered_section():
     assert section_problems(good.replace("## Try it", "## Try this")) == ["missing: Try it"]
     swapped = good.replace("## Concepts", "## TMP").replace("## Why it exists", "## Concepts").replace("## TMP", "## Why it exists")
     assert section_problems(swapped) == ["sections out of order"]
+
+
+def test_no_chapter_is_still_being_written():
+    stubs = [c for c in CHAPTERS if BEING_WRITTEN in (TUTORIAL / c).read_text()]
+    assert stubs == []
