@@ -88,11 +88,11 @@ In `supplychain/toolslock.py`:
 
 - `parse` rejects a row with the wrong column count or a digest that is not 64 lowercase hex characters. A malformed lock is an error before anything downloads.
 - `select` returns the rows for one architecture plus the `noarch` rows. It raises `LockError` when a requested name has no pin, so asking for a tool the lock does not cover is never a silent partial fetch.
-- `fetch` does the work. It downloads, hashes the whole download, compares it with the pin, extracts the member if there is one, writes the file (mode 644 for JSON trust material, 755 otherwise), and writes a stamp file `.<name>.sha256` beside it. On a mismatch it logs `Pinned download digest mismatch` with the tool, the architecture and both digests as fields, raises, and writes nothing.
+- `fetch` does the work. It downloads, hashes the whole download, compares it with the pin, extracts the member if there is one, writes the file (mode 644 for JSON trust material, 755 otherwise), and writes a stamp file `.<name>.sha256` beside it. On a mismatch it logs `Pinned download digest mismatch` with the tool, the architecture and both digests as fields, raises, and writes nothing. A download that fails (no network, a DNS or HTTP error, a timeout) raises `DownloadError`, a `LockError` that names the tool, its version, the URL and the reason, after logging `Pinned tool download failed` with the same fields. It writes nothing either.
 
 **The part that is easy to get wrong** is reuse. `fetch` skips the download when the file is already there, but only if the stamp equals `_stamp(pin, current bytes)`. The stamp holds two digests: the pin that was verified, and the digest of the file *as written*. The second is needed because a file extracted from an archive has no pin of its own. So every reuse re-hashes the file on disk. An earlier version trusted the stamp alone, so a binary swapped after download was reused and shipped in a bundle whose manifest still quoted the pinned digest. `tests/supplychain/test_toolslock.py::test_a_reused_tool_is_the_verified_one_not_whatever_is_on_disk` is the regression test.
 
-`scripts/fetch_tools.py` is a thin CLI over `select` and `fetch`: `--arch` (default: this host) and optional names. Files land in `.tools/<arch>/`, and trust material in `.tools/noarch/`. `make tools` fetches the two binaries the harness runs. `make supply-tools` fetches cosign, syft, trivy, the linters and the trust root.
+`scripts/fetch_tools.py` is a thin CLI over `select` and `fetch`: `--arch` (default: this host) and optional names. Files land in `.tools/<arch>/`, and trust material in `.tools/noarch/`. Any `LockError` ends the run with its one-line message and exit status 1, never a traceback; `tests/supplychain/test_fetch_tools.py` holds that with a fake opener that is offline. `make tools` fetches the two binaries the harness runs. `make supply-tools` fetches cosign, syft, trivy, the linters and the trust root.
 
 ### 2. The bundle: `scripts/build_bundle.py`, `supplychain/bundle.py`, `supplychain/checksums.py`
 
@@ -104,7 +104,7 @@ sentinel-<ver>-<arch>/
   requirements.txt   2. export_requirements(): uv export --frozen --no-dev, with --hash lines
   bin/               4. uv and nats-server for the target arch, through fetch()
   web/ fixtures/     5. the built console; NASA CARA data and the element-set snapshot
-  systemd/ install.sh LICENSE VERSION
+  systemd/ install.sh verify_contents.sh LICENSE VERSION
   BUNDLE.json        6. bundle_manifest(): commit, clean|dirty, epoch, tools, wheel digests
   SHA256SUMS         6. write_manifest(): every file, written last
 -> sentinel-<ver>-<arch>.tar.gz (+ .sha256)   7. write_tarball()
@@ -112,6 +112,7 @@ sentinel-<ver>-<arch>/
 
 - `export_requirements` is the one definition of the runtime dependency set: no dev tools and no optional AI extras. The bundle, the container and the Python SBOM all install exactly this.
 - `stage_fixtures` copies `SHIPPED_FIXTURES` (`cara`, `cara_cases.json`, `omm`) unmodified, with their provenance files. If one is missing from the source, the build fails.
+- `stage_installer` copies `INSTALLER` (`install.sh` and `verify_contents.sh`, the contents check that `install.sh` and the release image both run) to the bundle's root, modes kept.
 - `bundle_manifest` records the pinned binaries with their upstream URL and digest, and the digest of every wheel. It also records `source_tree: dirty` when `git status` shows uncommitted changes, so a bundle built from an edited tree cannot pass as its commit.
 - `write_tarball` normalises every entry (`normalise`: uid and gid 0, owner `root`, mtime = epoch, mode 755 or 644) and writes the gzip header with the same epoch and no file name.
 - `manifest_text` in `supplychain/checksums.py` produces lines byte-compatible with `sha256sum --strict -c`, sorted by relative path, and never lists `SHA256SUMS` itself.
@@ -129,18 +130,17 @@ One script decides whether a signature is acceptable, for `make airgap-verify`, 
 
 Every refusal in steps 1 to 3 happens before cosign runs. `tests/supplychain/test_verify_signature.py` pins this with a stub cosign that records its argv. That makes it possible to assert, for example, that keyless mode never passes `--insecure-ignore-tlog`.
 
-### 4. The installer: `deploy/bundle/install.sh`
+### 4. The installer: `deploy/bundle/install.sh` and `deploy/bundle/verify_contents.sh`
 
 `install.sh` runs after the signature has been verified and the tarball unpacked. It does not verify the signature itself. It:
 
-1. runs `sha256sum --quiet --strict -c SHA256SUMS`;
-2. refuses any file under `web`, `fixtures`, `bin`, `wheels` or `systemd` that the list does not name, using `comm` on sorted lists;
+1. runs `verify_contents.sh`, which checks the bundle against its own list: `sha256sum --quiet --strict -c SHA256SUMS`, then it refuses any file anywhere in the bundle that the list does not name, using `comm` on sorted lists;
 3. requires `python3.12` on the host, and sets `UV_OFFLINE=1`, `UV_NO_CACHE=1` and `UV_PYTHON_DOWNLOADS=never`;
 4. installs dependencies with the bundled `uv`, using `--no-index --find-links wheels --require-hashes`, then the sentinel wheel with `--no-deps`;
 5. copies the console, fixtures and binaries under `PREFIX` (default `/opt/sentinel`), and writes `sentinel.env` only if none exists;
 6. with `SYSTEMD=1`, creates the `sentinel` system user, renders the unit with `@PREFIX@` substituted, and starts it.
 
-**Easy to get wrong:** `sha256sum -c` checks only the files the list names. The installer copies whole directories and globs `wheels/sentinel-*.whl`, so a file added after signing would have ridden along unverified. Step 2 closes that hole. It uses `! -type d`, so an added symlink is refused too. `tests/supplychain/test_install_integrity.py` runs the real installer against a miniature bundle with a stub `uv` to prove it.
+**Easy to get wrong:** `sha256sum -c` checks only the files the list names. The installer copies whole directories and globs `wheels/sentinel-*.whl`, so a file added after signing would have ridden along unverified. The second half of step 1 closes that hole. It uses `! -type d`, so an added symlink is refused too, and it looks at the whole bundle, so a hidden or top-level file is refused as well. The release image (`deploy/containers/Dockerfile`) builds from the same unpacked bundle and runs the same script (`RUN bash verify_contents.sh`) before it installs anything. It used to re-run only the `sha256sum` half, so a file added to its build context went into the image. `tests/supplychain/test_install_integrity.py` runs the real installer and the check against a miniature bundle with a stub `uv`, and reads the Dockerfile to prove the image runs the check before its first `pip install`.
 
 ### 5. The local proofs: `verify_offline.sh`, `sign_local.sh`, `selftest_signature.sh`
 
@@ -196,7 +196,7 @@ The whole of `release.yml` has `permissions: {}` at the top, and each job is gra
 - `unpinned`: every `uses:` outside `./` ends in a 40-hex commit SHA. A tag like `@v4` can be moved to other code after review.
 - `unlocked_installs`: no `pip install` or `uv pip install` line, because those resolve afresh.
 - `unlocked_uv_jobs`: every job that sets up uv has `UV_LOCKED=1` (for the workflow or the job) or runs `uv sync --locked`.
-- `unpinned_tools`: every `uvx --from PKG` in the workflows and the Makefile carries `==`.
+- `unpinned_tools`: every package a `uvx` call installs carries an exact version: each `--from PKG` and `--with PKG`, and, with no `--from`, the tool itself (`uvx pip download` runs the newest pip). It reads shell lines and Python argv lists (`"uvx", "pip", ...`) alike, in the workflows, the Makefile and every script they run: `ci_scripts` follows each `scripts/` or `deploy/` path they name, and the paths those scripts name in turn. So `deploy/ansible/tests/test_verify.sh`, which the `supply-chain` job runs, is held to the same `ansible-core` pin as the `infra` job's syntax check, and the release build's `scripts/build_bundle.py` runs a pinned pip. A further test requires one version per package.
 
 **Easy to get wrong:** `uv sync --locked` in the install step is not enough. A later `uv run` re-locks silently if `uv.lock` is stale, so a job could test dependencies nobody reviewed. `UV_LOCKED: "1"` makes that an error in every uv command.
 
@@ -208,7 +208,7 @@ The whole of `release.yml` has `permissions: {}` at the top, and each job is gra
 | Ansible | `deploy/ansible/site.yml`, roles `baseline`, `sentinel`, `caddy`, `stig` | Installs the same signed bundle on a hub, with Caddy for TLS in front. `roles/sentinel/tasks/verify.yml` runs the signature gate on the target before anything is unpacked | `deploy/ansible/tests/test_verify.sh` (CI `supply-chain`), syntax check (CI `infra`) |
 | STIG role | `deploy/ansible/roles/stig/` | A documented subset of the DISA Ubuntu 24.04 STIG; checks the settings in effect (`sshd -T`), not the files written; optional OpenSCAP scan converted to a `.ckl` checklist | `tests/compliance/test_stig_role.py`, chapter 13 |
 | AWS | `deploy/aws/terraform/` | One Graviton instance in its own VPC: IMDSv2 only, encrypted root, SSH only from `admin_cidr` (which may never be `0.0.0.0/0`), Session Manager for break-glass access, leaf port closed unless allow-listed, a budget alarm | CI `infra` (fmt, validate) |
-| Release image | `deploy/containers/Dockerfile` | Built from an unpacked, verified bundle; re-checks `SHA256SUMS`; Chainguard base pinned by digest; non-root, read-only root | release `container` job |
+| Release image | `deploy/containers/Dockerfile` | Built from an unpacked, verified bundle; runs the installer's `verify_contents.sh` (every listed file matches, nothing unlisted); Chainguard base pinned by digest; non-root, read-only root | `tests/supplychain/test_install_integrity.py` (static); release `container` job |
 | Compose | `deploy/compose/compose.yaml`, `deploy/compose/Dockerfile` | Hub and edge, each with its own nats-server, over one Toxiproxy link; the image builds from source | `tests/test_compose_stack.py`, `tests/test_compose_config.py`, `tests/test_compose_image.py`, `tests/test_compose_wiring.py`, `tests/test_compose_smoke.py`; CI `compose-smoke` |
 
 In `deploy/ansible/roles/sentinel/tasks/verify.yml`, **the part that is easy to get wrong** is the verifier itself. The play copies the pinned cosign to the host and checks its sha256 *on the host* against the digest it pulls out of `deploy/tools.lock` (`sentinel_cosign_sha256` in the role's defaults). A cosign swapped on the controller or in transit would otherwise be trusted to judge the bundle.
@@ -236,7 +236,7 @@ cp build/toxiproxy.bak .tools/x86_64/toxiproxy
 unshare -rn make tools                                        # quiet reuse again
 ```
 
-The third command ends in a `URLError` traceback ("Temporary failure in name resolution"). That is the proof: `fetch` noticed the file no longer matched its stamp and went to download a fresh copy. With a network, it would have replaced the file.
+The third command logs `Pinned tool download failed`, prints `cannot download toxiproxy <version> (x86_64) from <url>: [Errno -3] Temporary failure in name resolution` and exits 1. That is the proof: `fetch` noticed the file no longer matched its stamp and went to download a fresh copy. With a network, it would have replaced the file.
 
 **The supply-chain unit tests, with no network at all:**
 
@@ -266,14 +266,14 @@ Each exits 1, in turn with `no signature bundle`, `no verification policy`, `amb
 
 ```bash
 mkdir -p build/try/mini/web && echo '<!doctype html>' > build/try/mini/web/index.html
-cp deploy/bundle/install.sh build/try/mini/
+cp deploy/bundle/install.sh deploy/bundle/verify_contents.sh build/try/mini/
 uv run python -c 'import pathlib; from supplychain.checksums import write_manifest; write_manifest(pathlib.Path("build/try/mini"))'
 cat build/try/mini/SHA256SUMS
 echo 'added after signing' > build/try/mini/web/injected.js
 PREFIX=/nonexistent SYSTEMD=0 build/try/mini/install.sh
 ```
 
-Look for `install: refusing files that SHA256SUMS does not list:`, followed by the added file's path relative to the bundle. Now remove the added file and change a listed one instead (`rm build/try/mini/web/injected.js; echo changed >> build/try/mini/web/index.html`). Run the installer again, and `sha256sum` reports the changed file as `FAILED`. Both refusals happen before anything is written under `PREFIX`.
+Look for `verify_contents: refusing files that SHA256SUMS does not list:`, followed by the added file's path relative to the bundle. Now remove the added file and change a listed one instead (`rm build/try/mini/web/injected.js; echo changed >> build/try/mini/web/index.html`). Run the installer again, and `sha256sum` reports the changed file as `FAILED`. Both refusals happen before anything is written under `PREFIX`.
 
 **The dependency set every artifact installs:**
 
@@ -361,7 +361,7 @@ These are stated plainly because the configuration exists and is checked, which 
 | A malformed row in `deploy/tools.lock` | `parse` raises before any download | `tools.lock line N: expected 6 columns...` |
 | A tool with no pin for the requested arch | `select` raises; nothing is fetched | `no pin for arch aarch64: <name>` |
 | A download that does not match its pin | Logged with both digests; nothing written | `SHA-256 mismatch for <tool> <arch>: got ..., pinned ...` |
-| A cached tool changed on disk | Not reused; downloaded again | With no network, a `URLError` traceback rather than a one-line message |
+| A cached tool changed on disk | Not reused; downloaded again | With no network, `cannot download <tool> <version> (<arch>) from <url>: <reason>` and exit 1 |
 | `web/dist` not built | `build` exits before staging | `web/dist is missing: run make web first` |
 | A shipped fixture missing from the source | The copy raises; the build fails | Python traceback naming the path |
 | No `.sigstore.json` beside the bundle | Refused before cosign | `no signature bundle: ... (an unsigned artifact is never installed)` |
@@ -369,7 +369,7 @@ These are stated plainly because the configuration exists and is checked, which 
 | A trust root that is not the pinned one | Refused before cosign | `trusted root digest ... does not match the pinned ...` |
 | A tampered, re-signed or wrong-identity bundle | cosign rejects it | `verify_signature: FAIL: signature does not verify for ...`; `verify_offline.sh` adds `bundle not unpacked` |
 | A changed file inside the unpacked bundle | `sha256sum` fails; nothing installed | `<path>: FAILED`, `sha256sum: WARNING` |
-| A file added inside the unpacked bundle | Refused; nothing installed | `install: refusing files that SHA256SUMS does not list:` |
+| A file added inside the unpacked bundle, or to the release image's build context | Refused; nothing installed | `verify_contents: refusing files that SHA256SUMS does not list:` |
 | No `python3.12` on the host | Refused | `python3.12 is required on the host` |
 | The proof's namespace has network | `verify_offline.sh` stops | `FAIL: namespace has network` |
 | An SBOM missing a shipped component | Logged; exit 1 | `SBOM incomplete` with the missing names |

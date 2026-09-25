@@ -23,6 +23,9 @@ PYTHON_TAG = "3.12"
 # Reference data an installed node reads from SENTINEL_FIXTURES, shipped as vendored:
 # the NASA CARA validation set, and the public element-set snapshot a hub starts from.
 SHIPPED_FIXTURES = ("cara", "cara_cases.json", "omm")
+# The installer and the contents check it and the release image run, from
+# deploy/bundle/, at the bundle's root.
+INSTALLER = ("install.sh", "verify_contents.sh")
 
 
 def stage_fixtures(source: pathlib.Path, stage: pathlib.Path) -> pathlib.Path:
@@ -37,6 +40,12 @@ def stage_fixtures(source: pathlib.Path, stage: pathlib.Path) -> pathlib.Path:
         else:
             shutil.copy2(source / name, target / name)
     return target
+
+
+def stage_installer(source: pathlib.Path, stage: pathlib.Path) -> None:
+    """Copy the installer scripts to the bundle's root, modes kept."""
+    for name in INSTALLER:
+        shutil.copy2(source / name, stage / name)
 
 
 def export_requirements(root: pathlib.Path) -> str:

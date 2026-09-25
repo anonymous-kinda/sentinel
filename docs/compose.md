@@ -97,7 +97,7 @@ When `deploy/tools.lock` moves to a new nats-server or Toxiproxy version, `tests
 
 The wheel is built against the setuptools that the pinned build image ships, so nothing unpinned is fetched to build it. The build context is an allowlist (`deploy/compose/Dockerfile.dockerignore`).
 
-The compose image adds two things to the release image: the OMM element-set snapshot a hub serves (`fixtures/omm`), and an empty `/var/lib/sentinel/trust`. A new named volume mounted over that directory takes its owner (65532), which lets the enrolment containers write the trust file.
+The compose image adds one thing to the release image: an empty `/var/lib/sentinel/trust`. A new named volume mounted over that directory takes its owner (65532), which lets the enrolment containers write the trust file. Both images carry the same reference data, the NASA CARA set and the OMM element-set snapshot a hub serves (`fixtures/omm`): the release image from the bundle's `fixtures/`, the compose image copied from the checkout.
 
 ## What the smoke test proves
 
