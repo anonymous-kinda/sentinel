@@ -53,9 +53,13 @@ and so on up to 32, so it never costs a thin link a round trip every cycle.
 The records behind it are fetched. It is not a link failure.
 
 A request's timeout is 6 s + 1.5 × expected bytes ÷ max(measured rate,
-400 B/s). Before any rate is measured, 1000 B/s is assumed. A timeout or "no
-responders" is expected over a DDIL link: it counts as a link failure, and
-the next cycle tries again.
+400 B/s). Before any rate is measured, and after the link monitor forgets
+one because the round trip shows a different link
+(`sentinel/linkstate/monitor.py`), 1000 B/s is assumed. Every exchange is
+timed on the monitor's clock. A timeout or "no responders" is expected over
+a DDIL link: it counts as a link failure, and the next cycle tries again.
+One lost request reads DEGRADED; the link reads DENIED only when a second
+is lost in a row with no success for the grace period.
 
 A record's expected bytes are its size in the manifest. An operator-data
 exchange's are the request, the budget and 2000 bytes for the hub's

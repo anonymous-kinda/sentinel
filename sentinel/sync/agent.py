@@ -212,6 +212,12 @@ class SyncAgent:
         manifest and records still get the link in each."""
         return int(min(self._rate() * OPS_BUDGET_S, OPS_BUDGET_MAX_BYTES))
 
+    async def _exchange(self, subject: str, request: bytes, timeout: float) -> tuple[Msg, float]:
+        """One request and its reply, timed on the link monitor's clock."""
+        started = self.link.clock()
+        reply = await self.bus.request(subject, request, timeout=timeout)
+        return reply, self.link.clock() - started
+
     async def _publish(self, kind: str, payload: dict[str, Any]) -> None:
         await self.bus.publish(
             subjects.local(self.node_id, kind),
@@ -228,17 +234,22 @@ class SyncAgent:
     # ------------------------------------------------------------------- cycle
     async def run(self) -> None:
         while True:
-            try:
-                await self.cycle()
-            except LINK_ERRORS as exc:
-                self.link.observe_failure()
-                self.last_cycle = {"error": type(exc).__name__, "at": self.clock.now().isoformat()}
-            except Exception:  # noqa: BLE001 - the agent must outlive any single bug
-                log.exception("Sync cycle failed", hub_id=self.hub_id, mode=self.mode)
-                self.link.observe_failure()
-            await self._link_changed()
-            await self._publish("sync.progress", self.status())
+            await self.step()
             await asyncio.sleep(self.interval_s)
+
+    async def step(self) -> None:
+        """One cycle, whatever it meets: a link failure is measured, and a bug
+        is logged without stopping the agent."""
+        try:
+            await self.cycle()
+        except LINK_ERRORS as exc:
+            self.link.observe_failure()
+            self.last_cycle = {"error": type(exc).__name__, "at": self.clock.now().isoformat()}
+        except Exception:  # noqa: BLE001 - the agent must outlive any single bug
+            log.exception("Sync cycle failed", hub_id=self.hub_id, mode=self.mode)
+            self.link.observe_failure()
+        await self._link_changed()
+        await self._publish("sync.progress", self.status())
 
     async def cycle(self) -> None:
         started = time.monotonic()
@@ -261,12 +272,10 @@ class SyncAgent:
         peer = self.ops.peer_contexts(self.hub_id)
         push = self.ops.payload_for(peer["log_ctx"], peer["mv_ctx"], budget)
         request = codec.encode({"from": self.node_id, **self.ops.contexts(), "push": push, "budget": budget})
-        t0 = time.monotonic()
-        reply_msg = await self.bus.request(
+        reply_msg, rtt = await self._exchange(
             subjects.ops_exchange(self.hub_id), request,
-            timeout=self._timeout(len(request) + budget + OPS_REPLY_OVERHEAD_BYTES),
+            self._timeout(len(request) + budget + OPS_REPLY_OVERHEAD_BYTES),
         )
-        rtt = time.monotonic() - t0
         reply = codec.decode(reply_msg.data)
         merged = await self.ops.merge_payload(reply["pull"])
         self.ops.remember_peer(self.hub_id, reply["ctx"])
@@ -282,17 +291,13 @@ class SyncAgent:
     async def fetch_manifest(self) -> list[dict[str, Any]] | None:
         request = codec.encode({"from": self.node_id, "known": self.manifest_digest})
         expected_bytes = self._manifest_expected_bytes()
-        t0 = time.monotonic()
         try:
-            reply = await self.bus.request(
-                subjects.sync_manifest(self.hub_id), request, timeout=self._timeout(expected_bytes)
-            )
+            reply, rtt = await self._exchange(subjects.sync_manifest(self.hub_id), request, self._timeout(expected_bytes))
         except RequestTimeout:
             self._manifests_lost += 1
             log.info("Manifest request timed out", hub_id=self.hub_id, expected_bytes=expected_bytes,
                      next_expected_bytes=self._manifest_expected_bytes())
             raise
-        rtt = time.monotonic() - t0
         self.link.observe_success(rtt, len(reply.data), rtt)
         self._manifests_lost = 0
         if reply.headers.get("Sentinel-Unchanged") == "1":
@@ -411,9 +416,7 @@ class SyncAgent:
 
     async def _request_record(self, item: WantItem) -> Msg:
         request = codec.encode({"sha": item.sha16, "from": self.node_id})
-        t0 = time.monotonic()
-        reply = await self.bus.request(subjects.sync_fetch(self.hub_id), request, timeout=self._timeout(item.size))
-        elapsed = time.monotonic() - t0
+        reply, elapsed = await self._exchange(subjects.sync_fetch(self.hub_id), request, self._timeout(item.size))
         self.link.observe_success(elapsed, len(reply.data), elapsed)
         return reply
 
