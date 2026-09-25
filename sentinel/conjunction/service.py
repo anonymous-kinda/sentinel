@@ -149,11 +149,16 @@ class ConjunctionService:
         return IngestResult("rejected", sha, code=code, detail=detail)
 
     def _event_for(self, message: CdmMessage, data_class: str, event_id: str | None = None) -> EventRow:
-        """Group CDM updates into events: same object pair, TCA within 60 s.
+        """Group CDM updates into events: same object pair, same data class,
+        TCA within 60 s.
 
         CCSDS 508.0-B-1 has no event identifier, so the rule has to be
         explicit. Identity is assigned where a CDM is first ingested and
         travels with it; downstream nodes never re-derive it.
+
+        An event holds one data class. A screening CDM (DERIVED, geometry
+        only) for the pair of a REAL event would otherwise become its latest
+        CDM, and its refusal would replace the real Pc.
         """
         pri = message.object_designator(0) or "OBJECT1"
         sec = message.object_designator(1) or "OBJECT2"
@@ -166,10 +171,11 @@ class ConjunctionService:
             self.store.add_event(row)
             return row
         for ev in self.store.events_for_pair(pri, sec):
-            if abs((dt.datetime.fromisoformat(ev.tca_ref) - tca).total_seconds()) <= EVENT_TCA_WINDOW_S:
+            same_class = ev.data_class == data_class
+            if same_class and abs((dt.datetime.fromisoformat(ev.tca_ref) - tca).total_seconds()) <= EVENT_TCA_WINDOW_S:
                 return ev
         row = EventRow(
-            event_id=f"{pri}-{sec}-{tca:%Y%m%dT%H%M%S}",
+            event_id=self._new_event_id(pri, sec, tca, data_class),
             primary_id=pri,
             primary_name=message.object_name(0),
             secondary_id=sec,
@@ -179,6 +185,13 @@ class ConjunctionService:
         )
         self.store.add_event(row)
         return row
+
+    def _new_event_id(self, pri: str, sec: str, tca: dt.datetime, data_class: str) -> str:
+        """`<pri>-<sec>-<TCA to the second>`. A screening TCA often falls in
+        the same second as the REAL one, so when an event of another class
+        already has the id, the new one carries its data class as well."""
+        event_id = f"{pri}-{sec}-{tca:%Y%m%dT%H%M%S}"
+        return event_id if self.store.event(event_id) is None else f"{event_id}-{data_class}"
 
     # --------------------------------------------------------------- assessment
     @functools.lru_cache(maxsize=4096)  # noqa: B019 - bounded, keyed by content hash
