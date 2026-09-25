@@ -103,12 +103,22 @@ class EventRow:
 
 
 class ConjunctionStore:
+    """`version` counts changes to the stored CDMs, events and hub
+    summaries: it changes exactly when a view built from them can, so such
+    a view can be cached against it. Assessments are not counted: each is
+    a pure function of a stored CDM under one engine version."""
+
     def __init__(self, path: str = ":memory:"):
         self._db = sqlite3.connect(path, check_same_thread=False, isolation_level=None)
         self._db.row_factory = sqlite3.Row
         self._lock = threading.RLock()
+        self.version = 0
         with self._lock:
             self._db.executescript("PRAGMA journal_mode=WAL;" + SCHEMA)
+
+    def _changed(self, cursor: sqlite3.Cursor) -> None:
+        if cursor.rowcount:
+            self.version += 1
 
     # --- raw messages -------------------------------------------------------
     def has_cdm(self, sha256: str) -> bool:
@@ -117,14 +127,14 @@ class ConjunctionStore:
 
     def add_cdm(self, row: CdmRow) -> None:
         with self._lock:
-            self._db.execute(
+            self._changed(self._db.execute(
                 "INSERT OR IGNORE INTO cdm_messages VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     row.sha256, row.raw, row.message_id, row.originator, row.creation_date,
                     row.tca, row.primary_id, row.secondary_id, row.event_id, row.data_class,
                     row.source, row.received_at, json.dumps(row.warnings), row.hbr_source,
                 ),
-            )
+            ))
 
     def cdms_for_event(self, event_id: str) -> list[CdmRow]:
         with self._lock:
@@ -167,10 +177,10 @@ class ConjunctionStore:
 
     def add_event(self, row: EventRow) -> None:
         with self._lock:
-            self._db.execute(
+            self._changed(self._db.execute(
                 "INSERT OR IGNORE INTO events VALUES (?,?,?,?,?,?,?)",
                 dataclasses.astuple(row),
-            )
+            ))
 
     def event(self, event_id: str) -> EventRow | None:
         with self._lock:
@@ -216,10 +226,10 @@ class ConjunctionStore:
     # --- summaries asserted by another node (edge) ------------------------------
     def put_remote_summary(self, event_id: str, summary: dict, origin: str, received_at: str) -> None:
         with self._lock:
-            self._db.execute(
+            self._changed(self._db.execute(
                 "INSERT OR REPLACE INTO remote_summaries VALUES (?,?,?,?)",
                 (event_id, json.dumps(summary), origin, received_at),
-            )
+            ))
 
     def remote_summaries(self) -> dict[str, dict]:
         with self._lock:
@@ -247,6 +257,7 @@ class ConjunctionStore:
         """Drop everything derivable from raw messages (for rebuild)."""
         with self._lock:
             self._db.executescript("DELETE FROM events; DELETE FROM assessments;")
+            self.version += 1
 
 
 def _now() -> str:

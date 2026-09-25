@@ -79,6 +79,8 @@ class ConjunctionService:
         self.policy = policy or ConjunctionPolicy()
         self.engine_config = engine_config or AssessmentConfig()
         self.engine_version = f"{__version__}+{_config_hash(self.engine_config)}"
+        # (store version, [(TCA, compact summary)]) of the events this node offers; see manifest().
+        self._offered: tuple[int, list[tuple[dt.datetime, dict]]] | None = None
 
     # ------------------------------------------------------------------ ingest
     async def ingest(
@@ -281,7 +283,7 @@ class ConjunctionService:
             if scope == "all" or (scope == "active") == future:
                 out.append(summary)
         if scope == "active":
-            out.sort(key=lambda s: (s["time_to_mcp_s"], -_consequence_rank(s)))
+            out.sort(key=_triage_order)
         else:
             out.sort(key=lambda s: s["tca"], reverse=True)
         return out
@@ -322,18 +324,28 @@ class ConjunctionService:
                 "asserted_by": remote.get("_origin")}
 
     def manifest(self) -> list[dict]:
-        """Compact summaries of every active event, for edges (P0)."""
-        out = []
-        for summary in self.list_events("active"):
-            if summary.get("verification") in (None, "LOCAL"):
+        """Compact summaries of every active event, for edges (P0).
+
+        Every edge asks every sync cycle, and building the list costs a
+        summary per stored event, so it is built once per store version.
+        Only "active" (TCA in the future) depends on the clock; that is
+        applied on every call."""
+        version = self.store.version
+        if self._offered is None or self._offered[0] != version:
+            self._offered = (version, self._offered_events())
+        now = self.clock.now()
+        return [compact for tca, compact in self._offered[1] if tca > now]
+
+    def _offered_events(self) -> list[tuple[dt.datetime, dict]]:
+        """(TCA, compact summary) of every event described by this node's own
+        data, past ones included, in triage order."""
+        offered = []
+        for summary in sorted(self.list_events("all"), key=_triage_order):
+            if summary["verification"] == "LOCAL":
                 rows = self.store.cdms_for_event(summary["event_id"])
-                out.append(
-                    compact_summary(
-                        summary,
-                        [(r.sha256[:16], len(r.raw), _epoch(r.creation_date or r.received_at)) for r in rows],
-                    )
-                )
-        return out
+                records = [(r.sha256[:16], len(r.raw), _epoch(r.creation_date or r.received_at)) for r in rows]
+                offered.append((dt.datetime.fromisoformat(summary["tca"]), compact_summary(summary, records)))
+        return offered
 
     def event_detail(self, event_id: str) -> dict | None:
         if self.store.event(event_id) is None or not self.store.cdms_for_event(event_id):
@@ -466,6 +478,11 @@ def _epoch(iso: str) -> int:
 
 def _consequence_rank(summary: dict) -> int:
     return ["ROUTINE", "WATCH", "SERIOUS", "CRITICAL"].index(summary["consequence"])
+
+
+def _triage_order(summary: dict) -> tuple[float, int]:
+    """Soonest maneuver commit point first, then the worse consequence."""
+    return summary["time_to_mcp_s"], -_consequence_rank(summary)
 
 
 def _from_dict(d: dict) -> AssessedConjunction:
