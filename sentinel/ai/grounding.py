@@ -3,8 +3,9 @@
 Every numeric token in the answer must match - at the precision the answer
 states it - a number in the tool results (values, numbers inside returned
 names, or the length of a returned list), or a number in the operator's
-own question. An answer that introduces any other number is withheld and
-the raw tool results are shown instead.
+own question. An answer that introduces any other number is withheld: the
+template answer is shown instead, phrased by code from the same facts, and
+the unsupported numbers are named (Assistant._narrate).
 
 Identifiers are not quantities. A number inside an identifier field (an
 event, object or message id, a hash, who asserted a record) grounds

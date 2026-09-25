@@ -5,6 +5,7 @@ precision stated, comes from a tool result - or from the operator's own
 question. Anything else is withheld: the model has no path to the math.
 """
 
+from sentinel.ai import grounding
 from sentinel.ai.grounding import check_grounding, numbers_in_text
 
 EVIDENCE = {
@@ -100,6 +101,14 @@ def test_a_queued_records_hash_and_the_summary_only_event_ids_ground_nothing():
     assert not check_grounding("ETA 41 s.", facts).ok
     assert not check_grounding("ETA 13 s.", facts).ok
     assert not check_grounding("75723 bytes waiting.", facts).ok
+
+
+def test_the_guard_says_what_the_operator_sees_in_place_of_a_withheld_answer():
+    """The assistant shows the template answer (tests/ai/test_assistant.py::
+    test_an_ungrounded_ai_answer_is_withheld_and_the_facts_shown), and the
+    module that withholds must say the same."""
+    doc = " ".join(grounding.__doc__.split())
+    assert "the template answer is shown instead" in doc and "raw tool results" not in doc
 
 
 def test_absurd_exponents_never_crash_the_guard():
