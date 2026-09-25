@@ -223,7 +223,7 @@ The edge's leafnode remote denies exporting `unit.>`, `passes.>` and `node.>`, a
 
 Each request's timeout scales with the link the agent has measured: `6 + 1.5 × bytes / max(rate, 400)` seconds. A cycle spends at most `max(5 × interval, 10)` seconds pulling.
 
-`SENTINEL_SYNC_MODE=fifo` orders the want list by hub arrival time and turns admission control off. It exists only as the measured baseline for the LIMITED scenario. In the latest run (`docs/ddil-results.md`), on the same link with the same bytes, every event was visible as a summary at 5.5 s, and the most urgent full CDM arrived in 12.1 s with earliest-deadline-first against 46.8 s in FIFO order.
+`SENTINEL_SYNC_MODE=fifo` orders the want list by hub arrival time and turns admission control off. It exists only as the measured baseline for the LIMITED scenario. In `docs/ddil-results.md`, on the same link with the same bytes, every event was visible as a summary at 6.5 s, and the most urgent full CDM arrived in 9.1 s with earliest-deadline-first against 136.9 s in FIFO order: medians of 5 runs per mode. Each run starts with the whole backlog at the hub and the link down, and the leaf connects over the shaped link, so both modes move the same records over the same link. ADR-006 says why the scenario is built that way.
 
 **Element sets share the link.** A hub offers edges the element sets the pass module uses: by default only the 38 in the imaging catalog (`SENTINEL_SYNC_ELEMENTS=catalog`), not every set it holds. Each record costs a request/reply and a manifest entry on a thin link. ADR-008 describes what offering the whole snapshot cost in a development run, how to reproduce it, and why the fix (batched fetch, or a reference-data class below routine CDMs) is an open question rather than done. The DDIL numbers above were measured with the catalog on offer.
 
@@ -520,7 +520,8 @@ On the edge's console, the LINK chip applies Toxiproxy presets to the real leaf 
 ```bash
 uv run python -m harness.run recovery                  # one scenario; needs nats-server and toxiproxy in .tools/
 uv run python -m harness.run denied --denial-s 60      # a longer denial
-make ddil                                              # all six, then rewrites docs/ddil-results.md
+uv run python -m harness.run limited --limited-runs 3  # fewer runs behind each median (CI runs 3)
+make ddil                                              # all six (LIMITED_RUNS=5 per mode), then rewrites docs/ddil-results.md
 make opsec                                             # the OPSEC scenario; rewrites docs/ddil-results.md only if all six have results
 ```
 
@@ -528,7 +529,7 @@ The scenarios are `denied`, `limited`, `intermittent`, `degraded`, `recovery` an
 
 `python -m harness.report` writes `docs/ddil-results.md` from all six results in `harness/results/` or not at all: with any missing, it names them, writes nothing and exits 1. `make opsec` passes `--if-complete`, so after one scenario on a fresh clone it says what is missing, leaves the report alone and succeeds. Commit the report only from a complete, passing run of all six (`make ddil`).
 
-For this guide, `recovery` and `opsec` were run through `python -m harness.run`, which writes only the git-ignored `harness/results/`. `recovery` passed. `opsec` failed one assertion, not from a leak but from a harness race: it counted element sets on the hub-side capture, which subscribes after the leaf connects and so could miss an early fetch. The scenario now counts them from the edge's own sync record (`SyncLedger` in `harness/opsec.py`) and keeps the capture for leak detection only. `make ddil` was not run, because it rewrites the committed report.
+For this guide, `recovery` and `opsec` were run through `python -m harness.run`, which writes only the git-ignored `harness/results/`. `recovery` passed. `opsec` failed one assertion, not from a leak but from a harness race: it counted element sets on the hub-side capture, which subscribes after the leaf connects and so could miss an early fetch. The scenario now counts them from the edge's own sync record (`SyncLedger` in `harness/ledger.py`) and keeps the capture for leak detection only. `make ddil` was not run, because it rewrites the committed report.
 
 ### The air-gap bundle
 

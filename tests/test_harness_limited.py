@@ -51,5 +51,10 @@ def test_every_record_delivered_once_nothing_in_the_queue_is_unfetched():
     assert reached(verified, status()) == everything
 
 
-def test_a_record_held_summary_only_was_not_delivered():
-    assert "all_records" not in reached(edge(**{"EV-1": "VERIFIED", "EV-2": "VERIFIED"}), status("ARRIVED", "SUMMARY_ONLY"))
+def test_a_record_held_summary_only_settles_the_backlog_without_being_delivered():
+    """Admission control may hold a record the link cannot deliver in time. The run
+    ends there rather than waiting out its timeout; the records-moved check then
+    shows that this run moved fewer records than the others."""
+    verified = edge(**{"EV-1": "VERIFIED", "EV-2": "VERIFIED"})
+    assert "all_records" in reached(verified, status("ARRIVED", "SUMMARY_ONLY"))
+    assert "all_records" not in reached(verified, status("ARRIVED", "FETCHING"))

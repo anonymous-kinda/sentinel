@@ -95,7 +95,7 @@ def limited_section(m: dict) -> list[str]:
         row("every event visible (summaries)", "all_summaries"),
         row("most urgent event's full CDM", "most_urgent_full", bold=True),
         row("every event verified", "all_latest_verified"),
-        row("every record delivered", "all_records"),
+        row("every record delivered or held summary-only", "all_records"),
         row("edge's rate estimate at the end", "rate_estimate_bytes_per_s", "B/s", 0),
         "",
         f"Same link, same {first['records_fetched']} records ({first['cdms']} CDMs, {first['cdm_bytes']:,} bytes of KVN, "

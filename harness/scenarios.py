@@ -257,13 +257,15 @@ def limited_link() -> dict:
 
 
 def limited_milestones(hub_events: dict, urgent_id: str, edge_events: dict, sync: dict) -> dict[str, bool]:
-    """Which of the moments a LIMITED run times the edge has reached, from one look at it."""
+    """Which of the moments a LIMITED run times the edge has reached, from one look at it.
+    `all_records`: the backlog is settled, every record delivered or held summary-only."""
     visible = set(edge_events) >= set(hub_events)
+    settled = all(i["status"] in ("ARRIVED", "SUMMARY_ONLY") for i in sync["queue"])
     return {
         "all_summaries": visible,
         "most_urgent_full": edge_events.get(urgent_id, {}).get("verification") == "VERIFIED",
         "all_latest_verified": visible and all(e.get("verification") == "VERIFIED" for e in edge_events.values()),
-        "all_records": visible and bool(sync["last_cycle"]) and all(i["status"] == "ARRIVED" for i in sync["queue"]),
+        "all_records": visible and bool(sync["last_cycle"]) and settled,
     }
 
 
