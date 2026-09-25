@@ -74,11 +74,11 @@ def test_a_forgery_that_reuses_a_dot_is_rejected_and_recorded_not_raised():
     assert log.rejected[-1]["reason"] == "untrusted-or-bad-signature"
 
 
-@pytest.mark.xfail(strict=True, reason=CORE + (
-    "SignedLog.verify calls bytes.fromhex(entry.sig), so a signature that is not hex raises "
-    "ValueError out of merge instead of being rejected and recorded"))
-def test_a_signature_that_is_not_hex_is_rejected_and_recorded_not_raised():
-    entry = dataclasses.replace(authored("alpha", 1)[0], sig="not-hex")
+@pytest.mark.parametrize("sig", ["not-hex", "00", "00" * 65], ids=["not-hex", "too-short", "too-long"])
+def test_a_signature_that_is_not_hex_is_rejected_and_recorded_not_raised(sig):
+    """SignedLog.verify called bytes.fromhex(entry.sig), so a signature that
+    was not hex raised ValueError out of merge instead of being rejected."""
+    entry = dataclasses.replace(authored("alpha", 1)[0], sig=sig)
     log = SignedLog("hub", KEYS["hub"], TrustStore(TRUST))
     assert log.merge([entry]) == []
     assert log.rejected[-1]["reason"] == "untrusted-or-bad-signature"

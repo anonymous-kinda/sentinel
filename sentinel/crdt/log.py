@@ -141,7 +141,11 @@ class SignedLog:
         return entry
 
     def verify(self, entry: Entry) -> bool:
-        return self.trust.verify(entry.dot.node, entry.signed_bytes(), bytes.fromhex(entry.sig))
+        try:
+            signature = bytes.fromhex(entry.sig)
+        except ValueError:
+            return False  # not hex: no signature at all, so it cannot verify
+        return self.trust.verify(entry.dot.node, entry.signed_bytes(), signature)
 
     def merge(self, incoming: Iterable[Entry]) -> list[Entry]:
         """Merge entries; return the ones that were new. Idempotent."""
