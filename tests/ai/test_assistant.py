@@ -10,7 +10,7 @@ import asyncio
 
 import pytest
 
-from sentinel.ai.assistant import Assistant
+from sentinel.ai.assistant import MAX_DRAFTS, TOOL_QUESTIONS, Assistant
 from sentinel.ai.narrate import NarratorUnavailable
 from sentinel.ai.router import Route, RouterUnavailable
 from sentinel.ai.tools import ToolError
@@ -47,7 +47,7 @@ class ScriptedNarrator:
         return self._text
 
 
-def make(registry, link="CONNECTED", marking="UNCLASSIFIED//EXERCISE", jev=None, llm=None, audit=None):
+def make(registry, link="CONNECTED", marking="UNCLASSIFIED//EXERCISE", jev=None, llm=None, audit=None, **options):
     return Assistant(
         registry,
         link_state=lambda: link,
@@ -57,6 +57,7 @@ def make(registry, link="CONNECTED", marking="UNCLASSIFIED//EXERCISE", jev=None,
         clock=FixedClock(NOW),
         jev=jev,
         llm=llm,
+        **options,
     )
 
 
@@ -172,6 +173,45 @@ def test_a_draft_against_a_superseded_cdm_cannot_be_confirmed():
         asyncio.run(assistant.confirm(a.draft_id, author="op2"))
     assert exc.value.code == "stale_draft"
     assert registry.ops.entries(a.facts["event_id"]) == []
+
+
+def test_unconfirmed_drafts_are_capped_and_the_oldest_is_evicted(caplog):
+    assistant = make(build_registry(), link="DENIED", max_drafts=2)
+    oldest, middle, newest = (ask(assistant, "/draft 118 monitor") for _ in range(3))
+
+    with pytest.raises(ToolError) as exc:
+        asyncio.run(assistant.confirm(oldest.draft_id, author="op2"))
+    assert exc.value.code == "unknown_draft", "an evicted draft is gone, as if never made"
+    assert asyncio.run(assistant.confirm(newest.draft_id, author="op2"))["kind"] == "DECISION"
+    assert asyncio.run(assistant.confirm(middle.draft_id, author="op2"))["kind"] == "DECISION"
+    [evicted] = [r.fields for r in caplog.records if r.getMessage() == "Assistant draft evicted"]
+    assert evicted == {"ask_seq": oldest.audit_seq, "max_drafts": 2}
+
+
+def test_the_default_cap_bounds_the_drafts_a_node_holds():
+    assistant = make(build_registry(), link="DENIED")
+    assert assistant.max_drafts == MAX_DRAFTS and 0 < MAX_DRAFTS <= 1000
+
+
+def test_the_interface_states_the_cap(tmp_path):
+    from sentinel.api import create_app
+    from sentinel.api.settings import Settings
+
+    settings = Settings(exercise=False, library=False, web_dist=None, var_dir=str(tmp_path))
+    confirm = create_app(settings, start_background=False).openapi()["paths"]["/api/ai/confirm"]["post"]
+    assert f"the {MAX_DRAFTS} newest unconfirmed drafts" in confirm["description"]
+
+
+def test_a_read_only_node_answers_without_drafting_what_it_could_never_record():
+    audit = AuditLog(None)
+    registry = build_registry()
+    assistant = make(registry, link="DENIED", audit=audit, read_only=True)
+    a = ask(assistant, "/draft 118 maneuver")
+    assert a.status == "clarify" and a.draft_id is None and a.facts is None
+    assert a.text == TOOL_QUESTIONS["read_only"] and "read-only" in a.text
+    assert a.route["tool"] == "draft_decision", "the request is understood, and refused"
+    assert audit.entries()[-1]["status"] == "clarify"
+    assert ask(assistant, "/events").status == "answered", "reading still works"
 
 
 # ----------------------------------------------------------------- audit

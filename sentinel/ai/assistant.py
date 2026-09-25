@@ -34,6 +34,8 @@ from .tools import ToolError, ToolRegistry
 log = get_logger(__name__)
 
 MIN_CONFIDENCE = 0.5
+# Unconfirmed drafts a node holds; past this the oldest is forgotten.
+MAX_DRAFTS = 100
 COMMANDS = "Try /events [red|amber] [48h], /assess <n>, /explain <n>, /link, /queue or /draft <n> <decision>."
 TOOL_QUESTIONS = {
     "missing_event": "Which event?",
@@ -42,6 +44,7 @@ TOOL_QUESTIONS = {
     "invalid_decision": f"A decision is one of {', '.join(DECISIONS)}.",
     "invalid_band": "Bands are RED, AMBER, GREEN and UNASSESSED.",
     "unknown_tool": COMMANDS,
+    "read_only": "This node is read-only: it answers questions but records no decisions, so it drafts none.",
 }
 
 
@@ -99,6 +102,8 @@ class Assistant:
         jev: Router | None = None,
         llm: Narrator | None = None,
         min_confidence: float = MIN_CONFIDENCE,
+        max_drafts: int = MAX_DRAFTS,
+        read_only: bool = False,
     ):
         self.tools = tools
         self.marking = marking
@@ -106,6 +111,8 @@ class Assistant:
         self.audit = audit
         self.clock = clock
         self.min_confidence = min_confidence
+        self.max_drafts = max_drafts
+        self.read_only = read_only
         self._link_state = link_state
         self._routers: dict[str, Router] = {"deterministic": DeterministicRouter(), **({"jev": jev} if jev else {})}
         self._narrators: dict[str, Narrator] = {"template": TemplateNarrator(), **({"claude": llm} if llm else {})}
@@ -145,8 +152,16 @@ class Assistant:
         answer.audit_seq = self.audit.append(record, at=self.clock.now().isoformat())["seq"]
         if answer.status == "draft":
             answer.draft_id = secrets.token_hex(8)
-            self._drafts[answer.draft_id] = _Draft(answer.facts, answer.route, answer.audit_seq)
+            self._hold_draft(answer.draft_id, _Draft(answer.facts, answer.route, answer.audit_seq))
         return answer
+
+    def _hold_draft(self, draft_id: str, draft: _Draft) -> None:
+        """Keep a draft for confirmation, forgetting the oldest past max_drafts:
+        confirming a forgotten draft is `unknown_draft`, as if never made."""
+        self._drafts[draft_id] = draft
+        while len(self._drafts) > self.max_drafts:
+            evicted = self._drafts.pop(next(iter(self._drafts)))
+            log.warning("Assistant draft evicted", ask_seq=evicted.ask_seq, max_drafts=self.max_drafts)
 
     async def _answer(self, text: str, tier: dict) -> Answer:
         fallbacks: list[dict] = []
@@ -157,6 +172,9 @@ class Assistant:
         held = gate(route, self.min_confidence)
         if held == "unsure":
             answer.text, answer.alternatives = self._unsure(route)
+            return answer
+        if self.read_only and TOOLS[route.tool].writes:
+            answer.text = TOOL_QUESTIONS["read_only"]
             return answer
         if held == "which_event":
             answer.text, answer.alternatives = self._which_event(route, context)

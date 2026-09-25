@@ -233,6 +233,16 @@ def test_tracks_refuse_what_they_cannot_draw(node, params, status):
     assert node.get("/api/passes/tracks", params=params).status_code == status
 
 
+def test_a_track_far_from_the_element_epoch_is_422_with_the_reason(node):
+    """Year 9999 once came back 200 with finite nonsense positions."""
+    r = node.get(
+        "/api/passes/tracks",
+        params={"norad_id": WV3, "start": "9999-12-31T23:00:00Z", "end": "9999-12-31T23:10:00Z"},
+    )
+    assert r.status_code == 422
+    assert r.json()["detail"].startswith("the element set is stale over this interval")
+
+
 # --------------------------------------------------------------- node wiring
 def test_hub_and_standalone_load_the_vendored_snapshot_and_say_how_much(tmp_path, caplog):
     caplog.set_level(logging.INFO)
