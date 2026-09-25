@@ -35,7 +35,7 @@ from ..risk.engine import assess, finite_eigenvalues
 from ..risk.types import AssessedConjunction, AssessmentConfig, Method, RefusalReason
 from .policy import ConjunctionPolicy, triage
 from .store import CdmRow, ConjunctionStore, EventRow
-from .summaries import compact_summary, disagreements, expand_summary
+from .summaries import compact_summary, disagreements, expand_summary, record_hashes
 from .trajectory import encounter_arcs_ecef
 
 EVENT_TCA_WINDOW_S = 60.0
@@ -286,18 +286,20 @@ class ConjunctionService:
             out.sort(key=lambda s: s["tca"], reverse=True)
         return out
 
-    @staticmethod
-    def _verification(summary: dict, remote: dict | None) -> str:
-        """LOCAL: this node's own data. VERIFIED: fetched and re-assessed here,
-        and this node's result is the one the hub asserted, field for field
-        (`disagreements`). UPDATING: the hub has a newer CDM not yet fetched.
-        MISMATCH: same CDM, different result - flag it."""
+    def _verification(self, summary: dict, remote: dict | None) -> str:
+        """LOCAL: this node's own data - no hub summary, or a CDM newer than
+        any the hub listed. UPDATING: the hub's latest CDM is not here yet.
+        VERIFIED: what this node shows is its own assessment of a record the
+        hub listed, and it is the result the hub asserted, field for field
+        (`disagreements`). MISMATCH: it is not - flag it."""
         if remote is None:
             return "LOCAL"
-        latest = summary["latest_cdm_sha256"]
-        hub_latest = remote["c"][-1][0] if remote.get("c") else None
-        if hub_latest and not latest.startswith(hub_latest):
+        listed = record_hashes(remote)
+        if listed and not self.store.has_cdm_prefix(listed[-1]):
             return "UPDATING"
+        latest = summary["latest_cdm_sha256"]
+        if listed and not any(latest.startswith(sha16) for sha16 in listed):
+            return "LOCAL"
         return "MISMATCH" if disagreements(summary, remote) else "VERIFIED"
 
     def current_ref(self, event_id: str) -> dict | None:
@@ -313,9 +315,10 @@ class ConjunctionService:
 
     def _asserted_ref(self, event_id: str) -> dict | None:
         remote = self.store.remote_summaries().get(event_id)
-        if remote is None or not remote.get("c"):
+        listed = [] if remote is None else record_hashes(remote)
+        if not listed:
             return None
-        return {"cdm_sha256": remote["c"][-1][0], "inputs_hash": remote.get("h"), "message_id": None,
+        return {"cdm_sha256": listed[-1], "inputs_hash": remote.get("h"), "message_id": None,
                 "asserted_by": remote.get("_origin")}
 
     def manifest(self) -> list[dict]:

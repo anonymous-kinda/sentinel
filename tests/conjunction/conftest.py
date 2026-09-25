@@ -46,6 +46,11 @@ def without_hbr(kvn: str) -> str:
     return "\n".join(line for line in kvn.splitlines() if not line.startswith("COMMENT HBR")) + "\n"
 
 
+def without_creation_date(kvn: str) -> str:
+    """Admitted: the profile then orders the event's CDMs by time of receipt."""
+    return "\n".join(line for line in kvn.splitlines() if not line.startswith("CREATION_DATE")) + "\n"
+
+
 def real_kvn() -> str:
     """The first exercise message, as if an operations centre had sent it."""
     return edited(first_exercise_kvn(), ORIGINATOR="TEST-OPS-CENTRE")

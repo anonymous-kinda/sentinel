@@ -96,6 +96,11 @@ def disagreements(summary: dict, asserted: dict) -> list[str]:
     return [key for key in RESULT_FIELDS if mine[key] != asserted.get(key)]
 
 
+def record_hashes(compact: dict) -> list[str]:
+    """The sha16 of every record the summary lists, oldest first."""
+    return [entry[0] for entry in compact.get("c") or []]
+
+
 def summary_only(compact: dict) -> dict:
     """The P0 part - everything but the CDM list."""
     return {k: v for k, v in compact.items() if k != "c"}
@@ -162,9 +167,10 @@ def summary_problem(compact: object, now: dt.datetime, policy: ConjunctionPolicy
     try:
         shown = expand_summary(compact, now, policy)
         json.dumps(shown, allow_nan=False)
+        hashes = record_hashes(compact)
     except _UNSHOWABLE as exc:
         return type(exc).__name__
-    if not isinstance(shown["latest_cdm_sha256"], str):
+    if not all(isinstance(sha16, str) for sha16 in hashes):
         return "record hash is not text"
     for key in ("pc", "pc_max"):
         value = shown["assessment"][key]
