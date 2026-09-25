@@ -46,6 +46,17 @@ class DotContext:
     def contains(self, dot: Dot) -> bool:
         return dot.seq <= self.vv.get(dot.node, 0) or dot in self.cloud
 
+    def covers(self, other: DotContext) -> bool:
+        """Every dot `other` has seen, this context has seen too.
+
+        Compares version vectors instead of enumerating dots, so the cost is
+        the size of `other` as sent, never the history it claims. compact()
+        keeps the dot after each node's prefix out of the cloud, so a longer
+        prefix in `other` always names a dot this context lacks.
+        """
+        prefixes = all(seq <= self.vv.get(node, 0) for node, seq in other.vv.items() if seq > 0)
+        return prefixes and all(self.contains(dot) for dot in other.cloud)
+
     def add(self, dot: Dot) -> None:
         if not self.contains(dot):
             self.cloud.add(dot)

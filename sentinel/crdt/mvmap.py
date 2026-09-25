@@ -91,11 +91,7 @@ class MVMap:
 
     def missing_for(self, peer: DotContext) -> dict[str, Register]:
         """Every register holding a write the peer has not seen."""
-        out = {}
-        for key, reg in self.registers.items():
-            if any(not peer.contains(d) for d in reg.ctx.dots()):
-                out[key] = reg
-        return out
+        return {key: reg for key, reg in self.registers.items() if not peer.covers(reg.ctx)}
 
     def state_digest(self) -> str:
         return codec.digest(
