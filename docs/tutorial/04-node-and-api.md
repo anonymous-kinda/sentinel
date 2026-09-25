@@ -149,7 +149,9 @@ Four more are read outside `Settings`: `SENTINEL_CLOCK` (`from_env` in `sentinel
 
 **Role validation.** `Settings.__post_init__` refuses a role that is not in `ROLES`. The comment there and `tests/api/test_node_role.py` say why: a mistyped `edg` used to start no sync while `/api/node` still reported a `sync` module, so a broken edge looked connected. Now the node refuses to start.
 
-**Easy to get wrong.** Boolean flags go through `_flag`, which reads `1`, `true`, `yes` and `on` as true and *any other value* as false. Nothing validates them. `SENTINEL_READ_ONLY=enabled` therefore produces a writable node. Check `read_only` in `GET /api/node` after deploying a public node.
+**Boolean validation.** Boolean flags go through `_flag`, which accepts the eight spellings in `FLAG_VALUES` (`1`, `true`, `yes`, `on`, `0`, `false`, `no`, `off`, in any case) and refuses anything else with a `ValueError` that names the variable. `SENTINEL_READ_ONLY=enabled` used to read as false and start a public node writable, with nothing logged. `tests/api/test_settings_flags.py` holds every flag to the set.
+
+**Easy to get wrong.** An empty value is refused too: `SENTINEL_AI_CLOUD=` does not mean "unset". Delete the line to take the default. And validation catches a word it does not know, not a wrong choice: `SENTINEL_READ_ONLY=0` on a public node is valid, so still check `read_only` in `GET /api/node` after deploying one.
 
 ### `sentinel/clock.py`
 
@@ -223,11 +225,11 @@ The policy is enforced by reading the source: `tests/test_logging_policy.py` par
 
 ### `sentinel/cli.py` and `sentinel/cli_ext.py`
 
-**Purpose.** `sentinel` is the console script. `build_parser` defines the codec commands: `sentinel assess`, `sentinel cdm parse` and `sentinel cdm emit`. `_register_extensions` then calls `register` in `cli_ext.py`, which adds `sentinel serve`, `sentinel exercise generate` and `sentinel screen`. `main` maps outcomes to exit codes: 0 when a message was assessed (a refusal is still an assessment), 2 for `CdmRejected`, and 1 for `CdmParseError` or an I/O error.
+**Purpose.** `sentinel` is the console script. `build_parser` defines the codec commands: `sentinel assess`, `sentinel cdm parse` and `sentinel cdm emit`. `_register_extensions` then calls `register` in `cli_ext.py`, which adds `sentinel serve`, `sentinel exercise generate` and `sentinel screen`. `main` maps outcomes to exit codes: 0 when a message was assessed (a refusal is still an assessment), 2 for `CdmRejected`, and 1 for an I/O error. `assess` and `cdm parse` read the file with `admit` (`sentinel/cdm/admission.py`, chapter 3), the node's own admission path, so whatever the node would quarantine, a file that is not KVN included, prints `REJECTED` with the node's code and reason and exits 2. `cdm emit` reads only the structure, with `read_message`. `exercise generate --epoch` and `screen --start` read their times with `_utc`: an ISO-8601 time without a timezone is UTC.
 
 `_serve` configures logging, then runs uvicorn with `log_config=None` (uvicorn's own lines go through Sentinel's handler) and `access_log=False` (requests are logged at the proxy in front). `uvicorn` and the API are imported inside `_serve`, so `sentinel assess` never loads the web stack.
 
-**Easy to get wrong.** Exit code 1 covers more than usage and I/O errors. A file that is not KVN at all raises `CdmParseError` and exits 1, although the node quarantines the same bytes as `PARSE_ERROR` with a 422. Only admission failures after a successful parse exit 2.
+**Easy to get wrong.** Exit code 2 is not only a rejection: argparse also exits 2 on a usage error, such as a missing file argument. Read standard error to tell them apart: a rejection starts with `REJECTED` and its code, a usage error with `usage:`.
 
 ### The interface documents
 
@@ -337,7 +339,7 @@ curl -s http://127.0.0.1:8010/openapi.json | python3 -c 'import json,sys; print(
 curl -s -D - -o /dev/null http://127.0.0.1:8010/api/health
 ```
 
-The first lists every route, the passes and screening ones included. The second shows the `content-security-policy` header on an API reply. (Use `-D - -o /dev/null` rather than `curl -I`: a HEAD request gets 405, because the routes are GET only.) FastAPI's `/docs` page is also served, but it loads Swagger UI from a CDN with an inline script, and the node's own CSP blocks both, so in a browser it stays blank. Read `docs/icd/openapi.json` instead.
+The first lists every route, the passes and screening ones included. The second shows the `content-security-policy` header on an API reply. (Use `-D - -o /dev/null` rather than `curl -I`: a HEAD request gets 405, because the routes are GET only.) FastAPI's `/docs` and `/redoc` pages are switched off and answer 404: they load their scripts from a CDN and start them with an inline script, which the node's own CSP blocks, so they would render blank. The schema is served here at `/openapi.json`, and `docs/icd/openapi.json` is its committed export.
 
 **9. Try the clocks.**
 
@@ -398,8 +400,8 @@ The help lists `assess`, `cdm`, `serve`, `exercise` and `screen`. The assessment
 - *Deferred:* authentication inside the node. It is a documented gap (IA-2 in the POA&M), not a hidden one.
 
 **Configuration from environment variables** (no ADR; `sentinel/api/settings.py`).
-- *Buys:* systemd units, containers and the harness configure a node the same way; a bad role, element scope, sync mode or clock stops the node at start-up.
-- *Costs:* flags are not validated, so a typo reads as off.
+- *Buys:* systemd units, containers and the harness configure a node the same way; a bad role, element scope, sync mode, clock or boolean flag stops the node at start-up.
+- *Costs:* every value is a string until something reads it, so each reader validates its own; a numeric setting such as `SENTINEL_SYNC_INTERVAL_S` fails with Python's own message, which does not name the variable.
 - *Alternative:* a configuration file, which would add a parser and a file to manage on every host.
 
 **The HTTP interface document is generated, the bus document is written and tested** (no ADR; `docs/icd/README.md`).
@@ -412,7 +414,7 @@ The help lists `assess`, `cdm`, `serve`, `exercise` and `screen`. The assessment
 |---|---|---|
 | `SENTINEL_ROLE` misspelled | `ValueError` before the server starts | the process exits; `SENTINEL_ROLE must be one of hub, edge, standalone` |
 | `SENTINEL_SYNC_ELEMENTS`, `SENTINEL_SYNC_MODE` or `SENTINEL_CLOCK` invalid | `ValueError` at build or start-up (sync mode only on an edge with a hub) | the process exits with the message |
-| A boolean flag misspelled | read as off | nothing: check `/api/node` (see the settings walkthrough) |
+| A boolean flag misspelled, or empty | `ValueError` before the server starts | the process exits; `SENTINEL_READ_ONLY must be one of 1, true, yes, on, 0, false, no, off (any case), not 'enabled'` |
 | `nats-server` not up yet | 60 retries, 0.5 s apart, then the start-up fails | log `Waiting for nats-server` with `attempt` and `error` |
 | NASA library or element snapshot missing | starts without them | log `Reference library missing` or `Element snapshot missing`, with the path |
 | Link emulator unreachable | `/api/link` still answers, with `emulation: null` | log `Link emulator unreachable` |
@@ -420,16 +422,15 @@ The help lists `assess`, `cdm`, `serve`, `exercise` and `screen`. The assessment
 | Write to a read-only node | 403 | `{"detail": "this node is read-only"}` |
 | Body over 1 MB, announced or not | 413, without reading the rest | the reply |
 | Body not JSON, not an object, or nested too deep | 422 | the reply |
-| A CDM that is wrong | 422, quarantined, `cdm.rejected` published | `GET /api/quarantine`; the console's live feed |
-| Unknown event | 404 on the detail and trajectory routes | the reply |
+| A CDM that is wrong | 422, quarantined, `cdm.rejected` published | `GET /api/quarantine`; the console's live feed; log `CDM quarantined` with `code`, `sha256` and `source` |
+| Unknown event | 404 on the detail, encounter, dilution-curve and trajectory routes | the reply: `no such event` |
 | Trajectory cannot be drawn (a state below the Earth's surface or beyond the 3 million km that ingest admits) | 422 | the reply; the globe shows nothing |
 | A catalogued imager's element set is unusable | 503 on `GET /api/passes` | log `Pass computation refused` |
 | A stream subscriber falls 256 events behind | the node closes that stream | log `Stream subscriber overflowed`; the console reconnects and refetches |
 | Console not built | the API works; `/` answers 404 | `make web`, or set `SENTINEL_WEB_DIST` |
 
-Three behaviours are worth knowing because they do not refuse:
+Two behaviours are worth knowing because they do not refuse:
 
-- `GET /api/events/<unknown>/encounter` and `.../dilution-curve` answer 200 with `"available": false`, not 404. For an unknown id the encounter reply's reason is `no covariance or HBR`, which is misleading.
 - A decision or note for an event id the node has never seen is accepted and signed, and an annotation for one is accepted too. The entry's `event_ref` then holds only the id, with no CDM hash, because there is no current CDM to bind it to.
 - An edge whose `SENTINEL_HUB_ID` is unset starts no sync agent and does not report `sync`. It works as a node that never hears from a hub.
 
@@ -467,7 +468,7 @@ When the stream reopens, `useStream` emits `stream.opened`, and the console refe
 
 <details><summary>Answer</summary>
 
-`_flag` reads only `1`, `true`, `yes` and `on` as true, so `enabled` is false and the node is writable. Nothing logs it. Catch it by checking `"read_only": true` in `GET /api/node` after deployment, or with a smoke test that expects 403 from a write.
+The node refuses to start. `_flag` accepts only its eight spellings, so the process exits with `ValueError: SENTINEL_READ_ONLY must be one of 1, true, yes, on, 0, false, no, off (any case), not 'enabled'`: a loud failure at deployment instead of a writable public node. Validation cannot catch a valid but wrong value such as `0`, so still check `"read_only": true` in `GET /api/node` after deployment, or run a smoke test that expects 403 from a write.
 </details>
 
 6. Why is `log.info(f"Unit {unit.unit_id} set at {unit.lat_deg}")` wrong here, beyond style?

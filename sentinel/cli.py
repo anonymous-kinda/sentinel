@@ -6,7 +6,8 @@
 
 Exit status follows the ingest policy: 0 when a message was assessed (a
 refusal is still an assessment), 2 when it was rejected as wrong, 1 on
-usage or I/O errors. A message is read exactly as the node admits it
+an I/O error. (argparse also exits 2, on a usage error, with `usage:` on
+stderr.) A message is read exactly as the node admits it
 (`sentinel.cdm.admit`): whatever the node would quarantine is reported with
 the node's code and reason, `REJECTED <code>...` on stderr.
 """
