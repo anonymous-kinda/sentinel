@@ -7,6 +7,8 @@ is written to one file, readable by the node's own user and nobody else.
 
 import json
 import math
+import os
+import pathlib
 import stat
 
 import pytest
@@ -108,6 +110,65 @@ def test_a_replacement_keeps_the_file_private(tmp_path):
     assert stat.S_IMODE((tmp_path / "unit.json").stat().st_mode) == 0o600
     assert units.load().unit_id == "EX-UNIT-2"
     assert [p.name for p in tmp_path.iterdir()] == ["unit.json"], "no temporary file left behind"
+
+
+@pytest.fixture
+def disk_calls(monkeypatch):
+    """Every fsync and rename the unit file makes, in order. An fsync is
+    recorded as what its descriptor is: the directory, or a file of n bytes."""
+    calls = []
+    real_fsync, real_replace = os.fsync, os.replace
+
+    def fsync(fd):
+        info = os.fstat(fd)
+        calls.append(("fsync", "directory", info.st_ino) if stat.S_ISDIR(info.st_mode) else ("fsync", "file", info.st_size))
+        real_fsync(fd)
+
+    def replace(src, dst):
+        calls.append(("replace", pathlib.Path(dst).name))
+        real_replace(src, dst)
+
+    monkeypatch.setattr(os, "fsync", fsync)
+    monkeypatch.setattr(os, "replace", replace)
+    return calls
+
+
+def test_a_saved_unit_is_on_disk_before_it_replaces_the_old_one(tmp_path, disk_calls):
+    """Power lost at any point leaves the old unit or the new one, never an
+    empty file: the new contents are flushed and fsynced before the rename,
+    and the directory is fsynced after it so the rename itself survives."""
+    UnitFile(tmp_path / "unit.json").save(unit_from_dict(VALID))
+    written = len((tmp_path / "unit.json").read_bytes())
+    assert disk_calls == [
+        ("fsync", "file", written),
+        ("replace", "unit.json"),
+        ("fsync", "directory", tmp_path.stat().st_ino),
+    ]
+
+
+def test_a_cleared_unit_stays_cleared_after_a_power_cut(tmp_path, disk_calls):
+    units = UnitFile(tmp_path / "unit.json")
+    units.save(unit_from_dict(VALID))
+    disk_calls.clear()
+    units.clear()
+    assert disk_calls == [("fsync", "directory", tmp_path.stat().st_ino)]
+    units.clear()
+    UnitFile(tmp_path / "absent" / "unit.json").clear()
+    assert len(disk_calls) == 1, "clearing no unit changes nothing, so syncs nothing"
+
+
+def test_a_failed_fsync_keeps_the_old_unit_and_leaves_no_temporary_file(tmp_path, monkeypatch):
+    units = UnitFile(tmp_path / "unit.json")
+    units.save(unit_from_dict(VALID))
+
+    def failing_fsync(fd):
+        raise OSError(5, "Input/output error")
+
+    monkeypatch.setattr(os, "fsync", failing_fsync)
+    with pytest.raises(OSError):
+        units.save(unit_from_dict({**VALID, "unit_id": "EX-UNIT-2"}))
+    assert units.load().unit_id == VALID["unit_id"]
+    assert [p.name for p in tmp_path.iterdir()] == ["unit.json"]
 
 
 def test_a_corrupt_file_is_refused_not_guessed(tmp_path):

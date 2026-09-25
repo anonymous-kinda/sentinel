@@ -65,7 +65,7 @@
   "paths": {
     "/api/ai/ask": {
       "post": {
-        "description": "An answer phrased from tool facts (every number checked by the grounding guard), a\nquestion back when the request is ambiguous, or a draft action that takes effect only\non /api/ai/confirm. 422 on an empty or over-long question.",
+        "description": "An answer phrased from tool facts (every number checked by the grounding guard), a\nquestion back when the request is ambiguous, or a draft action that takes effect only\non /api/ai/confirm. A read-only node, which can record nothing, drafts nothing: it\nsays so instead. 422 on an empty or over-long question.",
         "operationId": "ai_ask_api_ai_ask_post",
         "requestBody": {
           "content": {
@@ -157,7 +157,7 @@
     },
     "/api/ai/audit/verify": {
       "get": {
-        "description": "Recomputes the hash chain and reports the first entry that does not link, if any.",
+        "description": "Reads the audit file as it is now, recomputes the hash chain and holds it against the\nlines this node wrote. Reports the first line that does not link, cannot be read (a\nwrite torn by a power cut) or has changed or gone since it was written, if any. A\nbroken chain stays broken: entries recorded after the break never make it verify.",
         "operationId": "ai_audit_verify_api_ai_audit_verify_get",
         "responses": {
           "200": {
@@ -181,7 +181,7 @@
     },
     "/api/ai/confirm": {
       "post": {
-        "description": "The operator confirms a draft once; it becomes a signed DECISION. 404 for an unknown\ndraft, 409 when the event's CDM changed since the draft (stale), 403 on a read-only\nnode.",
+        "description": "The operator confirms a draft once; it becomes a signed DECISION. The node holds\nthe 100 newest unconfirmed drafts. 404 `unknown_draft` for a draft it does not hold\n(never made, already confirmed, or forgotten after 100 newer ones), 409 when the\nevent's CDM changed since the draft (stale), 403 on a read-only node.",
         "operationId": "ai_confirm_api_ai_confirm_post",
         "requestBody": {
           "content": {
@@ -732,7 +732,7 @@
     },
     "/api/events/{event_id}/trajectory": {
       "get": {
-        "description": "Earth-fixed arcs of both objects around TCA. Visualization only; 404 when the\nevent is unknown.",
+        "description": "Earth-fixed arcs of both objects around TCA. Visualization only; 404 when the\nevent is unknown, 422 when two-body arcs cannot be drawn for its states (a state\nbelow the Earth's surface or beyond its Hill sphere, a propagation that fails, or\nan arc past the last representable date).",
         "operationId": "trajectory_api_events__event_id__trajectory_get",
         "parameters": [
           {
@@ -1386,7 +1386,7 @@
     },
     "/api/stream": {
       "get": {
-        "description": "This node's `node.<node_id>.>` bus events. Local to the node: it keeps working\nwhen the link to any other node is down.",
+        "description": "This node's `node.<node_id>.>` bus events. Local to the node: it keeps working\nwhen the link to any other node is down. A subscriber that falls 256 events behind\nis never dropped from silently: the node logs it and closes that stream, and the\nconsole reconnects and re-reads everything when its stream opens.",
         "operationId": "stream_api_stream_get",
         "responses": {
           "200": {

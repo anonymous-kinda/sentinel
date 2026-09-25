@@ -6,7 +6,8 @@ Messages never echo a submitted value: coordinates do not belong in error
 text, logs or anywhere else they could be copied from.
 
 The unit is persisted in one JSON file, created with mode 0600 and
-replaced atomically. It is never a sync record and never published.
+replaced atomically and durably (fsynced before the rename, and the
+directory after it). It is never a sync record and never published.
 """
 
 from __future__ import annotations
@@ -110,19 +111,41 @@ class UnitFile:
         return unit_from_dict(body)
 
     def save(self, unit: Unit) -> None:
-        """Write a private temporary file beside the target, then rename it
-        over the target: a reader sees the old unit or the new, never half."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        fd, temp = tempfile.mkstemp(dir=self.path.parent, prefix=".unit-", suffix=".tmp")
-        try:
-            os.fchmod(fd, FILE_MODE)
-            with os.fdopen(fd, "w") as fh:
-                json.dump(unit_to_dict(unit), fh)
-            os.replace(temp, self.path)
-        except BaseException:
-            with contextlib.suppress(FileNotFoundError):
-                os.unlink(temp)
-            raise
+        replace_durably(self.path, json.dumps(unit_to_dict(unit)).encode(), FILE_MODE)
 
     def clear(self) -> None:
-        self.path.unlink(missing_ok=True)
+        try:
+            self.path.unlink()
+        except FileNotFoundError:
+            return
+        fsync_directory(self.path.parent)
+
+
+def replace_durably(path: pathlib.Path, data: bytes, mode: int) -> None:
+    """Write a temporary file beside `path` with `mode`, fsync it, rename it
+    over `path`, then fsync the directory. A reader sees the old contents or
+    the new, never half; and after a power cut the file holds one or the
+    other, never nothing."""
+    fd, temp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.stem}-", suffix=".tmp")
+    try:
+        os.fchmod(fd, mode)
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(temp, path)
+    except BaseException:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(temp)
+        raise
+    fsync_directory(path.parent)
+
+
+def fsync_directory(directory: pathlib.Path) -> None:
+    """Make a rename or an unlink in `directory` survive a power cut."""
+    fd = os.open(directory, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)

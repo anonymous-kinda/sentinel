@@ -94,6 +94,7 @@ def register(app: FastAPI, node) -> None:
         clock=node.clock,
         jev=jev,
         llm=llm,
+        read_only=settings.read_only,
     )
     node.extensions["ai"] = assistant
     node.extensions.setdefault("modules", []).append("ai")
@@ -125,7 +126,8 @@ def register(app: FastAPI, node) -> None:
     async def ai_ask(request: Request) -> dict:
         """An answer phrased from tool facts (every number checked by the grounding guard), a
         question back when the request is ambiguous, or a draft action that takes effect only
-        on /api/ai/confirm. 422 on an empty or over-long question."""
+        on /api/ai/confirm. A read-only node, which can record nothing, drafts nothing: it
+        says so instead. 422 on an empty or over-long question."""
         text = _question(await json_object(request))
         answer = await assistant.ask(text, operator_of(request, settings.node_id))
         return answer.to_dict()
@@ -141,9 +143,10 @@ def register(app: FastAPI, node) -> None:
         ),
     )
     async def ai_confirm(request: Request) -> dict:
-        """The operator confirms a draft once; it becomes a signed DECISION. 404 for an unknown
-        draft, 409 when the event's CDM changed since the draft (stale), 403 on a read-only
-        node."""
+        """The operator confirms a draft once; it becomes a signed DECISION. The node holds
+        the 100 newest unconfirmed drafts. 404 `unknown_draft` for a draft it does not hold
+        (never made, already confirmed, or forgotten after 100 newer ones), 409 when the
+        event's CDM changed since the draft (stale), 403 on a read-only node."""
         body = await json_object(request)
         try:
             return await assistant.confirm(
@@ -162,5 +165,8 @@ def register(app: FastAPI, node) -> None:
 
     @app.get("/api/ai/audit/verify", tags=[apidoc.ASSISTANT], summary="Verify the audit chain")
     def ai_audit_verify() -> dict:
-        """Recomputes the hash chain and reports the first entry that does not link, if any."""
+        """Reads the audit file as it is now, recomputes the hash chain and holds it against the
+        lines this node wrote. Reports the first line that does not link, cannot be read (a
+        write torn by a power cut) or has changed or gone since it was written, if any. A
+        broken chain stays broken: entries recorded after the break never make it verify."""
         return dataclasses.asdict(assistant.audit.verify())
