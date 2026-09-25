@@ -349,30 +349,37 @@ class SyncAgent:
         return fetched
 
     async def _fetch(self, item: WantItem) -> None:
-        request = codec.encode({"sha": item.sha16, "from": self.node_id})
-        t0 = time.monotonic()
-        reply = await self.bus.request(
-            subjects.sync_fetch(self.hub_id), request, timeout=self._timeout(item.size)
-        )
-        elapsed = time.monotonic() - t0
-        self.link.observe_success(elapsed, len(reply.data), elapsed)
+        reply = await self._request_record(item)
         if reply.headers.get("Sentinel-Error"):
             item.status = "QUEUED"
             return
         if not _is_the_record_asked_for(item, reply):
             self._refuse(item, "hash_mismatch", hash_ok=False, hub_sha256=reply.headers.get("Sentinel-Sha256"))
             return
+        # The manifest named the item; the header, when sent, must agree.
+        hub_item_id = reply.headers.get("Sentinel-Event-Id", item.event_id)
+        if hub_item_id != item.event_id:
+            self._refuse(item, "item_id_mismatch", hub_item_id=hub_item_id[:80])
+            return
         try:
             outcome = await self.records.ingest(
-                reply.data,
-                f"sync:{self.hub_id}",
-                reply.headers.get("Sentinel-Data-Class", "REAL"),
-                reply.headers.get("Sentinel-Event-Id"),
+                reply.data, f"sync:{self.hub_id}", reply.headers.get("Sentinel-Data-Class", "REAL"), item.event_id
             )
         except Exception:  # noqa: BLE001 - one record's failure must not stop the records behind it
             wait = self._put_back(item)
             log.exception("Sync record ingest failed", retry_in_pulls=wait, **self._about(item))
             return
+        await self._arrived(item, reply, outcome)
+
+    async def _request_record(self, item: WantItem) -> Msg:
+        request = codec.encode({"sha": item.sha16, "from": self.node_id})
+        t0 = time.monotonic()
+        reply = await self.bus.request(subjects.sync_fetch(self.hub_id), request, timeout=self._timeout(item.size))
+        elapsed = time.monotonic() - t0
+        self.link.observe_success(elapsed, len(reply.data), elapsed)
+        return reply
+
+    async def _arrived(self, item: WantItem, reply: Msg, outcome: dict[str, Any]) -> None:
         item.status = "ARRIVED"
         self._backoff.clear(item.sha16)
         self.summary_only.discard(item.event_id)

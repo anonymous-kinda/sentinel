@@ -310,10 +310,6 @@ def element_link() -> tuple[Link, set[int], ElementStore]:
     return Link(bus, clock, hub, edge, server, agent), offered, edge_elements
 
 
-@pytest.mark.xfail(strict=True, reason=CORE + (
-    "_fetch() routes a record by the reply's Sentinel-Event-Id header alone; without it the "
-    "item id the manifest gave (WantItem.event_id) is ignored, an element set is handed to "
-    "the CDM parser, quarantined as PARSE_ERROR, and the item is marked ARRIVED"))
 def test_a_record_is_filed_under_the_item_the_manifest_named(element_link):
     link, offered, edge_elements = element_link
 
@@ -325,6 +321,22 @@ def test_a_record_is_filed_under_the_item_the_manifest_named(element_link):
     run(link.agent.cycle())
     assert link.edge.conj.quarantined() == []
     assert set(edge_elements.latest()) == offered
+
+
+def test_a_reply_naming_another_item_is_refused(link):
+    """The manifest said which item a record belongs to; a reply header that
+    names another one is the hub contradicting itself, so the record is
+    refused rather than filed under either."""
+
+    def other_item(body, headers):
+        headers["Sentinel-Event-Id"] = "SOMEONE-ELSE"
+        return body, headers
+
+    tamper_fetch(link, other_item)
+    run(link.agent.cycle())
+    assert link.agent.arrivals == []
+    assert list(link.edge.conj.store.all_cdms()) == []
+    assert {item.status for item in link.agent.queue} == {"QUEUED"}
 
 
 # ------------------------------------------------------ admission control

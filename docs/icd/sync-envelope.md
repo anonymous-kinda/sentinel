@@ -225,7 +225,7 @@ manifest and never leave the node (ADR-010).
 | `Sentinel-Digest` | manifest reply | sha256 of the manifest's canonical CBOR. The edge sends it back as `known` once it has applied that manifest, so a manifest that failed to apply is fetched again. |
 | `Sentinel-Unchanged` | manifest reply | `1` when `known` matched: the body is empty. |
 | `Sentinel-Schema` | manifest reply with a body | `sentinel.manifest/1`. |
-| `Sentinel-Event-Id` | fetch reply | The item id the hub assigned. The edge uses it and never re-derives it; otherwise updates fetched out of order would split one event into two. |
+| `Sentinel-Event-Id` | fetch reply | The item id the hub assigned. The edge files the record under the item id the manifest named for it, which is the same hub-assigned id, and never re-derives one; otherwise updates fetched out of order would split one event into two. If this header is sent, it must equal that id, or the reply is refused. |
 | `Sentinel-Data-Class` | fetch reply | `REAL`, `DERIVED` or `EXERCISE`. A generator's ORIGINATOR mark still wins on admission (`docs/icd/cdm-profile.md`). |
 | `Sentinel-Sha256` | fetch reply | The full sha256 of the record bytes. The edge hashes what it received and admits the record only if that hash begins with the `sha16` it asked for and equals this header. A missing header is not a match. Anything else is refused before ingest: logged as `Sync record refused` with `hash_ok` false, and re-queued. Every arrival therefore carries `hash_ok` true. |
 | `Nats-Msg-Id` | fetch reply | The same sha256, as a NATS message id. The agent does not read it. |
