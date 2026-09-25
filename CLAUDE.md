@@ -64,3 +64,17 @@ When a regenerated report moves a number the prose quotes, the doc guard fails u
 - **Logging: stable messages, structured fields.** Use `log = get_logger(__name__)` from `sentinel.obs`, then write `log.info("Sync cycle failed", error=..., hub_id=...)`. Never interpolate values into the message; the message is the low-cardinality key you search and alert on.
 - **Errors.** Handle them where they can be handled. Log them with context fields. Never swallow them silently.
 - **Performance** only where measured; readability first.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues on `anonymous-kinda/sentinel`, through the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default roles, each label named after its role: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context. The ADRs are in `docs/system-design.md`, and new ones go there too. See `docs/agents/domain.md`.

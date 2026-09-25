@@ -30,6 +30,9 @@ Audiences in the tables below: **operator** (uses the decision aid, or runs a no
 | [Changelog](../CHANGELOG.md) | `CHANGELOG.md` | everyone | authored: what each version contains, newest first | |
 | [Security policy](../SECURITY.md) | `SECURITY.md` | security, everyone | authored: how to report a vulnerability, and what is known to be missing | |
 | [Repository rules for coding agents](../CLAUDE.md) | `CLAUDE.md` | new engineer, coding agents | authored | |
+| [Agent skills: issue tracker](agents/issue-tracker.md) | `docs/agents/issue-tracker.md` | coding agents | authored: issues live on GitHub, and the `gh` commands the skills run | |
+| [Agent skills: triage labels](agents/triage-labels.md) | `docs/agents/triage-labels.md` | coding agents | authored: the label for each triage role | |
+| [Agent skills: domain docs](agents/domain.md) | `docs/agents/domain.md` | coding agents | authored: what to read before exploring, and where a new ADR goes | |
 | This index | `docs/index.md` | everyone | authored | |
 | [Licence](../LICENSE) | `LICENSE` | everyone | authored (Apache 2.0) | |
 
