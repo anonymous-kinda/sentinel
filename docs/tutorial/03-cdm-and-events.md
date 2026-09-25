@@ -245,7 +245,7 @@ The views are computed on request, not at ingest:
 
 ### `sentinel/conjunction/policy.py`
 
-`ConjunctionPolicy` holds the operator's assumptions: `red_pc`, `amber_pc`, `mcp_lead_time_s` and `urgent_window_s`. `band_for` maps a Pc to a `Band`, and `triage(result, tca, policy)` returns a `Triage` with band, worst-case band, consequence, MCP and `needs_attention`, by the rules under Concepts. `triage_key` is the only thing the sync layer learns about a conjunction: an event id, a priority class, a deadline (the MCP) and a consequence. A full record is urgent when its consequence is SERIOUS or worse and its MCP is within `urgent_window_s` (72 h).
+`ConjunctionPolicy` holds the operator's assumptions: `red_pc`, `amber_pc`, `mcp_lead_time_s` and `urgent_window_s`. `band_for` maps a Pc to a `Band`, and `triage(result, tca, policy)` returns a `Triage` with band, worst-case band, consequence, MCP and `needs_attention`, by the rules under Concepts. What the sync layer learns about a conjunction is its summary: an event id, a deadline (the MCP), a consequence and its records. The sync agent derives the priority class from those itself (chapter 7): the latest record is urgent when its consequence is SERIOUS or worse and its MCP is within `urgent_window_s` (72 h). `triage_key` looks as if it computes that class, but nothing calls it.
 
 *Easy to get wrong:* a refused result is banded from `pc = None`, never from a number. `triage` checks `result.method` before it reads `pc`.
 
