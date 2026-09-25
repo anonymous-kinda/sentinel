@@ -17,6 +17,7 @@ var/
 # secrets and credentials - never commit
 .env
 .env.*
+!.env.example
 *.creds
 *.nk
 *.pem

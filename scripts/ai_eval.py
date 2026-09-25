@@ -46,12 +46,17 @@ METRICS = [
 ]
 
 
-def routing_context() -> RoutingContext:
-    """The exercise scenario one hour in: the events a router chooses from."""
+def exercise_service() -> ConjunctionService:
+    """The exercise scenario one hour in: every CDM released by then, ingested and assessed."""
     service = ConjunctionService(ConjunctionStore(), InProcessBus(), FixedClock(NOW))
     for item in generate(EPOCH):
         if item.release_at <= NOW:
             asyncio.run(service.ingest(item.kvn.encode(), "exercise", "EXERCISE"))
+    return service
+
+
+def routing_context(service: ConjunctionService) -> RoutingContext:
+    """The events a router chooses from."""
     return RoutingContext.from_facts([event_facts(s) for s in service.list_events()])
 
 
@@ -114,7 +119,7 @@ def svg(reports: dict[str, dict]) -> str:
 def main() -> None:
     cases = load_cases(EVAL_SET)
     set_hash = hashlib.sha256(EVAL_SET.read_bytes()).hexdigest()
-    context = routing_context()
+    context = routing_context(exercise_service())
     reports = {"deterministic": asyncio.run(run_eval(DeterministicRouter(), cases, context))}
     jev = jev_report(cases, context, set_hash)
     stale = jev is not None and jev.get("eval_set_sha256") != set_hash

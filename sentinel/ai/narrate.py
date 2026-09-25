@@ -9,6 +9,7 @@ grounding guard.
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Callable
 from typing import Protocol
 
@@ -38,6 +39,20 @@ class Narrator(Protocol):
     name: str
 
     async def narrate(self, question: str, tool: str, facts: dict) -> str: ...
+
+
+@dataclasses.dataclass(frozen=True)
+class Narration:
+    """One hosted model's answer and what the call cost."""
+
+    text: str
+    model: str
+    latency_ms: float
+    request_bytes: int
+    response_bytes: int
+    input_tokens: int
+    output_tokens: int
+    request_id: str | None
 
 
 # ------------------------------------------------------------ formatting
