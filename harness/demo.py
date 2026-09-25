@@ -21,6 +21,8 @@ import signal
 import sys
 import time
 
+from sentinel import localenv
+
 from .cluster import Cluster, http, wait_until
 
 
@@ -60,4 +62,5 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    localenv.load()  # keys and SENTINEL_AI_CLOUD reach both nodes
     sys.exit(main())
