@@ -321,7 +321,10 @@ def create_app(
     def encounter(event_id: str) -> dict:
         """Miss vector, projected covariance ellipse and hard-body radius in the encounter
         plane, for display. `available: false` with a reason when there is no covariance or
-        no hard-body radius."""
+        no hard-body radius, or the event's CDM has not arrived yet; 404 when the event is
+        unknown."""
+        if not node.conjunctions.knows(event_id):
+            raise HTTPException(404, "no such event")
         data = node.conjunctions.encounter(event_id)
         return data if data is not None else {"available": False, "reason": "no covariance or HBR"}
 
@@ -329,7 +332,9 @@ def create_app(
     def dilution_curve(event_id: str) -> dict:
         """Pc as the covariance is scaled by k (log10 grid), with the maximizing scale k*.
         `diluted` is true when k* < 1: the Pc would rise if the data were better.
-        `available: false` when the curve cannot be computed."""
+        `available: false` when the curve cannot be computed; 404 when the event is unknown."""
+        if not node.conjunctions.knows(event_id):
+            raise HTTPException(404, "no such event")
         data = node.conjunctions.dilution_curve(event_id)
         return data if data is not None else {"available": False}
 

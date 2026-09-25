@@ -347,6 +347,11 @@ class ConjunctionService:
                 offered.append((dt.datetime.fromisoformat(summary["tca"]), compact_summary(summary, records)))
         return offered
 
+    def knows(self, event_id: str) -> bool:
+        """Whether this node has heard of the event: from its own CDMs, or
+        from the hub's summary of one whose CDM has not arrived yet."""
+        return self._latest(event_id) is not None or event_id in self.store.remote_summaries()
+
     def event_detail(self, event_id: str) -> dict | None:
         if self.store.event(event_id) is None or not self.store.cdms_for_event(event_id):
             remote = self.store.remote_summaries().get(event_id)
