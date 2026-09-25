@@ -65,11 +65,21 @@ forbidden_modules =
 [importlinter:contract:hosted-ai-at-the-edges]
 name = Hosted AI SDKs are confined to their adapters
 type = forbidden
+# Every sentinel.ai module except router_jev and narrate_claude, the package's
+# own __init__ included (tests/ai/test_contracts.py holds the list to the
+# package). Modules, not packages: as a package, sentinel.ai would take in the
+# two adapters and forbid them the SDKs they wrap.
+as_packages = false
 source_modules =
+    sentinel.ai
     sentinel.ai.assistant
+    sentinel.ai.calibration
     sentinel.ai.catalog
+    sentinel.ai.evaluation
     sentinel.ai.grounding
+    sentinel.ai.live_check
     sentinel.ai.narrate
+    sentinel.ai.opsec
     sentinel.ai.policy
     sentinel.ai.router
     sentinel.ai.tools
