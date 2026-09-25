@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NodeInfo } from "../api/types";
 import { PassesPanel } from "../components/passes/PassesPanel";
+import { mockApi, ok, type Route } from "./fixtures/api";
 import { NOW_MS, catalog, node, passes, skipped, unit } from "./fixtures/passes";
 
 const HONESTY =
@@ -12,26 +13,6 @@ const PASSES = "GET /api/passes?hours=24";
 const UNIT = "GET /api/passes/unit";
 const CATALOG = "GET /api/passes/catalog";
 
-type Route = { status: number; body?: unknown } | "pending";
-
-function mockApi(routes: Record<string, Route>) {
-  const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
-    const key = `${init?.method ?? "GET"} ${String(input)}`;
-    const route = routes[key];
-    if (!route) return Promise.reject(new Error(`unmocked ${key}`));
-    if (route === "pending") return new Promise<Response>(() => {});
-    const body = route.body === undefined ? null : JSON.stringify(route.body);
-    return Promise.resolve(new Response(body, { status: route.status, headers: { "Content-Type": "application/json" } }));
-  });
-  vi.stubGlobal("fetch", fetchMock);
-  return {
-    fetchMock,
-    routes,
-    calls: (key: string) => fetchMock.mock.calls.filter(([input, init]) => `${init?.method ?? "GET"} ${String(input)}` === key),
-  };
-}
-
-const ok = (body: unknown) => ({ status: 200, body });
 const healthy = () => ({ [UNIT]: ok(unit), [PASSES]: ok(passes), [CATALOG]: ok(catalog) });
 
 function renderPanel(props: { node?: NodeInfo; version?: number } = {}) {

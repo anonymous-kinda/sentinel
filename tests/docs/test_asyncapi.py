@@ -33,7 +33,6 @@ import json
 import pathlib
 
 import pytest
-import yaml
 from fastapi.testclient import TestClient
 
 from sentinel.api import create_app
@@ -53,11 +52,15 @@ from sentinel.passes.sync_adapter import ElementRecords
 from sentinel.sync import SyncAgent, SyncServer
 
 from .icd import (
-    ICD,
+    NODE_PREFIX,
     ROOT,
     Found,
+    addresses,
     compare,
+    documented_node_kinds,
+    family,
     headers_read,
+    load_asyncapi,
     nats_list,
     node_kinds,
     sentinel_kinds,
@@ -65,19 +68,13 @@ from .icd import (
     string_constants,
 )
 
-ASYNCAPI = ICD / "asyncapi.yaml"
 EDGE_CONF = ROOT / "deploy" / "nats" / "edge.conf.tmpl"
 SNAPSHOT = ROOT / "fixtures" / "omm" / "celestrak-resource-20260924.json"
 HEADER = r"(Sentinel|Nats)-[A-Za-z0-9]+(-[A-Za-z0-9]+)*"
-NODE_PREFIX = "node.{node_id}."
 # Not subject builders: a token sanitiser, the generic node-local builder
 # (its kinds are found at its call sites) and the console's wildcard.
 NOT_BUILDERS = {"token", "local", "local_all"}
 EPOCH = dt.datetime(2026, 9, 24, 6, 0, tzinfo=dt.UTC)
-
-
-def load(text: str | None = None) -> dict:
-    return yaml.safe_load(ASYNCAPI.read_text() if text is None else text)
 
 
 # ------------------------------------------------------------------ $ref
@@ -121,14 +118,6 @@ def builders() -> dict:
     }
 
 
-def family(address: str) -> str:
-    """The address without trailing parameter tokens: cdm.accepted.{event_id} -> cdm.accepted."""
-    tokens = address.split(".")
-    while tokens and tokens[-1].startswith("{"):
-        tokens.pop()
-    return ".".join(tokens)
-
-
 def cross_node_families() -> set[str]:
     return {f for f in (family(template(fn)) for fn in builders().values()) if not f.startswith(NODE_PREFIX)}
 
@@ -154,10 +143,6 @@ def code_headers() -> set[str]:
 
 
 # ------------------------------------------------------- the document's side
-def addresses(doc: dict) -> dict[str, str]:
-    return {name: ch["address"] for name, ch in doc["channels"].items() if ch.get("address")}
-
-
 def messages(doc: dict, channel: dict) -> dict[str, dict]:
     return {name: deref(doc, message) for name, message in channel["messages"].items()}
 
@@ -176,10 +161,6 @@ def documented_headers(doc: dict) -> set[str]:
 
 def kind_of(doc: dict, message: dict) -> str | None:
     return deref(doc, header_schema(doc, message).get("properties", {}).get("Sentinel-Kind", {})).get("const")
-
-
-def documented_node_kinds(doc: dict) -> set[str]:
-    return {family(a)[len(NODE_PREFIX) :] for a in addresses(doc).values() if a.startswith(NODE_PREFIX)}
 
 
 def documented_cross_node_families(doc: dict) -> set[str]:
@@ -511,7 +492,7 @@ def test_an_undocumented_node_local_kind_fails_the_check(tmp_path):
         Found(real.sentinel_kinds.values | found.sentinel_kinds.values, []),
         real.headers,
     )
-    assert asyncapi_problems(load(), merged) == [
+    assert asyncapi_problems(load_asyncapi(), merged) == [
         "node event kind made.constant is not documented",
         "node event kind made.direct is not documented",
         "node event kind made.helper is not documented",
@@ -523,7 +504,7 @@ def test_an_undocumented_node_local_kind_fails_the_check(tmp_path):
 
 
 def test_a_documented_kind_the_code_no_longer_publishes_fails_the_check():
-    doc = load()
+    doc = load_asyncapi()
     doc["channels"]["retired"] = {
         **copy.deepcopy(doc["channels"]["cdmRejected"]),
         "address": "node.{node_id}.retired.kind",
@@ -538,11 +519,11 @@ def test_a_documented_kind_the_code_no_longer_publishes_fails_the_check():
 
 
 def test_the_document_is_structurally_asyncapi_3():
-    assert structure_problems(load()) == []
+    assert structure_problems(load_asyncapi()) == []
 
 
 def test_the_structure_check_catches_a_broken_document():
-    doc = load()
+    doc = load_asyncapi()
     doc["channels"]["syncFetch"]["parameters"] = {}
     doc["operations"]["serveFetch"]["channel"] = {"$ref": "#/channels/noSuchChannel"}
     assert structure_problems(doc) == ["unresolved $ref #/channels/noSuchChannel"]
@@ -551,11 +532,11 @@ def test_the_structure_check_catches_a_broken_document():
 
 
 def test_the_document_matches_the_subjects_headers_and_leaf_policy_in_the_code():
-    assert asyncapi_problems(load()) == []
+    assert asyncapi_problems(load_asyncapi()) == []
 
 
 def test_a_stale_document_is_caught():
-    doc = load()
+    doc = load_asyncapi()
     stale = copy.deepcopy(doc)
     del stale["channels"]["syncArrival"]
     stale["operations"] = {k: v for k, v in stale["operations"].items() if "syncArrival" not in json.dumps(v)}
@@ -574,18 +555,18 @@ def test_a_stale_document_is_caught():
 
 
 def test_every_message_the_nodes_send_is_the_documented_message(recorded):
-    problems, _ = conformance(load(), recorded)
+    problems, _ = conformance(load_asyncapi(), recorded)
     assert problems == []
 
 
 def test_every_documented_channel_is_exercised(recorded):
-    doc = load()
+    doc = load_asyncapi()
     _, used = conformance(doc, recorded)
     assert sorted(set(doc["channels"]) - used) == []
 
 
 def test_a_message_that_drifts_from_the_document_is_caught(recorded):
-    doc = load()
+    doc = load_asyncapi()
     del doc["components"]["messages"]["record"]["headers"]["properties"]["Nats-Msg-Id"]
     doc["components"]["messages"]["cdmAccepted"]["headers"]["required"].append("Sentinel-Event-Id")
     problems, _ = conformance(doc, recorded)

@@ -156,19 +156,38 @@ export interface Validation {
   calibration_note?: string;
 }
 
-export interface LogEntryView {
+interface LogEntryBase {
   dot: [string, number];
   lamport: number;
   wall_time: string;
-  kind: "DECISION" | "NOTE" | "RESOLUTION" | "AI_DRAFT_CONFIRMED";
   event_ref: { event_id: string; cdm_sha256?: string; inputs_hash?: string; message_id?: string };
-  body: Record<string, string>;
   author: string;
   node: string;
   signature_valid: boolean;
   digest: string;
   review_required: boolean;
 }
+
+export interface DecisionBody {
+  decision: string;
+  rationale?: string;
+  /** An AI draft an operator confirmed: router, confidence, model, audit sequence. */
+  drafted_by?: Record<string, unknown>;
+}
+
+/** A person settled a CONFLICT: the field, the value they wrote, and every
+ *  concurrent value it superseded, each with who wrote it and where. */
+export interface ResolutionBody {
+  field: string;
+  value: string;
+  superseded: RegisterValue[];
+}
+
+/** A signed operator-log entry; its body depends on its kind. */
+export type LogEntryView =
+  | (LogEntryBase & { kind: "DECISION"; body: DecisionBody })
+  | (LogEntryBase & { kind: "NOTE"; body: { text: string } })
+  | (LogEntryBase & { kind: "RESOLUTION"; body: ResolutionBody });
 
 export interface RegisterValue {
   dot: [string, number];

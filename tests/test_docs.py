@@ -8,6 +8,7 @@ was applied, not skipped. The second applies the rules to the real docs
 - every repository path they name exists;
 - every `make` target they name is in the Makefile;
 - every `sentinel` subcommand they name is in the CLI parser;
+- every repository script they run goes through `uv run`, not the system python;
 - every package under sentinel/ carries a module docstring;
 - every headline number registered in tests/doc_claims.toml matches its
   generated source, at the precision the prose states it.
@@ -32,6 +33,7 @@ from tests.doclint import (
     makefile_targets,
     missing_paths,
     parse_markdown,
+    scripts_outside_the_project,
     undocumented_packages,
     unknown_cli_commands,
     unknown_make_targets,
@@ -122,6 +124,16 @@ def test_a_cli_subcommand_that_does_not_exist_is_reported():
     assert unknown_cli_commands(commands(md), CLI) == ["cdm lint", "launch"]
 
 
+def test_a_script_run_with_the_system_python_is_reported():
+    md = parse_markdown(
+        "```\n$ X=1 python scripts/report.py --out d  # the report\n"
+        "uv run python scripts/ok.py && uv run --with openpyxl python scripts/ok2.py\n```\n"
+        "Run `python3 scripts/demo.py`. `python -m harness.report` names a module; "
+        "`python3 --version` runs no script."
+    )
+    assert scripts_outside_the_project(md) == ["python scripts/report.py", "python3 scripts/demo.py"]
+
+
 def test_a_package_without_a_docstring_is_reported(tmp_path):
     _write(tmp_path, "pkg/__init__.py", '"""Documented."""\n')
     _write(tmp_path, "pkg/bare/__init__.py", "from x import y\n")
@@ -183,7 +195,16 @@ def test_a_claim_without_a_number_is_rejected(tmp_path):
 def test_the_doc_set_covers_the_readme_the_rules_and_the_design_docs():
     names = {_id(d) for d in DOCS}
     assert {"README.md", "CLAUDE.md", "SECURITY.md", "docs/system-design.md"} <= names
-    assert {"docs/adapters/wayfinder.md", "docs/validation-report.md"} <= names
+    assert {"docs/adapters/wayfinder.md", "docs/validation-report.md", "fixtures/README.md"} <= names
+
+
+def test_the_fixtures_readme_names_every_fixture():
+    """A new fixture gets a line in the README; a removed one takes its line with it
+    (the path check above)."""
+    named = set(parse_markdown((ROOT / "fixtures" / "README.md").read_text(encoding="utf-8")).code)
+    entries = sorted((ROOT / "fixtures").iterdir())
+    paths = [f"fixtures/{e.name}/" if e.is_dir() else f"fixtures/{e.name}" for e in entries if e.name != "README.md"]
+    assert [p for p in paths if p not in named] == []
 
 
 @pytest.mark.parametrize("doc", PATH_DOCS, ids=_id)
@@ -202,6 +223,14 @@ def test_every_make_target_a_doc_names_exists(doc):
 def test_every_cli_subcommand_a_doc_names_exists(doc):
     md = parse_markdown(doc.read_text(encoding="utf-8"))
     assert unknown_cli_commands(commands(md), CLI) == []
+
+
+@pytest.mark.parametrize("doc", [*DOCS, ROOT / "CONTRIBUTING.md"], ids=_id)
+def test_every_script_a_doc_runs_runs_in_the_project_environment(doc):
+    """A fresh clone's system python has none of the project's dependencies:
+    `python3 scripts/x.py` fails there, `uv run python scripts/x.py` works."""
+    md = parse_markdown(doc.read_text(encoding="utf-8"))
+    assert scripts_outside_the_project(md) == []
 
 
 def test_every_package_has_a_module_docstring():

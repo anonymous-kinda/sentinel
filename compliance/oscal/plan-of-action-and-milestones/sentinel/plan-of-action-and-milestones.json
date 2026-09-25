@@ -1,10 +1,10 @@
 {
   "plan-of-action-and-milestones": {
-    "uuid": "084afe42-8cf7-5ced-8bad-b5909dc99091",
+    "uuid": "4a79b747-c9dc-59c3-91ec-231a53ee48e6",
     "metadata": {
       "title": "Sentinel plan of action and milestones",
-      "last-modified": "2026-09-24T18:54:56Z",
-      "version": "0.2.0",
+      "last-modified": "2026-09-24T22:45:06Z",
+      "version": "0.3.0",
       "oscal-version": "1.2.1"
     },
     "import-ssp": {
@@ -259,7 +259,7 @@
         "uuid": "1a72f9dd-307e-5acb-9719-cadb55106ffa",
         "title": "CM-3 (Build, test and release pipeline): partial",
         "description": "Require the CI checks and one review before merging to main, and record the setting as code.",
-        "statement": "Stated in the SSP as partial: Every change is a git commit, and every push and pull request runs the checks listed under CA-7. Generated documents (the validation report, the AI eval report, this package's authored OSCAL documents) are regenerated and compared in CI, so a change cannot alter them silently. Branch protection and required review are GitHub settings and are not evidenced in the repository.",
+        "statement": "Stated in the SSP as partial: Every change is a git commit, and every push and pull request runs the checks listed under CA-7. Generated documents (the validation report, the AI eval report, the OpenAPI interface control document, this package's authored OSCAL documents) are regenerated and compared in CI, so a change cannot alter them silently. Branch protection and required review are GitHub settings and are not evidenced in the repository.",
         "status": "open",
         "remediations": [
           {
@@ -604,7 +604,7 @@
         "uuid": "19aceabd-ee7a-5ce8-bdd2-ee9401235784",
         "title": "SI-2 (Build, test and release pipeline): partial",
         "description": "Feed Trivy findings, with VEX, into the POA&M alongside test failures.",
-        "statement": "Stated in the SSP as partial: Every failing test becomes a POA&M item, linked to the controls that cite it, on every CI run (this package); dependency updates go through the lockfile and the full test ladder. On every push the vulnerability gate fails the build on any finding in a dependency or a shipped binary that no reviewed VEX statement answers (RA-5), so a known flaw cannot pass unnoticed. Those findings reach the job's SARIF output, not yet this package's POA&M.",
+        "statement": "Stated in the SSP as partial: Every failing test becomes a POA&M item, linked to the controls that cite it, on every CI run (this package). A dependency update reaches CI only as a change to uv.lock, because the jobs that test install exactly the lock (uv sync --locked, which a test requires), so the full test ladder runs on the update itself. On every push the vulnerability gate fails the build on any finding in a dependency or a shipped binary that no reviewed VEX statement answers (RA-5), so a known flaw cannot pass unnoticed. Those findings reach the job's SARIF output, not yet this package's POA&M.",
         "status": "open",
         "remediations": [
           {
@@ -709,7 +709,7 @@
         "uuid": "30906a7a-2397-53a0-bce1-ceab33d3e9a6",
         "title": "SR-3 (Build, test and release pipeline): partial",
         "description": "Push the first release tag so that signing, provenance and SBOM attestation run.",
-        "statement": "Stated in the SSP as partial: The supply-chain controls are documented in docs/supply-chain.md, and the supply-chain CI job runs them on every push: SBOMs with a completeness gate (CM-8), a Trivy scan that fails on any finding no reviewed VEX statement answers (RA-5), and offline signature verification with the real cosign (CM-14, SI-7). Third-party binaries and trust material are pinned by version and SHA-256 (deploy/tools.lock); a mismatch writes nothing (scripts/fetch_tools.py, used by every job that fetches a tool). Python dependencies are hash-locked and installed offline with --require-hashes. Upstream data (NASA CARA, CelesTrak, NIST, DISA) is vendored unmodified with provenance and checksums that the tests verify. Every action in every workflow is pinned by commit SHA, which a test enforces (tests/test_workflows_pinned.py). Not yet done: signing, SLSA provenance and SBOM attestation of releases exist only in release.yml, which has not run yet.",
+        "statement": "Stated in the SSP as partial: The supply-chain controls are documented in docs/supply-chain.md, and the supply-chain CI job runs them on every push: SBOMs with a completeness gate (CM-8), a Trivy scan that fails on any finding no reviewed VEX statement answers (RA-5), and offline signature verification with the real cosign (CM-14, SI-7). Third-party binaries and trust material are pinned by version and SHA-256 (deploy/tools.lock); a mismatch writes nothing (scripts/fetch_tools.py, used by every job that fetches a tool). Python dependencies are hash-locked in uv.lock. The CI jobs that test and assess install exactly the lock with uv sync --locked, which refuses a stale lock, and a test fails any workflow that installs with pip or uv pip instead, since those resolve afresh; a bundle installs them offline with --require-hashes. Upstream data (NASA CARA, CelesTrak, NIST, DISA) is vendored unmodified with provenance and checksums that the tests verify. Every action in every workflow is pinned by commit SHA, which a test enforces (tests/test_workflows_pinned.py). Not yet done: signing, SLSA provenance and SBOM attestation of releases exist only in release.yml, which has not run yet.",
         "status": "open",
         "remediations": [
           {
@@ -724,7 +724,7 @@
         "uuid": "b6432452-6797-52f2-895d-c95efe54fcfa",
         "title": "SR-4 (Build, test and release pipeline): partial",
         "description": "Push the first release tag; verify the published provenance and SBOM attestations online (gh attestation verify) and offline (cosign verify-blob-attestation against the pinned trusted root), as docs/supply-chain.md describes. Build L3 needs the provenance generated in an isolated, trusted reusable workflow.",
-        "statement": "Stated in the SSP as partial: Provenance is recorded for vendored upstream data (fixtures/cara/PROVENANCE.md, fixtures/omm/PROVENANCE.md, compliance/vendor/nist/PROVENANCE.md, compliance/vendor/disa/PROVENANCE.md) and each NASA CARA test case documents its source and tolerance. Each bundle's BUNDLE.json records the commit it was built from, whether that tree was clean or dirty, its SOURCE_DATE_EPOCH, and the upstream URL and SHA-256 of every bundled binary; a build from uncommitted changes cannot pass as its commit. deploy/tools.lock records the upstream URL and SHA-256 of every third-party binary. SLSA v1 build provenance (Build L2) and SBOM attestations for every tarball and image archive are generated by the sign job of .github/workflows/release.yml and shipped as files, so they verify offline. That workflow runs only on a tag on GitHub, has been checked only statically (actionlint) and has not run yet, so no release provenance exists. Build L3 is not claimed: the provenance is generated inside this repository's own workflow (docs/supply-chain.md).",
+        "statement": "Stated in the SSP as partial: Provenance is recorded for vendored upstream data (fixtures/cara/PROVENANCE.md, fixtures/omm/PROVENANCE.md, compliance/vendor/nist/PROVENANCE.md, compliance/vendor/disa/PROVENANCE.md) and each NASA CARA test case documents its source and tolerance. Each bundle's BUNDLE.json records the commit it was built from, whether that tree was clean or dirty, its SOURCE_DATE_EPOCH, and the upstream URL and SHA-256 of every bundled binary; a build from uncommitted changes cannot pass as its commit. deploy/tools.lock records the upstream URL and SHA-256 of every third-party binary, and uv.lock the registry, file URL and SHA-256 of every third-party Python distribution; the CI jobs that test and assess install exactly what uv.lock records (uv sync --locked), which a test requires. SLSA v1 build provenance (Build L2) and SBOM attestations for every tarball and image archive are generated by the sign job of .github/workflows/release.yml and shipped as files, so they verify offline. That workflow runs only on a tag on GitHub, has been checked only statically (actionlint) and has not run yet, so no release provenance exists. Build L3 is not claimed: the provenance is generated inside this repository's own workflow (docs/supply-chain.md).",
         "status": "open",
         "remediations": [
           {

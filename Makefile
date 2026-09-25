@@ -49,8 +49,8 @@ airgap-verify: supply-tools  ## no network: verify signature, install, run (VERI
 	SENTINEL_CERT_IDENTITY=$(CERT_IDENTITY) \
 	deploy/bundle/verify_offline.sh dist/sentinel-$$($(UV) run python -c 'import sentinel;print(sentinel.__version__)')-$(ARCH).tar.gz
 
-tools:  ## fetch pinned nats-server, toxiproxy, uv into .tools/ (sha256-verified)
-	$(UV) run python scripts/fetch_tools.py
+tools:  ## fetch the pinned nats-server and toxiproxy the harness runs into .tools/<arch>/ (sha256-verified)
+	$(UV) run python scripts/fetch_tools.py nats-server toxiproxy
 
 demo-local: web tools  ## hub on :8000 and edge on :8001 over an emulated link (Ctrl-C to stop)
 	$(UV) run python -m harness.demo
@@ -148,6 +148,8 @@ XCCDF ?=
 
 compliance: compliance-catalog  ## OSCAL package: pytest evidence -> assessment results + POA&M, trestle validate -a (XCCDF=scan results)
 	mkdir -p $(COMPLIANCE_BUILD)
+	@# The authored documents first: the suite checks them against the sources.
+	$(UV) run python scripts/oscal_evidence.py
 	$(UV) run pytest -q --junitxml=$(COMPLIANCE_BUILD)/junit.xml; echo $$? > $(COMPLIANCE_BUILD)/pytest.status
 	$(UV) run python scripts/oscal_evidence.py --junit $(COMPLIANCE_BUILD)/junit.xml \
 		$(if $(wildcard harness/results/*.json),--harness harness/results) $(if $(XCCDF),--xccdf $(XCCDF))
@@ -162,9 +164,9 @@ compliance-catalog:  ## verify the vendored NIST SP 800-53 Rev 5 catalog, then i
 
 # --- M3 pass service: OPSEC evidence (NIST AC-4) -------------------------------
 .PHONY: opsec
-opsec: tools  ## OPSEC scenario on real processes: a unit set at the edge never reaches the hub; then docs/ddil-results.md
+opsec: tools  ## OPSEC scenario on real processes: a unit set at the edge never reaches the hub; rewrites docs/ddil-results.md only if every scenario has a result
 	$(UV) run python -m harness.run opsec
-	$(UV) run python -m harness.report
+	$(UV) run python -m harness.report --if-complete
 # --- end M3 pass service ------------------------------------------------------
 
 # >>> interface control documents (docs/icd) >>>
@@ -211,3 +213,11 @@ compose-link:  ## shape the leaf link from inside the edge: PRESET=CONNECTED|DEG
 typecheck:  ## mypy over sentinel/: strict on the core and the risk engine, standard on the rest
 	$(UV) run mypy sentinel
 # <<< type check (mypy) <<<
+
+# >>> hosted-AI live check >>>
+# One real call per provider whose key is set (see .env.example); a missing
+# key is reported, not failed. It writes nothing: `make ai-eval` publishes.
+.PHONY: ai-live-check
+ai-live-check:  ## one real Jev routing call and one Claude narration, each only if its key is set; writes nothing
+	$(UV) run python scripts/ai_live_check.py
+# <<< hosted-AI live check <<<

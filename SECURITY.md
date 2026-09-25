@@ -8,7 +8,9 @@ page says how to report a vulnerability and what is known to be missing.
 
 Report privately. Do not open a public issue for a vulnerability.
 
-- **Contact:** `[MAINTAINER: add a private security contact before publishing]`
+- **How:** use GitHub's private vulnerability reporting. On the repository's
+  **Security** tab, choose **Report a vulnerability**. The report stays private
+  between you and the maintainer until a fix is published.
 - Include the commit or release version, what you did, what happened, and
   what an attacker gains.
 - No response time is promised. Fixes land on `main`.

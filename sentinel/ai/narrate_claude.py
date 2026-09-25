@@ -18,6 +18,7 @@ Request choices:
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import time
 
@@ -25,7 +26,7 @@ import anthropic
 from anthropic import AsyncAnthropic, DefaultAsyncHttpxClient
 
 from ..obs import get_logger
-from .narrate import NarratorUnavailable
+from .narrate import Narration, NarratorUnavailable
 
 log = get_logger(__name__)
 
@@ -82,6 +83,10 @@ class ClaudeNarrator:
         return cls(AsyncAnthropic(timeout=TIMEOUT, max_retries=0, http_client=http_client))
 
     async def narrate(self, question: str, tool: str, facts: dict) -> str:
+        return (await self.narration(question, tool, facts)).text
+
+    async def narration(self, question: str, tool: str, facts: dict) -> Narration:
+        """The answer with the model, latency, bytes and tokens of the call."""
         started = time.monotonic()
         try:
             raw = await self._client.beta.messages.with_raw_response.create(
@@ -107,10 +112,9 @@ class ClaudeNarrator:
         if not text:
             raise NarratorUnavailable("empty")
 
-        log.info(
-            "Claude narration complete",
+        narration = Narration(
+            text=text,
             model=message.model,
-            tool=tool,
             latency_ms=round((time.monotonic() - started) * 1000, 1),
             request_bytes=len(raw.http_response.request.content),
             response_bytes=len(await raw.read()),
@@ -118,4 +122,6 @@ class ClaudeNarrator:
             output_tokens=message.usage.output_tokens,
             request_id=raw.request_id,
         )
-        return text
+        cost = {k: v for k, v in dataclasses.asdict(narration).items() if k != "text"}
+        log.info("Claude narration complete", tool=tool, **cost)
+        return narration

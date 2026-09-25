@@ -37,3 +37,11 @@ def test_the_public_node_does_not_run_the_assistant():
     assert re.search(r"^sentinel_ai: false", defaults, re.M), "off unless a deployment turns it on"
     site = (DEPLOY / "ansible" / "site.yml").read_text()
     assert re.search(r"^\s+sentinel_ai: false", site, re.M)
+
+
+def test_the_unit_sets_its_log_level_through_the_environment_not_a_flag():
+    """A --log-level flag would override SENTINEL_LOG_LEVEL from sentinel.env,
+    so a site could never raise the level without editing the unit."""
+    unit = (DEPLOY / "systemd" / "sentinel.service").read_text()
+    assert "--log-level" not in unit
+    assert "Environment=SENTINEL_LOG_LEVEL=warning" in unit, "the default, overridable by the EnvironmentFile"

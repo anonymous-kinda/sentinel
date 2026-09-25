@@ -1,17 +1,49 @@
-"""Render harness/results/*.json into docs/ddil-results.md (generated file)."""
+"""Render harness/results/*.json into docs/ddil-results.md (generated file).
+
+    python -m harness.report [--if-complete]
+
+The report is written from every scenario or not at all: with any result
+missing it names the missing scenarios and writes nothing, so one scenario
+run on a fresh clone cannot drop the other five from the committed report.
+It exits 1 then, or 0 with --if-complete (for `make opsec`).
+"""
 
 from __future__ import annotations
 
+import argparse
 import json
 import pathlib
+import sys
+
+from .scenarios import SCENARIOS
 
 HERE = pathlib.Path(__file__).resolve().parent
 OUT = HERE.parent / "docs" / "ddil-results.md"
-ORDER = ["denied", "limited", "intermittent", "degraded", "recovery", "opsec"]
+RESULTS = HERE / "results"
+ORDER = list(SCENARIOS)
 
 
-def main() -> None:
-    results = {n: json.loads((HERE / "results" / f"{n}.json").read_text()) for n in ORDER if (HERE / "results" / f"{n}.json").exists()}
+def missing() -> list[str]:
+    """The scenarios with no result in RESULTS, in report order."""
+    return [name for name in ORDER if not (RESULTS / f"{name}.json").exists()]
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="python -m harness.report", description=__doc__.split("\n\n")[0])
+    parser.add_argument("--if-complete", action="store_true",
+                        help="with a result missing, skip the report and exit 0 instead of 1")
+    args = parser.parse_args(argv)
+    absent = missing()
+    if absent:
+        print(f"not writing {OUT.name}: no result for {', '.join(absent)} in {RESULTS}. "
+              "Run every scenario (make ddil) to regenerate it.", file=sys.stderr)
+        return 0 if args.if_complete else 1
+    OUT.write_text(render({name: json.loads((RESULTS / f"{name}.json").read_text()) for name in ORDER}))
+    print(f"wrote {OUT}")
+    return 0
+
+
+def render(results: dict[str, dict]) -> str:
     lines = [
         "# DDIL test results",
         "",
@@ -55,9 +87,8 @@ def main() -> None:
             metrics = {k: v for k, v in r["metrics"].items() if not isinstance(v, dict)}
             if metrics:
                 lines += ["| metric | value |", "|---|---|"] + [f"| {k} | {v} |" for k, v in metrics.items()] + [""]
-    OUT.write_text("\n".join(lines) + "\n")
-    print(f"wrote {OUT}")
+    return "\n".join(lines) + "\n"
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
